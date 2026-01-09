@@ -1,28 +1,24 @@
 FROM python:3.12-slim
 
-# Evita que o Python gere arquivos .pyc e garante logs em tempo real
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-# Garante que o Poetry instale pacotes no sistema do container (sem venv isolada)
-ENV POETRY_VIRTUALENVS_CREATE=false
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    POETRY_VIRTUALENVS_CREATE=false
 
 WORKDIR /app
 
-# Instala dependências do sistema necessárias para o Postgres e o Poetry
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    curl \
+RUN apt-get update && apt-get install -y build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Instala o Poetry
-RUN pip install poetry
+RUN pip install --no-cache-dir poetry
 
-# Copia os arquivos de configuração do Poetry
 COPY pyproject.toml poetry.lock* /app/
 
-# Instala as dependências (se o lock não existir, ele ignora o erro e instala do toml)
-RUN poetry install --no-interaction --no-ansi
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-root --no-interaction --no-ansi \
+    && pip uninstall -y poetry
 
-# Copia o resto do código
 COPY . /app/
+
+EXPOSE 8000
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

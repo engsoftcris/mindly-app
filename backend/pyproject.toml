@@ -1,16 +1,19 @@
-[tool.poetry]
-name = "mindly-backend"
+[project]
+name = "backend"
 version = "0.1.0"
-description = "Mindly - Rede Social MVP (Backend)"
-authors = ["Cristiano <cristiano.tobias@gmail.com>"]
-package-mode = false
+description = ""
+authors = [
+    {name = "engsoftcris",email = "cristiano.tobias40@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django (>=6.0.1,<7.0.0)",
+    "djangorestframework (>=3.16.1,<4.0.0)",
+    "psycopg2-binary (>=2.9.11,<3.0.0)"
+]
 
-[tool.poetry.dependencies]
-python = ">=3.12"
-django = "^5.1"
-djangorestframework = "^3.15"
-psycopg2-binary = "^2.9"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
