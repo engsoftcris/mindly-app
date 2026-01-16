@@ -54,6 +54,7 @@ class CustomUserAdmin(BaseUserAdmin):
         "email",
         "full_name",
         "photo_preview",
+        "is_private",
         "is_staff",
     )
 
@@ -70,6 +71,7 @@ class CustomUserAdmin(BaseUserAdmin):
                 "profile_picture",
                 "photo_preview",
                 "phone",
+                "is_private",
             )
         }),
         ("Permissões", {

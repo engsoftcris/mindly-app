@@ -43,6 +43,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
 
+    # --- TASK 13 CODE START ---
+    is_private = models.BooleanField(
+        default=False,
+        verbose_name="Private Profile",
+        help_text="If enabled, only approved followers can see your content."
+    )
+    # --- TASK 13 CODE END ---
+
     objects = UserManager()
 
     USERNAME_FIELD = 'username'
