@@ -21,6 +21,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "upload_picture",
             "social_id",
             "provider",
+            'is_private',
         ]
         read_only_fields = ["id"]
 
