@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework.authtoken',
+    'rest_framework_simplejwt',
     'accounts.apps.AccountsConfig',
 ]
 
@@ -134,3 +134,26 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 AUTH_USER_MODEL = 'accounts.User'
+
+# settings.py - Security Headers
+
+# Proteção contra Cross-Site Scripting (XSS)
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Impede que o teu site seja colocado dentro de um <iframes> de outros sites (evita Clickjacking)
+X_FRAME_OPTIONS = 'DENY'
+
+# Se já estiveres a usar HTTPS no teu ambiente (recomendado)
+# SECURE_SSL_REDIRECT = True
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        # Isso obriga que todos os endpoints exijam login por padrão
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        # Define o JWT como o método de autenticação principal
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+}
