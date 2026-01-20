@@ -23,5 +23,7 @@ def delete_old_profile_picture(sender, instance, **kwargs):
 @receiver(post_delete, sender=User)
 def delete_profile_picture_on_delete(sender, instance, **kwargs):
     if instance.profile_picture:
-        if instance.profile_picture.path and os.path.isfile(instance.profile_picture.path):
+        if instance.profile_picture.path and os.path.isfile(
+            instance.profile_picture.path
+        ):
             os.remove(instance.profile_picture.path)
