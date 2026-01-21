@@ -21,15 +21,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "upload_picture",
             "social_id",
             "provider",
-            'is_private',
+            "is_private",
         ]
         read_only_fields = ["id"]
 
     def get_profile_picture(self, obj):
         request = self.context.get("request")
-        if obj.profile_picture and request:
-            return request.build_absolute_uri(obj.profile_picture.url)
-        return None
+        
+        # LÓGICA TAL-12: Só exibe a URL original se estiver APROVADA
+        if obj.image_status == "APPROVED" and obj.profile_picture:
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+            
+        # Caso contrário (PENDING ou REJECTED), retorna o fallback
+        # Certifique-se de ter essa imagem em static/images/
+        if request:
+            return request.build_absolute_uri("/static/images/default-avatar.png")
+        return "/static/images/default-avatar.png"
 
     def validate_upload_picture(self, image):
         if image.size > 2 * 1024 * 1024:
@@ -40,26 +49,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
         upload = validated_data.pop("upload_picture", None)
 
         if upload:
-            # abre imagem
+            # LÓGICA TAL-12: Se subiu imagem nova, o status volta a ser PENDING
+            instance.image_status = "PENDING"
+            
             img = Image.open(upload)
             img = img.convert("RGB")
-
-            # resize (mantém proporção)
             img.thumbnail((512, 512))
 
-            # buffer em memória
             buffer = BytesIO()
             img.save(buffer, format="JPEG", quality=85)
             buffer.seek(0)
 
-            # nome com hash
             filename = f"{uuid.uuid4().hex}.jpg"
 
-            # remove foto antiga
             if instance.profile_picture:
                 instance.profile_picture.delete(save=False)
 
-            # salva nova
             instance.profile_picture.save(
                 filename,
                 ContentFile(buffer.read()),

@@ -61,41 +61,48 @@ class CustomUserAdmin(BaseUserAdmin):
     readonly_fields = ("photo_preview",)
 
     fieldsets = (
-        (None, {
-            "fields": ("username", "password")
-        }),
-        ("Perfil", {
-            "fields": (
-                "full_name",
-                "bio",
-                "profile_picture",
-                "photo_preview",
-                "phone",
-                "is_private",
-            )
-        }),
-        ("Permissões", {
-            "fields": (
-                "is_active",
-                "is_staff",
-                "is_superuser",
-                "groups",
-                "user_permissions",
-            )
-        }),
+        (None, {"fields": ("username", "password")}),
+        (
+            "Perfil",
+            {
+                "fields": (
+                    "full_name",
+                    "bio",
+                    "profile_picture",
+                    "photo_preview",
+                    "phone",
+                    "is_private",
+                )
+            },
+        ),
+        (
+            "Permissões",
+            {
+                "fields": (
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "groups",
+                    "user_permissions",
+                )
+            },
+        ),
     )
 
     add_fieldsets = (
-        (None, {
-            "classes": ("wide",),
-            "fields": (
-                "username",
-                "email",
-                "full_name",
-                "password1",
-                "password2",
-            ),
-        }),
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "email",
+                    "full_name",
+                    "password1",
+                    "password2",
+                ),
+            },
+        ),
     )
 
     search_fields = ("username", "email", "full_name")
@@ -106,8 +113,8 @@ class CustomUserAdmin(BaseUserAdmin):
             return format_html(
                 '<a href="{0}" target="_blank">'
                 '<img src="{0}" style="max-height:120px;border-radius:8px;" />'
-                '</a>',
-                obj.profile_picture.url
+                "</a>",
+                obj.profile_picture.url,
             )
         return "Sem imagem"
 

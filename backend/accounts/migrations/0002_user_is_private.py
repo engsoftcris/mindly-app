@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0001_initial'),
+        ("accounts", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='is_private',
-            field=models.BooleanField(default=False, help_text='If enabled, only approved followers can see your content.', verbose_name='Private Profile'),
+            model_name="user",
+            name="is_private",
+            field=models.BooleanField(
+                default=False,
+                help_text="If enabled, only approved followers can see your content.",
+                verbose_name="Private Profile",
+            ),
         ),
     ]
