@@ -19,22 +19,16 @@ class UserAdminForm(forms.ModelForm):
         if not image:
             return image
 
-        # Verifica se 'image' tem o atributo 'content_type' 
-        # (Isso só acontece quando um NOVO arquivo é enviado)
+        # Fix TAL-26: Verifica se é um novo upload (hasattr content_type)
         if hasattr(image, 'content_type'):
-            # limite de tamanho: 2MB
             max_size = 2 * 1024 * 1024
             if image.size > max_size:
                 raise ValidationError("A imagem deve ter no máximo 2MB.")
 
-            # tipo MIME
             if image.content_type not in ("image/jpeg", "image/png"):
                 raise ValidationError("Formato inválido. Use JPEG ou PNG.")
 
-            # validação real do conteúdo com Pillow
             try:
-                # Importante: usar o 'image' diretamente pode fechar o stream, 
-                # por isso abrimos apenas para verificar.
                 img = Image.open(image)
                 img.verify()
             except Exception:
@@ -48,18 +42,16 @@ class CustomUserAdmin(BaseUserAdmin):
     model = User
     form = UserAdminForm
 
-    # TAL-26: Adicionado image_status e ajustado para mostrar a foto menor na lista
     list_display = (
         "username",
         "email",
         "full_name",
-        "image_status",  # Novo
-        "photo_list_preview",  # Miniatura pequena para a lista
+        "image_status",
+        "photo_list_preview",
         "is_private",
         "is_staff",
     )
 
-    # TAL-26: Filtros para moderação rápida
     list_filter = ("image_status", "is_private", "is_active", "is_staff")
     
     readonly_fields = ("photo_preview",)
@@ -71,8 +63,8 @@ class CustomUserAdmin(BaseUserAdmin):
                 "full_name",
                 "bio",
                 "profile_picture",
-                "photo_preview", # Preview grande dentro do formulário
-                "image_status",  # Campo de moderação
+                "photo_preview",
+                "image_status",
                 "phone",
                 "is_private",
             )
@@ -89,25 +81,25 @@ class CustomUserAdmin(BaseUserAdmin):
     )
 
     add_fieldsets = (
-        (None, {
-            "classes": ("wide",),
-            "fields": (
-                "username",
-                "email",
-                "full_name",
-                "password1",
-                "password2",
-            ),
-        }),
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "email",
+                    "full_name",
+                    "password1",
+                    "password2",
+                ),
+            },
+        ),
     )
 
     search_fields = ("username", "email", "full_name")
     ordering = ("username",)
 
-    # --- MÉTODOS DE PREVIEW ---
-    
     def photo_list_preview(self, obj):
-        """Miniatura pequena para a listagem geral"""
         if obj.profile_picture:
             return format_html(
                 '<img src="{}" style="width:35px;height:35px;border-radius:50%;object-fit:cover;" />',
@@ -117,7 +109,6 @@ class CustomUserAdmin(BaseUserAdmin):
     photo_list_preview.short_description = "Avatar"
 
     def photo_preview(self, obj):
-        """Preview maior dentro da página de edição"""
         if obj.profile_picture:
             return format_html(
                 '<a href="{0}" target="_blank">'
@@ -128,7 +119,6 @@ class CustomUserAdmin(BaseUserAdmin):
         return "Sem imagem"
     photo_preview.short_description = "Visualização da Foto"
 
-    # --- TAL-26: BULK ACTIONS ---
     actions = ['approve_images', 'reject_images']
 
     @admin.action(description='Aprovar fotos selecionadas')

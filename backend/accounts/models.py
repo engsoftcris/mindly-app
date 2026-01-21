@@ -1,11 +1,15 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    PermissionsMixin,
+)
 from django.db import models
 
 
 class UserManager(BaseUserManager):
     def create_user(self, username, email=None, password=None, **extra_fields):
         if not username:
-            raise ValueError('O username é obrigatório')
+            raise ValueError("O username é obrigatório")
 
         email = self.normalize_email(email) if email else None
         user = self.model(username=username, email=email, **extra_fields)
@@ -14,8 +18,8 @@ class UserManager(BaseUserManager):
         return user
 
     def create_superuser(self, username, email=None, password=None, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
         return self.create_user(username, email, password, **extra_fields)
 
 
@@ -39,11 +43,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # PERFIL
     full_name = models.CharField(max_length=255)
     bio = models.TextField(blank=True, null=True)
-    profile_picture = models.ImageField(
-        upload_to='profiles/',
-        blank=True,
-        null=True
-    )
+    profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
 
     # SOCIAL (FUTURO)
     social_id = models.CharField(max_length=255, blank=True, null=True)
@@ -58,14 +58,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_private = models.BooleanField(
         default=False,
         verbose_name="Private Profile",
-        help_text="If enabled, only approved followers can see your content."
+        help_text="If enabled, only approved followers can see your content.",
     )
     # --- TASK 13 CODE END ---
 
     objects = UserManager()
 
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['full_name']
+    USERNAME_FIELD = "username"
+    REQUIRED_FIELDS = ["full_name"]
 
     def __str__(self):
         return self.username
