@@ -20,6 +20,17 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    IMAGE_STATUS_CHOICES = [
+        ("PENDING", "Pendente"),
+        ("APPROVED", "Aprovado"),
+        ("REJECTED", "Rejeitado"),
+    ]
+    
+    image_status = models.CharField(
+        max_length=10, 
+        choices=IMAGE_STATUS_CHOICES, 
+        default="PENDING"
+    )
     # IDENTIFICAÇÃO
     username = models.CharField(max_length=30, unique=True)
     email = models.EmailField(unique=True, null=True, blank=True)
