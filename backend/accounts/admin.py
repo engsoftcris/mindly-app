@@ -8,9 +8,6 @@ from PIL import Image
 from .models import User
 
 
-# =========================
-# FORM COM VALIDAÇÃO PROFISSIONAL
-# =========================
 class UserAdminForm(forms.ModelForm):
     class Meta:
         model = User
@@ -22,28 +19,24 @@ class UserAdminForm(forms.ModelForm):
         if not image:
             return image
 
-        # limite de tamanho: 2MB
-        max_size = 2 * 1024 * 1024
-        if image.size > max_size:
-            raise ValidationError("A imagem deve ter no máximo 2MB.")
+        # Fix TAL-26: Verifica se é um novo upload (hasattr content_type)
+        if hasattr(image, 'content_type'):
+            max_size = 2 * 1024 * 1024
+            if image.size > max_size:
+                raise ValidationError("A imagem deve ter no máximo 2MB.")
 
-        # tipo MIME
-        if image.content_type not in ("image/jpeg", "image/png"):
-            raise ValidationError("Formato inválido. Use JPEG ou PNG.")
+            if image.content_type not in ("image/jpeg", "image/png"):
+                raise ValidationError("Formato inválido. Use JPEG ou PNG.")
 
-        # validação real do conteúdo
-        try:
-            img = Image.open(image)
-            img.verify()
-        except Exception:
-            raise ValidationError("Arquivo inválido ou corrompido.")
+            try:
+                img = Image.open(image)
+                img.verify()
+            except Exception:
+                raise ValidationError("Arquivo inválido ou corrompido.")
 
         return image
 
 
-# =========================
-# ADMIN
-# =========================
 @admin.register(User)
 class CustomUserAdmin(BaseUserAdmin):
     model = User
@@ -53,40 +46,38 @@ class CustomUserAdmin(BaseUserAdmin):
         "username",
         "email",
         "full_name",
-        "photo_preview",
+        "image_status",
+        "photo_list_preview",
         "is_private",
         "is_staff",
     )
 
+    list_filter = ("image_status", "is_private", "is_active", "is_staff")
+    
     readonly_fields = ("photo_preview",)
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        (
-            "Perfil",
-            {
-                "fields": (
-                    "full_name",
-                    "bio",
-                    "profile_picture",
-                    "photo_preview",
-                    "phone",
-                    "is_private",
-                )
-            },
-        ),
-        (
-            "Permissões",
-            {
-                "fields": (
-                    "is_active",
-                    "is_staff",
-                    "is_superuser",
-                    "groups",
-                    "user_permissions",
-                )
-            },
-        ),
+        ("Perfil", {
+            "fields": (
+                "full_name",
+                "bio",
+                "profile_picture",
+                "photo_preview",
+                "image_status",
+                "phone",
+                "is_private",
+            )
+        }),
+        ("Permissões", {
+            "fields": (
+                "is_active",
+                "is_staff",
+                "is_superuser",
+                "groups",
+                "user_permissions",
+            )
+        }),
     )
 
     add_fieldsets = (
@@ -108,14 +99,34 @@ class CustomUserAdmin(BaseUserAdmin):
     search_fields = ("username", "email", "full_name")
     ordering = ("username",)
 
+    def photo_list_preview(self, obj):
+        if obj.profile_picture:
+            return format_html(
+                '<img src="{}" style="width:35px;height:35px;border-radius:50%;object-fit:cover;" />',
+                obj.profile_picture.url
+            )
+        return "-"
+    photo_list_preview.short_description = "Avatar"
+
     def photo_preview(self, obj):
         if obj.profile_picture:
             return format_html(
                 '<a href="{0}" target="_blank">'
-                '<img src="{0}" style="max-height:120px;border-radius:8px;" />'
-                "</a>",
-                obj.profile_picture.url,
+                '<img src="{0}" style="max-height:150px;border-radius:8px;border: 2px solid #ddd;" />'
+                '</a>',
+                obj.profile_picture.url
             )
         return "Sem imagem"
+    photo_preview.short_description = "Visualização da Foto"
 
-    photo_preview.short_description = "Foto"
+    actions = ['approve_images', 'reject_images']
+
+    @admin.action(description='Aprovar fotos selecionadas')
+    def approve_images(self, request, queryset):
+        count = queryset.update(image_status='APPROVED')
+        self.message_user(request, f"{count} usuários aprovados.")
+
+    @admin.action(description='Rejeitar fotos selecionadas')
+    def reject_images(self, request, queryset):
+        count = queryset.update(image_status='REJECTED')
+        self.message_user(request, f"{count} usuários rejeitados.")

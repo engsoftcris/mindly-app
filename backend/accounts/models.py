@@ -24,7 +24,6 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-
     IMAGE_STATUS_CHOICES = [
         ("PENDING", "Pendente"),
         ("APPROVED", "Aprovado"),
