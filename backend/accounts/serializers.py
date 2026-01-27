@@ -4,17 +4,19 @@ from PIL import Image
 
 from django.core.files.base import ContentFile
 from rest_framework import serializers
-from .models import User
+from accounts.models import User
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
     upload_picture = serializers.ImageField(write_only=True, required=False)
+    username = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             "id",
+            "username",
             "full_name",
             "bio",
             "profile_picture",
@@ -23,17 +25,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "provider",
             "is_private",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "username"]
 
     def get_profile_picture(self, obj):
         request = self.context.get("request")
-        
+
         # LÓGICA TAL-12: Só exibe a URL original se estiver APROVADA
         if obj.image_status == "APPROVED" and obj.profile_picture:
             if request:
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
-            
+
         # Caso contrário (PENDING ou REJECTED), retorna o fallback
         # Certifique-se de ter essa imagem em static/images/
         if request:
@@ -51,7 +53,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if upload:
             # LÓGICA TAL-12: Se subiu imagem nova, o status volta a ser PENDING
             instance.image_status = "PENDING"
-            
+
             img = Image.open(upload)
             img = img.convert("RGB")
             img.thumbnail((512, 512))
@@ -72,3 +74,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
             )
 
         return super().update(instance, validated_data)
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    full_name = serializers.CharField(required=False)
+
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'password', 'full_name')
+
+    def create(self, validated_data):
+        # Usamos o create_user para garantir que a senha seja criptografada (hash)
+        full_name = validated_data.pop('full_name', '')
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            password=validated_data['password'],
+            full_name=full_name
+        )
+        return user

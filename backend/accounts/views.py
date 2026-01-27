@@ -1,5 +1,7 @@
 from rest_framework import generics, permissions
-from .serializers import UserProfileSerializer
+
+from accounts.models import User
+from .serializers import RegisterSerializer, UserProfileSerializer
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -14,3 +16,9 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    # Importante: Permitir que qualquer pessoa crie uma conta (AllowAny)
+    permission_classes = [permissions.AllowAny]
+    serializer_class = RegisterSerializer

@@ -29,11 +29,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         ("APPROVED", "Aprovado"),
         ("REJECTED", "Rejeitado"),
     ]
-    
+
     image_status = models.CharField(
-        max_length=10, 
-        choices=IMAGE_STATUS_CHOICES, 
-        default="PENDING"
+        max_length=10, choices=IMAGE_STATUS_CHOICES, default="PENDING"
     )
     # IDENTIFICAÇÃO
     username = models.CharField(max_length=30, unique=True)

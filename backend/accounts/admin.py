@@ -20,7 +20,7 @@ class UserAdminForm(forms.ModelForm):
             return image
 
         # Fix TAL-26: Verifica se é um novo upload (hasattr content_type)
-        if hasattr(image, 'content_type'):
+        if hasattr(image, "content_type"):
             max_size = 2 * 1024 * 1024
             if image.size > max_size:
                 raise ValidationError("A imagem deve ter no máximo 2MB.")
@@ -53,31 +53,37 @@ class CustomUserAdmin(BaseUserAdmin):
     )
 
     list_filter = ("image_status", "is_private", "is_active", "is_staff")
-    
+
     readonly_fields = ("photo_preview",)
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        ("Perfil", {
-            "fields": (
-                "full_name",
-                "bio",
-                "profile_picture",
-                "photo_preview",
-                "image_status",
-                "phone",
-                "is_private",
-            )
-        }),
-        ("Permissões", {
-            "fields": (
-                "is_active",
-                "is_staff",
-                "is_superuser",
-                "groups",
-                "user_permissions",
-            )
-        }),
+        (
+            "Perfil",
+            {
+                "fields": (
+                    "full_name",
+                    "bio",
+                    "profile_picture",
+                    "photo_preview",
+                    "image_status",
+                    "phone",
+                    "is_private",
+                )
+            },
+        ),
+        (
+            "Permissões",
+            {
+                "fields": (
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "groups",
+                    "user_permissions",
+                )
+            },
+        ),
     )
 
     add_fieldsets = (
@@ -103,9 +109,10 @@ class CustomUserAdmin(BaseUserAdmin):
         if obj.profile_picture:
             return format_html(
                 '<img src="{}" style="width:35px;height:35px;border-radius:50%;object-fit:cover;" />',
-                obj.profile_picture.url
+                obj.profile_picture.url,
             )
         return "-"
+
     photo_list_preview.short_description = "Avatar"
 
     def photo_preview(self, obj):
@@ -113,20 +120,21 @@ class CustomUserAdmin(BaseUserAdmin):
             return format_html(
                 '<a href="{0}" target="_blank">'
                 '<img src="{0}" style="max-height:150px;border-radius:8px;border: 2px solid #ddd;" />'
-                '</a>',
-                obj.profile_picture.url
+                "</a>",
+                obj.profile_picture.url,
             )
         return "Sem imagem"
+
     photo_preview.short_description = "Visualização da Foto"
 
-    actions = ['approve_images', 'reject_images']
+    actions = ["approve_images", "reject_images"]
 
-    @admin.action(description='Aprovar fotos selecionadas')
+    @admin.action(description="Aprovar fotos selecionadas")
     def approve_images(self, request, queryset):
-        count = queryset.update(image_status='APPROVED')
+        count = queryset.update(image_status="APPROVED")
         self.message_user(request, f"{count} usuários aprovados.")
 
-    @admin.action(description='Rejeitar fotos selecionadas')
+    @admin.action(description="Rejeitar fotos selecionadas")
     def reject_images(self, request, queryset):
-        count = queryset.update(image_status='REJECTED')
+        count = queryset.update(image_status="REJECTED")
         self.message_user(request, f"{count} usuários rejeitados.")
