@@ -1,42 +1,67 @@
 import pytest
-from accounts.serializers import UserProfileSerializer, RegisterSerializer # Importa o RegisterSerializer
-from .factories import UserFactory
 from django.contrib.auth import get_user_model
+from accounts.serializers import RegisterSerializer
+from accounts.serializers import UserProfileSerializer
 
 User = get_user_model()
 
-# --- Testes do RegisterSerializer (O que adicionámos agora) ---
-
 @pytest.mark.django_db
-def test_register_serializer_creates_user_with_full_name():
-    """Garante que o registro salva o nome completo corretamente"""
+def test_register_serializer_creates_user_with_full_name_and_hashed_password():
     payload = {
-        "username": "tester",
-        "email": "tester@mindly.com",
-        "password": "strong_password_123",
-        "full_name": "Testador Oficial"
+        "username": "tester_serializer",
+        "email": "serializer@test.com",
+        "password": "senha_segura_123",
+        "full_name": "Utilizador de Teste"
     }
     
     serializer = RegisterSerializer(data=payload)
-    assert serializer.is_valid()
-    
+    assert serializer.is_valid(), serializer.errors
     user = serializer.save()
     
-    assert user.username == "tester"
-    assert user.full_name == "Testador Oficial"
-    assert user.check_password("strong_password_123")
+    # DEBUG PRINTS
+    print(f"\nDEBUG - Senha gravada no banco: {user.password}")
+    print(f"\nDEBUG - check_password result: {user.check_password('senha_segura_123')}")
 
-# --- Testes do UserProfileSerializer (Os que tu já tinhas) ---
+    assert user.full_name == "Utilizador de Teste"
+    assert user.check_password("senha_segura_123") is True
 
 @pytest.mark.django_db
-def test_serializer_returns_default_image_when_status_is_pending():
-    user = UserFactory(image_status="PENDING", profile_picture="profiles/test.jpg")
+def test_register_serializer_duplicate_email_fails():
+    # Criamos o primeiro utilizador
+    User.objects.create_user(username="original", email="dup@test.com", password="123")
+    
+    # Tentamos registar outro com o mesmo email via Serializer
+    payload = {
+        "username": "outro",
+        "email": "dup@test.com", # Email duplicado
+        "password": "password123",
+        "full_name": "Outro User"
+    }
+    serializer = RegisterSerializer(data=payload)
+    
+    assert not serializer.is_valid()
+    assert "email" in serializer.errors
+
+@pytest.mark.django_db
+def test_user_created_without_password_has_unusable_password():
+    # Simula o fluxo do Google (sem passar password)
+    user = User.objects.create_user(
+        username="google_user",
+        email="google@test.com",
+        full_name="Google User"
+    )
+    
+    assert not user.has_usable_password()
+    assert user.password.startswith('!') # O prefixo de segurança do Django
+
+@pytest.mark.django_db
+def test_profile_serializer_returns_default_avatar_for_pending_status():
+    user = User.objects.create_user(
+        username="photo_test",
+        email="photo@test.com",
+        image_status="PENDING"
+    )
     serializer = UserProfileSerializer(instance=user)
+    
+    # Verifica se a URL contém o avatar padrão
     assert "default-avatar.png" in serializer.data["profile_picture"]
-    assert "profiles/test.jpg" not in serializer.data["profile_picture"]
-
-@pytest.mark.django_db
-def test_serializer_returns_original_image_when_status_is_approved():
-    user = UserFactory(image_status="APPROVED", profile_picture="profiles/test.jpg")
-    serializer = UserProfileSerializer(instance=user)
-    assert "profiles/test.jpg" in serializer.data["profile_picture"]

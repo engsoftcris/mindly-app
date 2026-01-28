@@ -24,15 +24,36 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from accounts.views import RegisterView
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    
+    # Concentra tudo o que é conta (Login Google, Perfil, Register) aqui
     path("api/accounts/", include("accounts.urls")),
+    
+    # Rotas de suporte JWT (Úteis para o Admin ou Login Manual)
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
-    path('api/register/', RegisterView.as_view(), name='auth_register'),
+    
+    # Social Auth (Obrigatório para o social-django funcionar internamente)
+    path('social-auth/', include('social_django.urls', namespace='social')),
 ]
 
+# Servir Media e Static em Desenvolvimento
 if settings.DEBUG:
+    # Serve arquivos MEDIA (uploads)
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Serve arquivos STATIC (css, js, imagens padrão)
+    urlpatterns += static(settings.STATIC_URL, document_root=os.path.join(settings.BASE_DIR, 'static'))
+    
+# Esta linha abaixo é o segredo se o 'static()' falhar:
+urlpatterns += staticfiles_urlpatterns()

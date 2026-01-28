@@ -1,24 +1,89 @@
-from rest_framework import generics, permissions
+from rest_framework import generics,status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
+# Ferramentas do Social Auth
+from social_django.utils import load_strategy, load_backend
+from social_core.exceptions import MissingBackend, AuthTokenError
+
+# JWT
+from rest_framework_simplejwt.tokens import RefreshToken
+
+# Seus modelos e serializers
 from accounts.models import User
-from .serializers import RegisterSerializer, UserProfileSerializer
-
+from .serializers import (
+    UserProfileSerializer, 
+    GoogleAuthSerializer  # Certifique-se de criar este no serializers.py
+)
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user
 
-    # Passa request para o serializer para construir URL absoluta
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
 
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    # Importante: Permitir que qualquer pessoa crie uma conta (AllowAny)
-    permission_classes = [permissions.AllowAny]
-    serializer_class = RegisterSerializer
+class GoogleLoginView(APIView):
+    """
+    Endpoint para autenticação via Google.
+    Recebe um 'access_token' do frontend e retorna tokens JWT.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Valida se o access_token veio no corpo da requisição
+        serializer = GoogleAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        access_token = serializer.validated_data['access_token']
+        strategy = load_strategy(request)
+        
+        try:
+            # Carrega o backend do Google e tenta autenticar o token
+            backend = load_backend(strategy=strategy, name='google-oauth2', redirect_uri=None)
+            user = backend.do_auth(access_token)
+        except (MissingBackend, AuthTokenError) as e:
+            return Response(
+                {'error': 'Token do Google inválido ou expirado', 'details': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user:
+            if not user.is_active:
+                return Response({'error': 'Usuário desativado'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Gera os tokens JWT para o seu usuário
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': {
+                    'email': user.email,
+                    'id': user.id
+                }
+            })
+        
+        return Response({'error': 'Erro desconhecido ao autenticar'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # accounts/pipeline.py (ou dentro de views.py para testar rápido)
+
+def save_full_name(backend, details, response, user=None, *args, **kwargs):
+    if backend.name == 'google-oauth2':
+        # Tenta pegar o nome completo vindo do Google
+        full_name = response.get('name') or details.get('fullname')
+        
+        if full_name:
+            # Se o usuário já existe, atualiza direto
+            if user:
+                user.full_name = full_name
+                user.save()
+            # Se o usuário está sendo criado agora, injeta nos detalhes
+            details['full_name'] = full_name
+            
+    return {'details': details} # IMPORTANTE: Retornar o dicionário

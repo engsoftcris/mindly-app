@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UserProfileView
+from .views import UserProfileView, GoogleLoginView  
 from .views_picture import UserProfilePictureView
 
 urlpatterns = [
@@ -9,4 +9,5 @@ urlpatterns = [
         UserProfilePictureView.as_view(),
         name="user-profile-picture",
     ),
+    path("google-login/", GoogleLoginView.as_view(), name="google_login"),
 ]
