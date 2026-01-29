@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Sair imediatamente se um comando falhar
 set -e
 
 echo "--> Rodando Migrations..."
-python manage.py migrate
+python manage.py migrate --noinput
 
 echo "--> Iniciando Gunicorn..."
-gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
