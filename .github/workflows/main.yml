@@ -67,9 +67,12 @@ jobs:
 
       - name: Cypress Run
         uses: cypress-io/github-action@v6
+        env:
+          # mock do client_id para evitar erro de inicialização do SDK do Google no CI
+          VITE_GOOGLE_CLIENT_ID: "871089850123-test-id.apps.googleusercontent.com"
+          VITE_API_URL: "http://localhost:8000"
         with:
           working-directory: ./frontend
           start: npm run dev
           wait-on: 'http://localhost:5173'
-          # Aqui ele vai rodar os testes que acabamos de validar (TAL-09)
           browser: chrome
