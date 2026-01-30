@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 from datetime import timedelta
+import dj_database_url
 
 # --------------------------------------------------
 # BASE
@@ -13,13 +14,33 @@ SECRET_KEY = os.getenv(
     "django-insecure-dev-key-change-in-production"
 )
 
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS_ENV = os.getenv("ALLOWED_HOSTS", "")
-if ALLOWED_HOSTS_ENV:
-    ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(",")
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 else:
-    ALLOWED_HOSTS = []
+    # Garante que a lista comece apenas com valores válidos
+    CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
+    
+    frontend_env = os.getenv("FRONTEND_URL")
+    if frontend_env:
+        CORS_ALLOWED_ORIGINS.append(frontend_env)
+
+# Mantém esta linha, ela é importante para o JWT/Cookies
+CORS_ALLOW_CREDENTIALS = True
+
+# --------------------------------------------------
+# SECURITY
+# --------------------------------------------------
+
+# Se a env existir, divide por vírgula. Se não, usa o padrão seguro para dev.
+ALLOWED_HOSTS = os.getenv(
+    "ALLOWED_HOSTS", 
+    "localhost,127.0.0.1,0.0.0.0,backend,app"
+).split(",")
 
 
 # --------------------------------------------------
@@ -101,15 +122,19 @@ TEMPLATES = [
 # DATABASE
 # --------------------------------------------------
 
+# Se existir DATABASE_URL (no Staging/Render/Actions), ele usa-a.
+# Se não existir, ele monta a URL com os teus os.getenv locais.
+default_db_url = os.getenv(
+    "DATABASE_URL",
+    f"postgresql://{os.getenv('DB_USER', 'mindly_admin')}:{os.getenv('DB_PASSWORD', 'mindly_pass')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'mindly_db')}"
+)
+
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "mindly_db"),
-        "USER": os.getenv("DB_USER", "mindly_admin"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "mindly_pass"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "5432"),
-    }
+    "default": dj_database_url.config(
+        default=default_db_url,
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 
@@ -160,17 +185,6 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
-
-
-# --------------------------------------------------
-# CORS
-# --------------------------------------------------
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
-
-CORS_ALLOW_CREDENTIALS = True
 
 
 # --------------------------------------------------

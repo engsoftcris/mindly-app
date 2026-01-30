@@ -1,0 +1,79 @@
+name: CI/CD Pipeline - Mindly
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mindly_db
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: poetry install --no-root
+
+      - name: Run Django Tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgres://user:password@localhost:5432/mindly_db
+          SECRET_KEY: test-key-ci
+          DEBUG: True
+        run: poetry run python manage.py test
+
+  test-frontend-e2e:
+    needs: test-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Cypress Run
+        uses: cypress-io/github-action@v6
+        continue-on-error: true
+        env:
+          # mock do client_id para evitar erro de inicialização do SDK do Google no CI
+          VITE_GOOGLE_CLIENT_ID: "871089850123-test-id.apps.googleusercontent.com"
+          VITE_API_URL: "http://localhost:8000"
+        with:
+          working-directory: ./frontend
+          start: npm run dev
+          wait-on: 'http://localhost:5173'
+          browser: chrome

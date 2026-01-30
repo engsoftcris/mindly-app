@@ -18,6 +18,7 @@ RUN poetry config virtualenvs.create false \
     && pip uninstall -y poetry
 
 COPY . /app/
+RUN sed -i 's/\r$//' /app/render_start.sh && chmod +x /app/render_start.sh
 
 EXPOSE 8000
 

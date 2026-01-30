@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  // URL base para não precisares de repetir em cada chamada
-  baseURL: 'http://localhost:8000/api',
+  // Se existir VITE_API_URL no ambiente, usa ela. Senão, usa localhost.
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
 });
 
 // Este interceptor vai anexar o Token JWT automaticamente em cada pedido
