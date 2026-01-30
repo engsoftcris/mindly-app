@@ -16,6 +16,17 @@ from .serializers import (
     UserProfileSerializer, 
     GoogleAuthSerializer  # Certifique-se de criar este no serializers.py
 )
+from django.http import JsonResponse
+from datetime import datetime
+
+def api_root(request):
+    return JsonResponse({
+        "project": "Mindly API",
+        "status": "active",
+        "version": "0.1.0",
+        "timestamp": datetime.now().isoformat(),
+        "author": "engsoftcris"
+    })
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer

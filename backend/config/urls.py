@@ -26,12 +26,14 @@ from rest_framework_simplejwt.views import (
 
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 import os
+from accounts.views import api_root
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     
     # Concentra tudo o que é conta (Login Google, Perfil, Register) aqui
     path("api/accounts/", include("accounts.urls")),
+    path('', api_root, name='index'),
     
     # Rotas de suporte JWT (Úteis para o Admin ou Login Manual)
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
