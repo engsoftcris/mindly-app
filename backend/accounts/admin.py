@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
+from .models import Post
 from PIL import Image
 
 from .models import User
@@ -138,3 +139,25 @@ class CustomUserAdmin(BaseUserAdmin):
     def reject_images(self, request, queryset):
         count = queryset.update(image_status="REJECTED")
         self.message_user(request, f"{count} usuários rejeitados.")
+
+@admin.register(Post)
+class PostAdmin(admin.ModelAdmin):
+    # Added 'media_preview' to the list
+    list_display = ('user', 'content_preview', 'media_preview', 'created_at')
+    list_filter = ('created_at', 'user')
+    search_fields = ('content', 'user__username')
+
+    def content_preview(self, obj):
+        return obj.content[:50] + "..." if len(obj.content) > 50 else obj.content
+    
+    # New: See if there is a file attached without leaving the list
+    def media_preview(self, obj):
+        if obj.media:
+            # Check if it's an image or video by extension
+            ext = obj.media.name.lower()
+            if ext.endswith(('.mp4', '.mov', '.avi', '.mkv')):
+                return "🎥 Video File"
+            return "🖼️ Image File"
+        return "No Media"
+    
+    media_preview.short_description = 'Media Type'
