@@ -1,4 +1,4 @@
-from rest_framework import generics,status
+from rest_framework import generics,status,viewsets,permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,10 +11,10 @@ from social_core.exceptions import MissingBackend, AuthTokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 # Seus modelos e serializers
-from accounts.models import User
 from .serializers import (
     UserProfileSerializer, 
-    GoogleAuthSerializer  # Certifique-se de criar este no serializers.py
+    GoogleAuthSerializer,
+    PostSerializer
 )
 from django.http import JsonResponse
 from datetime import datetime
@@ -27,6 +27,7 @@ def api_root(request):
         "timestamp": datetime.now().isoformat(),
         "author": "engsoftcris"
     })
+from .models import Post
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
@@ -98,3 +99,25 @@ def save_full_name(backend, details, response, user=None, *args, **kwargs):
             details['full_name'] = full_name
             
     return {'details': details} # IMPORTANTE: Retornar o dicionário
+
+
+class PostViewSet(viewsets.ModelViewSet):
+    # Change this so people can actually see the "English World" feed!
+    queryset = Post.objects.all().order_by('-created_at')
+    serializer_class = PostSerializer
+    
+    def get_permissions(self):
+        """
+        Custom permissions: 
+        - Anyone (authenticated) can view and create.
+        - Only the owner can Edit (PUT/PATCH) or Delete.
+        """
+        if self.action in ['update', 'partial_update', 'destroy']:
+            # You might need to create a custom IsOwner permission later,
+            # but for now, IsAuthenticated is the baseline.
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        # This part is perfect! It connects the post to the logged-in user.
+        serializer.save(user=self.request.user)

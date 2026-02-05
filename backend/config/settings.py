@@ -17,7 +17,8 @@ SECRET_KEY = os.getenv(
 # --------------------------------------------------
 # CORS
 # --------------------------------------------------
-DEBUG = os.getenv("DEBUG", "True") == "True"
+DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes", "on")
+
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True

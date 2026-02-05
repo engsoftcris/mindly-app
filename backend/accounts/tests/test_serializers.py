@@ -1,6 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
-from accounts.serializers import RegisterSerializer
+from accounts.serializers import PostSerializer, RegisterSerializer
 from accounts.serializers import UserProfileSerializer
 
 User = get_user_model()
@@ -65,3 +65,15 @@ def test_profile_serializer_returns_default_avatar_for_pending_status():
     
     # Verifica se a URL contém o avatar padrão
     assert "default-avatar.png" in serializer.data["profile_picture"]
+
+@pytest.mark.django_db
+def test_post_serializer_read_only_fields():
+    user = User.objects.create_user(username="cristiano", email="c@test.com")
+    payload = {
+        "author": "hacker_name", # Trying to fake the author field
+        "content": "Valid content"
+    }
+    serializer = PostSerializer(data=payload)
+    serializer.is_valid()
+    # The 'author' should be ignored because it is ReadOnly in the Serializer Meta
+    assert "author" not in serializer.validated_data

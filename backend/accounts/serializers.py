@@ -4,7 +4,7 @@ from PIL import Image
 
 from django.core.files.base import ContentFile
 from rest_framework import serializers
-from accounts.models import User
+from .models import Post, User
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -95,3 +95,28 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class GoogleAuthSerializer(serializers.Serializer):
     access_token = serializers.CharField()
+
+
+class PostSerializer(serializers.ModelSerializer):
+    # Using 'author' as the label for the 'user' relationship
+    author = serializers.ReadOnlyField(source='user.username')
+
+    class Meta:
+        model = Post
+        # Added 'media' here! 
+        fields = ['id', 'author', 'content', 'media', 'created_at']
+        read_only_fields = ['id', 'author', 'created_at']
+
+    def validate_content(self, value):
+        if len(value) > 280:
+            raise serializers.ValidationError("Your thought is too long! Keep it under 280 characters.")
+        return value
+
+    def validate_media(self, value):
+        """
+        Extra security: Ensure files aren't massive (e.g., 100MB limit).
+        The duration is already checked in the model!
+        """
+        if value and value.size > 100 * 1024 * 1024:
+            raise serializers.ValidationError("Media file is too large (max 100MB).")
+        return value
