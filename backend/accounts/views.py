@@ -10,6 +10,7 @@ from social_core.exceptions import MissingBackend, AuthTokenError
 # JWT
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from rest_framework.pagination import PageNumberPagination
 # Seus modelos e serializers
 from .serializers import (
     UserProfileSerializer, 
@@ -18,6 +19,7 @@ from .serializers import (
 )
 from django.http import JsonResponse
 from datetime import datetime
+from django.db.models import Q
 
 def api_root(request):
     return JsonResponse({
@@ -121,3 +123,33 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # This part is perfect! It connects the post to the logged-in user.
         serializer.save(user=self.request.user)
+
+# Criteria: Load 20 posts per page for performance
+class FeedPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+class HybridFeedView(generics.ListAPIView):
+    """
+    Returns a list of posts from users that the current user follows,
+    ordered by the most recent first. Includes pagination (20 per page).
+    """
+    serializer_class = PostSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = FeedPagination
+
+    def get_serializer_context(self):
+        # Mandatory to generate full URLs for profile pictures
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def get_queryset(self):
+        user = self.request.user
+        following_users = user.following.all()
+        
+        # This logic says: "Show posts from people I follow OR posts from ME"
+        return Post.objects.filter(
+            Q(user__in=following_users) | Q(user=user)
+        ).distinct().order_by('-created_at')

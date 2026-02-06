@@ -96,14 +96,32 @@ class RegisterSerializer(serializers.ModelSerializer):
 class GoogleAuthSerializer(serializers.Serializer):
     access_token = serializers.CharField()
 
+# 1. Create a lightweight version for the feed (only ID, name, and photo)
+class FeedAuthorSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'full_name', 'profile_picture']
+
+    def get_profile_picture(self, obj):
+        # We reuse your logic: Only show if APPROVED
+        request = self.context.get("request")
+        if obj.image_status == "APPROVED" and obj.profile_picture:
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        
+        # Fallback
+        path = "/static/images/default-avatar.png"
+        return request.build_absolute_uri(path) if request else path
 
 class PostSerializer(serializers.ModelSerializer):
-    # Using 'author' as the label for the 'user' relationship
-    author = serializers.ReadOnlyField(source='user.username')
+    # CHANGED: Now using the Serializer instead of ReadOnlyField
+    author = FeedAuthorSerializer(source='user', read_only=True)
 
     class Meta:
         model = Post
-        # Added 'media' here! 
         fields = ['id', 'author', 'content', 'media', 'created_at']
         read_only_fields = ['id', 'author', 'created_at']
 
