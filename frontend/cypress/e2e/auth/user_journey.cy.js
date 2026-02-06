@@ -44,7 +44,7 @@ describe('Fluxo do Dashboard (Utilizador Autenticado)', () => {
 
     cy.get('h1', { timeout: 10000 }).should('contains.text', 'Teste Cypress');
     cy.get('img[alt="Profile"]').should('be.visible');
-    cy.contains(/google/i).should('be.visible');
+    cy.contains(/social feed/i).should('be.visible');
   });
 
   it('Deve realizar o logout através do botão do Dashboard', () => {

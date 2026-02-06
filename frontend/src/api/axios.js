@@ -24,7 +24,14 @@ export const postsAPI = {
   create: (data) => api.post('/accounts/posts/', data),
   list: () => api.get('/accounts/posts/'),
   // ... update the others too
-  feed: (page = 1) => api.get(`/accounts/feed/?page=${page}`),
+  getFeed: (urlOrPage = '/accounts/feed/') => {
+    // If it's just a number, we format it. If it's a full string/URL, we use it.
+    const endpoint = typeof urlOrPage === 'number' 
+      ? `/accounts/feed/?page=${urlOrPage}` 
+      : urlOrPage;
+      
+    return api.get(endpoint);
+  },
 };
 
 export default api;
