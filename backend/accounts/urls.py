@@ -20,4 +20,5 @@ urlpatterns = [
     path('feed/', HybridFeedView.as_view(), name='network-feed'),
     # 2. Router Paths (This includes /api/posts/)
     path('', include(router.urls)),
+    path('profile/me/', UserProfileView.as_view(), name='my-profile'),
 ]

@@ -6,13 +6,11 @@ const Feed = () => {
   const [nextPage, setNextPage] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // 1. Function to fetch data
   const fetchFeed = useCallback(async (url) => {
     if (loading) return;
     setLoading(true);
     try {
       const response = await postsAPI.getFeed(url);
-      // We APPEND the new posts to the existing ones
       setPosts(prev => [...prev, ...response.data.results]);
       setNextPage(response.data.next);
     } catch (err) {
@@ -22,12 +20,10 @@ const Feed = () => {
     }
   }, [loading]);
 
-  // 2. Initial load
   useEffect(() => {
     fetchFeed();
-  }, []);
+  }, [fetchFeed]); // Adicionado fetchFeed como dependência (boa prática)
 
-  // 3. The "Magic Eye" (Observer)
   const observer = useRef();
   const lastPostElementRef = useCallback(node => {
     if (loading) return;
@@ -39,19 +35,42 @@ const Feed = () => {
       }
     });
     if (node) observer.current.observe(node);
-  }, [loading, nextPage]);
+  }, [loading, nextPage, fetchFeed]);
 
   return (
-    <div className="feed-container">
+    <div className="feed-container space-y-4 p-4">
       {posts.map((post, index) => {
-        // If it's the last post in the list, we attach the "Ref" to it
-        if (posts.length === index + 1) {
-          return <div ref={lastPostElementRef} key={post.id}>{post.content}</div>;
-        }
-        return <div key={post.id}>{post.content}</div>;
+        const isLast = posts.length === index + 1;
+        
+        return (
+          <div 
+            key={post.id} 
+            ref={isLast ? lastPostElementRef : null}
+            className="p-4 bg-white border rounded-lg shadow-sm"
+          >
+            {/* --- CABEÇALHO DO POST --- */}
+            <div className="flex items-center mb-2">
+              <span className="font-bold text-blue-600 mr-2">
+                {/* A MÁGICA AQUI: 
+                  Verifique se o seu backend envia 'author' ou 'author_details'. 
+                  Pelo que vimos antes, deve ser post.author.display_name 
+                */}
+                {post.author?.display_name || post.author?.username || "Usuário"}
+              </span>
+              <span className="text-gray-400 text-xs">
+                @{post.author?.username}
+              </span>
+            </div>
+
+            {/* --- CONTEÚDO --- */}
+            <div className="text-gray-800">
+              {post.content}
+            </div>
+          </div>
+        );
       })}
       
-      {loading && <p>Loading more posts...</p>}
+      {loading && <p className="text-center text-blue-500">Loading more posts...</p>}
     </div>
   );
 };

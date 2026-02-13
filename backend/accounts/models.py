@@ -8,6 +8,8 @@ from django.contrib.auth.models import (
 from django.db import models
 from django.utils.timezone import now
 from django.core.validators import MaxLengthValidator
+from django.conf import settings
+import uuid
 
 def process_video_ffmpeg(file_path):
     """
@@ -91,6 +93,25 @@ def get_post_media_path(instance, filename):
     video_extensions = ['mp4', 'mov', 'avi', 'mkv', 'webm']
     media_type = "videos" if ext in video_extensions else "images" if ext in image_extensions else "others"
     return f"posts/{media_type}/{now().strftime('%Y/%m')}/{filename}"
+
+class Profile(models.Model):
+    # UUID as Primary Key for security/obfuscation
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # Linking to your existing User model
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    
+    # Fields for AC
+    display_name = models.CharField(max_length=50, blank=True)
+    bio = models.TextField(max_length=160, blank=True)
+    
+    # Timestamps (always good practice)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profile: {self.user.email} ({self.id})"
+
 
 class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')

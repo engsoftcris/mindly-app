@@ -4,13 +4,16 @@ from PIL import Image
 
 from django.core.files.base import ContentFile
 from rest_framework import serializers
-from .models import Post, User
+from .models import Post, User, Profile
+
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
     upload_picture = serializers.ImageField(write_only=True, required=False)
     username = serializers.CharField(read_only=True)
+    # ADICIONE ISSO AQUI TAMBÉM
+    display_name = serializers.ReadOnlyField(source='profile.display_name')
 
     class Meta:
         model = User
@@ -18,6 +21,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "full_name",
+            "display_name", # <--- Adicione aqui
             "bio",
             "profile_picture",
             "upload_picture",
@@ -99,20 +103,42 @@ class GoogleAuthSerializer(serializers.Serializer):
 # 1. Create a lightweight version for the feed (only ID, name, and photo)
 class FeedAuthorSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
+    # BUSCA O DISPLAY_NAME DO PERFIL ASSOCIADO AO USER
+    display_name = serializers.ReadOnlyField(source='profile.display_name')
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'full_name', 'profile_picture']
+        # ADICIONE 'display_name' NA LISTA ABAIXO
+        fields = ['id', 'username', 'full_name', 'display_name', 'profile_picture']
 
     def get_profile_picture(self, obj):
-        # We reuse your logic: Only show if APPROVED
+        # ... (sua lógica atual da foto continua igual)
         request = self.context.get("request")
         if obj.image_status == "APPROVED" and obj.profile_picture:
-            if request:
-                return request.build_absolute_uri(obj.profile_picture.url)
-            return obj.profile_picture.url
+            return request.build_absolute_uri(obj.profile_picture.url) if request else obj.profile_picture.url
+        path = "/static/images/default-avatar.png"
+        return request.build_absolute_uri(path) if request else path
+
+class ProfileSerializer(serializers.ModelSerializer):
+    username = serializers.ReadOnlyField(source='user.username')
+    email = serializers.ReadOnlyField(source='user.email')
+    # BUSCA A FOTO DO USER:
+    profile_picture = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def get_profile_picture(self, obj):
+        # Reutilizamos a lógica: Se o user tiver foto aprovada, manda a URL
+        user = obj.user
+        request = self.context.get("request")
         
-        # Fallback
+        if user.image_status == "APPROVED" and user.profile_picture:
+            return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
+        
+        # Fallback padrão
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
 

@@ -13,13 +13,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.pagination import PageNumberPagination
 # Seus modelos e serializers
 from .serializers import (
-    UserProfileSerializer, 
     GoogleAuthSerializer,
-    PostSerializer
+    PostSerializer,
+    UserProfileSerializer
 )
+from .serializers import ProfileSerializer
 from django.http import JsonResponse
 from datetime import datetime
 from django.db.models import Q
+from .models import Profile
 
 def api_root(request):
     return JsonResponse({
@@ -30,18 +32,6 @@ def api_root(request):
         "author": "engsoftcris"
     })
 from .models import Post
-
-class UserProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        return self.request.user
-
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context["request"] = self.request
-        return context
 
 class GoogleLoginView(APIView):
     """
@@ -74,13 +64,12 @@ class GoogleLoginView(APIView):
             
             # Gera os tokens JWT para o seu usuário
             refresh = RefreshToken.for_user(user)
+            user_data = UserProfileSerializer(user, context={'request': request}).data
+            print("DEBUG LOGIN DATA:", user_data)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user': {
-                    'email': user.email,
-                    'id': user.id
-                }
+                'user': user_data
             })
         
         return Response({'error': 'Erro desconhecido ao autenticar'}, status=status.HTTP_400_BAD_REQUEST)
@@ -129,6 +118,21 @@ class FeedPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 50
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    # 1. Trocamos para o ProfileSerializer (que enxerga o display_name e o UUID)
+    serializer_class = ProfileSerializer 
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        # 2. Em vez de retornar o User, retornamos o Profile ligado ao User
+        # Isso garante que o PATCH salve no lugar certo!
+        return self.request.user.profile
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
 
 class HybridFeedView(generics.ListAPIView):
     """
