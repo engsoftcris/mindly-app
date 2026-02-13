@@ -2,7 +2,8 @@ name: CI/CD Pipeline - Mindly
 
 on:
   push:
-    branches: [ main ]
+    # Agora ele roda em qualquer branch de feature para garantir que o código está bom
+    branches: [ main, 'feature/**' ]
   pull_request:
     branches: [ main ]
 
@@ -67,9 +68,8 @@ jobs:
 
       - name: Cypress Run
         uses: cypress-io/github-action@v6
-        continue-on-error: true
+        # Removi o "continue-on-error" para que você saiba quando o teste falhar de verdade!
         env:
-          # mock do client_id para evitar erro de inicialização do SDK do Google no CI
           VITE_GOOGLE_CLIENT_ID: "871089850123-test-id.apps.googleusercontent.com"
           VITE_API_URL: "http://localhost:8000"
         with:
@@ -77,3 +77,14 @@ jobs:
           start: npm run dev
           wait-on: 'http://localhost:5173'
           browser: chrome
+
+  # NOVO JOB: Só roda se os testes passarem E se estivermos na branch MAIN
+  deploy:
+    needs: test-frontend-e2e
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Render
+        run: |
+          echo "Disparando Deploy no Render..."
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
