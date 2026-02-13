@@ -16,6 +16,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     navigate('/login');
   }, [navigate]);
+  const updateUser = useCallback((newData) => {
+  setUser(prev => {
+    if (!prev) return prev;
+    return { ...prev, ...newData };
+  });
+}, []);
 
   const fetchUserProfile = useCallback(async () => {
     try {
@@ -47,7 +53,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

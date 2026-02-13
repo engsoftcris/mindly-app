@@ -19,6 +19,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export const profileAPI = {
+  // GET /api/accounts/profile/me/
+  getMe: () => api.get('/accounts/profile/me/'),
+  
+  // PATCH /api/accounts/profile/me/
+  updateMe: (data) => api.patch('/accounts/profile/me/', data),
+};
 export const postsAPI = {
   // We add 'accounts' here because your Django config forces it
   create: (data) => api.post('/accounts/posts/', data),
