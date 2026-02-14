@@ -1,0 +1,8 @@
+# Ignorar ficheiros locais do Django
+.env
+db.sqlite3
+posts/
+media/
+staticfiles/
+__pycache__/
+*.py[cod]

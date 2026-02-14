@@ -30,10 +30,10 @@ const Dashboard = () => {
     fetchFeed("/accounts/feed/");
   }, []);
 
-  const handleRefresh = () => {
-    setPosts([]);
-    fetchFeed();
-  };
+  const handleRefresh = async () => {
+  setNextPage(null);
+  await fetchFeed("/accounts/feed/");
+};
 
   const observer = useRef();
   const lastPostElementRef = useCallback(node => {
@@ -103,16 +103,65 @@ const Dashboard = () => {
 
                 <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">{post.content}</p>
 
-                {post.media && (
-                  <div className="mt-4 rounded-xl overflow-hidden border border-gray-800 bg-black">
-                    {post.media.match(/\.(mp4|webm|mov|ogg)$/i) ? (
-                      <video src={post.media} controls className="w-full max-h-[500px]" />
-                    ) : (
-                      <img src={post.media} className="w-full max-h-[500px] object-cover" alt="media" />
-                    )}
-                  </div>
-                )}
+             {/* --- CÓDIGO ATUALIZADO DENTRO DO MAP --- */}
+{
+  (post.media_url || post.media) && (() => {
+    const mediaSrc = post.media_url || post.media;
+    const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(mediaSrc);
+    
+    const isPending = post.moderation_status === "PENDING";
+    const isRejected = post.moderation_status === "REJECTED";
 
+    // 1. CASO REJEITADO: Mostra apenas o aviso de diretrizes
+    if (isRejected) {
+      return (
+        <div className="mt-3 p-6 rounded-xl border border-red-900/30 bg-red-900/10 flex flex-col items-center justify-center text-center">
+          <svg className="w-8 h-8 text-red-500/60 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-red-500 font-bold text-xs uppercase tracking-widest">Conteúdo Removido</p>
+          <p className="text-gray-500 text-[10px] mt-1 italic">Este post violou as diretrizes da comunidade e não está mais disponível.</p>
+        </div>
+      );
+    }
+
+    // 2. CASO PENDENTE OU APROVADO: Mostra a mídia (com ou sem blur)
+    return (
+      <div className="relative mt-3 overflow-hidden rounded-xl border border-gray-800 bg-[#0d1117] group">
+        {isVideo ? (
+          <video
+            src={mediaSrc}
+            controls={!isPending}
+            playsInline
+            className={`max-h-96 w-full object-contain transition-all duration-500 ${isPending ? "blur-2xl scale-110 opacity-40" : ""}`}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        ) : (
+          <img
+            src={mediaSrc}
+            alt="Post media"
+            className={`max-h-96 w-full object-contain transition-all duration-500 ${isPending ? "blur-2xl scale-110 opacity-40" : ""}`}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        )}
+
+        {/* Overlay para PENDING */}
+        {isPending && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+            <div className="bg-blue-500/20 backdrop-blur-md border border-blue-500/50 p-3 rounded-2xl shadow-2xl">
+              <svg className="w-8 h-8 text-blue-400 mx-auto mb-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <p className="text-blue-400 font-bold text-xs uppercase tracking-tighter">Conteúdo em Análise</p>
+              <p className="text-gray-300 text-[10px] mt-1 max-w-[150px]">Ficará visível para a rede após aprovação.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  })()
+}
                 <div className="mt-4 text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
                   {new Date(post.created_at).toLocaleString()}
                 </div>
