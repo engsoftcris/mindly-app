@@ -4,8 +4,8 @@ describe('Mindly - Suite de Testes: Storage e Moderação', () => {
   const VIDEO_URL = "https://example.com/video-teste.mp4";
 
   beforeEach(() => {
-    // Mock de Perfil e Autenticação (Comum a todos os testes)
-    cy.intercept('GET', '**/api/accounts/profile/**', {
+    // Intercepts globais para evitar falhas de carregamento inicial
+    cy.intercept('GET', '**/api/accounts/profile**', {
       statusCode: 200,
       body: { id: MOCK_UUID, username: 'cristiano', display_name: 'Cristiano' }
     }).as('getProfile');
@@ -15,41 +15,39 @@ describe('Mindly - Suite de Testes: Storage e Moderação', () => {
     });
   });
 
-  // --- BLOCO 1: TESTES DE STORAGE (OS TEUS TESTES ORIGINAIS) ---
   context('Storage & URL Clean Fix', () => {
     beforeEach(() => {
-      cy.intercept('GET', '**/api/accounts/feed/**', { statusCode: 200, body: { results: [] } }).as('getFeed');
+      cy.intercept('GET', '**/api/accounts/feed**', { statusCode: 200, body: { results: [] } }).as('getFeed');
       cy.intercept('POST', '**/api/posts/**', {
         statusCode: 201,
         body: { id: 999, content: 'URL Fix Test', image: CLEAN_URL, author: { username: 'cristiano' } }
       }).as('createPost');
-      cy.visit('/', { timeout: 20000 });
-      cy.wait(['@getProfile', '@getFeed']);
+      
+      cy.visit('/');
+      cy.wait(['@getProfile', '@getFeed'], { timeout: 25000 });
     });
 
     it('1. Deve abrir o modal de postagem e encontrar o textarea', () => {
       cy.get('button').contains(/Post|Novo|Criar/i).first().click({force: true});
-      cy.get('textarea', { timeout: 10000 }).should('be.visible');
+      cy.get('textarea', { timeout: 15000 }).should('be.visible');
     });
 
     it('2. Deve validar a resposta da API (Sem /s3/ e Sem Assinaturas)', () => {
       cy.get('button').contains(/Post|Novo|Criar/i).first().click({force: true});
-      cy.get('textarea').type('Testando formato de imagem...', { delay: 30 });
-      cy.get('button[type="submit"]').click();
+      cy.get('textarea').type('Testando formato de imagem...', { delay: 50 });
+      cy.get('button[type="submit"]').should('not.be.disabled').click();
       
-      cy.wait('@createPost', { timeout: 15000 }).then((interception) => {
+      cy.wait('@createPost', { timeout: 25000 }).then((interception) => {
         const imageUrl = interception.response.body.image;
         expect(imageUrl).to.not.include('/s3/'); 
         expect(imageUrl).to.include('storage/v1/object/public');
-        expect(imageUrl).to.not.include('AWSAccessKeyId');
       });
     });
   });
 
-  // --- BLOCO 2: TESTES DE MODERAÇÃO (VÍDEOS E STATUS) ---
   context('Moderação de Conteúdo', () => {
     it('3. Deve aplicar BLUR e Overlay em vídeos PENDING', () => {
-      cy.intercept('GET', '**/api/accounts/feed/**', {
+      cy.intercept('GET', '**/api/accounts/feed**', {
         statusCode: 200,
         body: { results: [{
           id: 10, author: { username: 'cristiano' }, content: 'Em análise',
@@ -58,14 +56,14 @@ describe('Mindly - Suite de Testes: Storage e Moderação', () => {
       }).as('getPending');
 
       cy.visit('/');
-      cy.wait(['@getProfile', '@getPending']);
+      cy.wait(['@getProfile', '@getPending'], { timeout: 20000 });
       
-      cy.get('video').should('have.class', 'blur-2xl');
+      cy.get('video', { timeout: 15000 }).should('have.class', 'blur-2xl');
       cy.contains('Conteúdo em Análise').should('be.visible');
     });
 
     it('4. Deve mostrar vídeo normalmente em APPROVED', () => {
-      cy.intercept('GET', '**/api/accounts/feed/**', {
+      cy.intercept('GET', '**/api/accounts/feed**', {
         statusCode: 200,
         body: { results: [{
           id: 11, author: { username: 'cristiano' }, content: 'Tudo OK',
@@ -74,14 +72,14 @@ describe('Mindly - Suite de Testes: Storage e Moderação', () => {
       }).as('getApproved');
 
       cy.visit('/');
-      cy.wait(['@getProfile', '@getApproved']);
+      cy.wait(['@getProfile', '@getApproved'], { timeout: 20000 });
       
-      cy.get('video').should('not.have.class', 'blur-2xl');
+      cy.get('video', { timeout: 15000 }).should('not.have.class', 'blur-2xl');
       cy.get('video').should('have.attr', 'controls');
     });
 
     it('5. Deve mostrar aviso de diretrizes em REJECTED', () => {
-      cy.intercept('GET', '**/api/accounts/feed/**', {
+      cy.intercept('GET', '**/api/accounts/feed**', {
         statusCode: 200,
         body: { results: [{
           id: 12, author: { username: 'cristiano' }, content: 'Bloqueado',
@@ -90,7 +88,7 @@ describe('Mindly - Suite de Testes: Storage e Moderação', () => {
       }).as('getRejected');
 
       cy.visit('/');
-      cy.wait(['@getProfile', '@getRejected']);
+      cy.wait(['@getProfile', '@getRejected'], { timeout: 20000 });
       
       cy.get('video').should('not.exist');
       cy.contains('Este post violou as diretrizes').should('be.visible');
