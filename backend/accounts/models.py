@@ -1,5 +1,3 @@
-import subprocess
-import os
 from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
@@ -11,32 +9,7 @@ from django.core.validators import MaxLengthValidator
 from django.conf import settings
 import uuid
 
-def process_video_ffmpeg(file_path):
-    """
-    Uses the FFmpeg installed in Docker to:
-    1. Cut to 15s
-    2. Convert to H.264 (Universal MP4)
-    """
-    # Safe way to create a temp name
-    base, ext = os.path.splitext(file_path)
-    temp_output = f"{base}_tmp{ext}"
-    
-    command = [
-        'ffmpeg', '-i', file_path,
-        '-t', '15',                # Limit to 15s
-        '-c:v', 'libx264',         # Compatible codec
-        '-preset', 'veryfast',
-        '-crf', '28',              # Quality control
-        '-c:a', 'aac',
-        '-y', temp_output          
-    ]
-    
-    try:
-        subprocess.run(command, check=True, capture_output=True)
-        if os.path.exists(temp_output):
-            os.replace(temp_output, file_path) 
-    except Exception as e:
-        print(f"FFmpeg Error: {e}")
+
 
 # --- USER MODELS ---
 
@@ -114,18 +87,32 @@ class Profile(models.Model):
 
 
 class Post(models.Model):
+    MODERATION_CHOICES = [
+        ("PENDING", "Pendente"),
+        ("APPROVED", "Aprovado"),
+        ("REJECTED", "Rejeitado")
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField(validators=[MaxLengthValidator(280)])
     media = models.FileField(upload_to=get_post_media_path, null=True, blank=True)
+    
+    # Campo essencial para o seu Overlay no React funcionar
+    moderation_status = models.CharField(
+        max_length=10, 
+        choices=MODERATION_CHOICES, 
+        default="PENDING"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
 
+    # Removido todo o processamento FFmpeg/Subprocess daqui.
+    # O save() agora é o padrão do Django, sem risco de travar a RAM do Render.
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        if self.media:
-            file_path = self.media.path
-            extension = os.path.splitext(file_path)[1].lower()
-            if extension in ['.mp4', '.mov', '.avi', '.webm', '.mkv']:
-                process_video_ffmpeg(file_path)
+
+    def __str__(self):
+        return f"Post by {self.user.username} ({self.moderation_status})"

@@ -2,6 +2,7 @@ from rest_framework import generics,status,viewsets,permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 
 # Ferramentas do Social Auth
 from social_django.utils import load_strategy, load_backend
@@ -96,6 +97,9 @@ class PostViewSet(viewsets.ModelViewSet):
     # Change this so people can actually see the "English World" feed!
     queryset = Post.objects.all().order_by('-created_at')
     serializer_class = PostSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    parser_classes = (MultiPartParser, FormParser)
     
     def get_permissions(self):
         """

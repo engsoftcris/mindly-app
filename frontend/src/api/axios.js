@@ -27,12 +27,13 @@ export const profileAPI = {
   updateMe: (data) => api.patch('/accounts/profile/me/', data),
 };
 export const postsAPI = {
-  // We add 'accounts' here because your Django config forces it
-  create: (data) => api.post('/accounts/posts/', data),
-  list: () => api.get('/accounts/posts/'),
-  // ... update the others too
+  // REMOVEMOS o 'accounts' porque o router está na raiz da /api/
+  create: (data) => api.post('/posts/', data),
+  
+  list: () => api.get('/posts/'),
+
   getFeed: (urlOrPage = '/accounts/feed/') => {
-    // If it's just a number, we format it. If it's a full string/URL, we use it.
+    // O feed continua em /accounts/ porque está no accounts/urls.py
     const endpoint = typeof urlOrPage === 'number' 
       ? `/accounts/feed/?page=${urlOrPage}` 
       : urlOrPage;

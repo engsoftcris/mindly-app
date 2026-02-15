@@ -3,6 +3,7 @@ from io import BytesIO
 from PIL import Image
 
 from django.core.files.base import ContentFile
+import os
 from rest_framework import serializers
 from .models import Post, User, Profile
 
@@ -143,24 +144,39 @@ class ProfileSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(path) if request else path
 
 class PostSerializer(serializers.ModelSerializer):
-    # CHANGED: Now using the Serializer instead of ReadOnlyField
     author = FeedAuthorSerializer(source='user', read_only=True)
+    media_url = serializers.SerializerMethodField()  # ✅ ADICIONA ISSO
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'content', 'media', 'created_at']
-        read_only_fields = ['id', 'author', 'created_at']
+        fields = ['id', 'author', 'content', 'media', 'media_url', 'moderation_status', 'created_at']  # ✅ ADD AQUI
+        read_only_fields = ['id', 'author', 'created_at', 'media_url']
 
     def validate_content(self, value):
         if len(value) > 280:
             raise serializers.ValidationError("Your thought is too long! Keep it under 280 characters.")
         return value
 
-    def validate_media(self, value):
-        """
-        Extra security: Ensure files aren't massive (e.g., 100MB limit).
-        The duration is already checked in the model!
-        """
-        if value and value.size > 100 * 1024 * 1024:
-            raise serializers.ValidationError("Media file is too large (max 100MB).")
-        return value
+    def validate_media(self, file):
+        if not file:
+            return file
+
+        max_mb = 15
+        if file.size > max_mb * 1024 * 1024:
+            raise serializers.ValidationError(f"Media file is too large (max {max_mb}MB).")
+
+        name = (file.name or "").lower()
+        ext = os.path.splitext(name)[1]
+
+        allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm", ".mkv", ".avi"}
+        if ext not in allowed:
+            raise serializers.ValidationError("Unsupported file type.")
+
+        content_type = getattr(file, "content_type", None)
+        if content_type and not (content_type.startswith("image/") or content_type.startswith("video/")):
+            raise serializers.ValidationError("Invalid media content type.")
+
+        return file
+
+    def get_media_url(self, obj):
+        return obj.media.url if obj.media else None

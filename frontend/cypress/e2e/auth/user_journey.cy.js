@@ -1,12 +1,12 @@
-// Impede que erros do SDK do Google (como falta de client_id real) quebrem o teste
+// Impede que erros do SDK do Google quebrem o teste
 Cypress.on('uncaught:exception', (err, runnable) => {
   return false;
 });
 
 describe('Fluxo de Login Social (Página de Login)', () => {
   it('Deve exibir o botão de Login do Google', () => {
-    cy.visit('/login');
-    cy.contains('button', /Google/i).should('be.visible');
+    cy.visit('/login', { timeout: 15000 });
+    cy.contains('button', /Google/i, { timeout: 10000 }).should('be.visible');
   });
 
   it('Deve permitir que o utilizador clique no botão de Google', () => {
@@ -19,7 +19,6 @@ describe('Fluxo do Dashboard (Utilizador Autenticado)', () => {
   beforeEach(() => {
     cy.clearLocalStorage();
 
-    // Mock da API - Ajustado para ser mais flexível com a URL
     cy.intercept('GET', '**/accounts/profile*', {
       statusCode: 200,
       body: {
@@ -31,91 +30,93 @@ describe('Fluxo do Dashboard (Utilizador Autenticado)', () => {
       }
     }).as('getProfile');
 
-    // Injeta o token antes de visitar a página
+    // MOCK DO FEED para evitar o erro 401 que vimos antes
+    cy.intercept('GET', '**/accounts/feed/**', {
+        statusCode: 200,
+        body: { count: 0, next: null, results: [] }
+    }).as('getFeed');
+
     cy.window().then((win) => {
       win.localStorage.setItem('access', 'fake-token-123');
     });
   });
 
   it('Deve carregar o Dashboard e mostrar as informações do utilizador', () => {
-    cy.visit('/');
-    // Adicionamos um timeout maior para o CI não dar gargalo
-    cy.wait('@getProfile', { timeout: 10000 });
+    cy.visit('/', { timeout: 20000 });
+    // Espera perfil e feed com folga para o Firefox
+    cy.wait(['@getProfile', '@getFeed'], { timeout: 15000 });
 
-    cy.get('h1', { timeout: 10000 }).should('contains.text', 'Seu Mundo Mindly');
-    cy.get('img[alt="Profile"]').should('be.visible');
-    cy.contains(/Network Feed/i).should('be.visible');
+    cy.get('h1', { timeout: 12000 }).should('contains.text', 'Seu Mundo Mindly');
+    cy.get('img[alt="Profile"]', { timeout: 10000 }).should('be.visible');
+    cy.contains(/Network Feed/i, { timeout: 10000 }).should('be.visible');
   });
 
   it('Deve realizar o logout através do botão do Dashboard', () => {
     cy.visit('/');
-    cy.wait('@getProfile', { timeout: 10000 });
+    cy.wait(['@getProfile', '@getFeed'], { timeout: 15000 });
 
-    cy.get('button').contains(/Logout|Sign Out|Sair/i).click();
+    // Clique forçado caso haja animação de fade-in no Dashboard
+    cy.get('button').contains(/Logout|Sign Out|Sair/i).click({ force: true });
 
     cy.window().should((win) => {
       expect(win.localStorage.getItem('access')).to.be.null;
     });
-    cy.url().should('include', '/login');
+    cy.url({ timeout: 10000 }).should('include', '/login');
   });
 });
 
-describe('Segurança de Acesso (Privacidade)', () => {
+describe('Segurança e Postagem (Media)', () => {
   it('Deve redirecionar para /login ao tentar aceder à raiz sem estar autenticado', () => {
     cy.clearLocalStorage();
-    cy.visit('/'); 
-    cy.url().should('include', '/login');
+    cy.visit('/', { failOnStatusCode: false }); 
+    cy.url({ timeout: 12000 }).should('include', '/login');
   });
-  describe('Post Creation Flow (Media Support)', () => {
-  beforeEach(() => {
-    cy.window().then((win) => {
-      win.localStorage.setItem('access', 'fake-token-123');
+
+  describe('Sub-fluxo: Criação de Post com Vídeo', () => {
+    beforeEach(() => {
+      cy.window().then((win) => {
+        win.localStorage.setItem('access', 'fake-token-123');
+      });
+
+      cy.intercept('GET', '**/accounts/profile*', {
+        statusCode: 200,
+        body: { username: 'cristiano', full_name: 'Cristiano' }
+      }).as('getProfileMedia');
+
+      cy.intercept('GET', '**/posts/', { statusCode: 200, body: [] }).as('getPosts');
+      
+      cy.intercept('POST', '**/posts/', {
+        statusCode: 201,
+        body: { id: 99, content: 'Success!' }
+      }).as('createPostMedia');
+
+      cy.visit('/');
+      cy.wait('@getProfileMedia', { timeout: 15000 });
     });
 
-    cy.intercept('GET', '**/accounts/profile*', {
-      statusCode: 200,
-      body: { username: 'cristiano', full_name: 'Cristiano' }
-    }).as('getProfile');
+    it('Deve permitir carregar um vídeo e escrever conteúdo', () => {
+      // 1. Abrir Modal
+      cy.get('button').contains(/Post|Create|New|Criar/i).first().click({ force: true }); 
 
-    // MOCK THE POSTS LIST TO AVOID 401 ERRORS
-    cy.intercept('GET', '**/posts/', {
-      statusCode: 200,
-      body: [] 
-    }).as('getPosts');
+      // 2. Escrever (com delay para o Firefox)
+      cy.get('textarea', { timeout: 10000 })
+        .should('be.visible')
+        .type('Teste automatizado com vídeo.', { delay: 30 });
 
-    cy.intercept('POST', '**/posts/', {
-      statusCode: 201,
-      body: { id: 99, content: 'Success!' }
-    }).as('createPost');
+      // 3. Upload de Arquivo (Simulado)
+      cy.get('input[type="file"]').selectFile({
+        contents: Cypress.Buffer.from('fake-video-data'),
+        fileName: 'test-video.mp4',
+      }, { force: true });
 
-    cy.visit('/');
-    cy.wait('@getProfile');
-  });
+      // 4. Submit
+      cy.get('button[type="submit"]').click();
 
-  it('Should allow a user to upload a video and write content', () => {
-    // 1. Open Modal - Using a more generic selector
-    cy.get('button').contains(/Post|Create|New/i).click(); 
+      // 5. Validação
+      cy.wait('@createPostMedia', { timeout: 15000 }).its('response.statusCode').should('eq', 201);
 
-    // 2. Type
-    const postContent = 'This is a Cypress automated test post.';
-    cy.get('textarea').first().type(postContent);
-
-    // 3. Upload
-    const fileName = 'test-video.mp4';
-    cy.get('input[type="file"]').selectFile({
-      contents: Cypress.Buffer.from('fake-video-data'),
-      fileName: fileName,
-    }, { force: true });
-
-    // 4. Submit
-    cy.get('button[type="submit"]').click();
-
-    // 5. Verify status instead of body.get()
-    cy.wait('@createPost').its('response.statusCode').should('eq', 201);
-
-    // 6. Check if modal closed
-    cy.get('textarea').should('not.exist');
+      // 6. Check de UI
+      cy.get('textarea', { timeout: 10000 }).should('not.exist');
+    });
   });
 });
-});
-

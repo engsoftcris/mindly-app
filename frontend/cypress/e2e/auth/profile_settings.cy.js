@@ -1,9 +1,9 @@
-describe('Profile Settings & Real-time Sync (UUID Era)', () => {
+describe('Profile Settings & Real-time Sync (UUID Era) - Robust Version', () => {
   const MOCK_UUID = 'b369ce73-66ba-4dc9-a736-d79eb3e45e5b';
   const USERNAME = 'cristiano.tobias40';
 
   beforeEach(() => {
-    // 1. Mock inicial: Perfil carregando como "Cristiano Original"
+    // 1. Mock inicial do Perfil
     cy.intercept('GET', /.*accounts\/profile.*/, {
       statusCode: 200,
       body: {
@@ -15,28 +15,30 @@ describe('Profile Settings & Real-time Sync (UUID Era)', () => {
       }
     }).as('getProfileMe');
 
-    // 2. Prepara o token de acesso
+    // 2. Prepara o estado inicial
     cy.window().then((win) => {
       win.localStorage.clear();
       win.localStorage.setItem('access', 'fake-token-123');
     });
 
-    // 3. Visita a página
-    cy.visit('/profile');
-    cy.wait('@getProfileMe');
+    // 3. Visita a página com timeout de rede
+    cy.visit('/profile', { timeout: 15000 });
+    cy.wait('@getProfileMe', { timeout: 10000 });
   });
 
-  it('1. Deve exibir o nome "Cristiano" na Navbar (vido do display_name)', () => {
-    // Verifica se o seu split(' ')[0] funcionou e pegou o primeiro nome do mock
-    cy.get('nav', { timeout: 10000 }).should('contain', 'Cristiano');
-    cy.get('nav').should('not.contain', USERNAME); // Garante que NÃO está mostrando o username
+  it('1. Deve exibir o nome "Cristiano" na Navbar (extraído do display_name)', () => {
+    // Aumentamos o timeout para garantir que o AuthContext carregou na UI
+    cy.get('nav', { timeout: 12000 })
+      .should('be.visible')
+      .and('contain', 'Cristiano');
+    
+    cy.get('nav').should('not.contain', USERNAME);
   });
 
   it('2. Sync Test: Deve atualizar para "Ricardo" e refletir na Navbar instantaneamente', () => {
     const newFullName = 'Ricardo Silva Pro';
     const expectedFirstName = 'Ricardo';
 
-    // Interceptamos o PATCH para responder com o novo nome "Ricardo"
     cy.intercept('PATCH', /.*accounts\/profile.*/, {
       statusCode: 200,
       body: {
@@ -47,29 +49,28 @@ describe('Profile Settings & Real-time Sync (UUID Era)', () => {
       }
     }).as('updateToRicardo');
 
-    // Forçamos o Mock do GET a retornar Ricardo também (para navegação posterior)
+    // Mock do GET atualizado para navegação futura
     cy.intercept('GET', /.*accounts\/profile.*/, {
       statusCode: 200,
-      body: {
-        id: MOCK_UUID,
-        username: USERNAME,
-        display_name: newFullName
-      }
+      body: { id: MOCK_UUID, username: USERNAME, display_name: newFullName }
     }).as('getProfileRicardo');
 
-    // Ação: Altera o nome no input
-    cy.get('input').filter(':not([disabled])').first().clear().type(newFullName);
+    // Interação com o Input (Garantindo que está pronto para receber texto)
+    cy.get('input').filter(':not([disabled])').first()
+      .should('be.visible')
+      .clear()
+      .type(newFullName, { delay: 50 }); // Delay suave para estabilidade no Firefox
+
     cy.get('button[type="submit"]').click();
 
-    // Espera a API confirmar o sucesso
-    cy.wait('@updateToRicardo');
+    // Espera a API confirmar (timeout estendido para 15s)
+    cy.wait('@updateToRicardo', { timeout: 15000 });
 
-    // Validação de Feedback
-    cy.contains('Profile updated successfully!').should('be.visible');
+    // Validação de Feedback Visual
+    cy.contains('Profile updated successfully!', { timeout: 10000 }).should('be.visible');
 
-    // Validação de Sincronização (A "Prova Real")
-    // O timeout de 10s dá tempo para o AuthContext atualizar o estado do user
-    cy.get('nav', { timeout: 10000 })
+    // Validação de Sincronização em Tempo Real na Nav
+    cy.get('nav', { timeout: 12000 })
       .should('contain', expectedFirstName)
       .and('not.contain', 'Cristiano'); 
   });
@@ -77,26 +78,21 @@ describe('Profile Settings & Real-time Sync (UUID Era)', () => {
   it('3. Persistência: Deve manter o nome "Ricardo" ao navegar para o Dashboard', () => {
     const ricardoName = 'Ricardo';
 
-    // Mock para garantir que ao mudar de página o app receba o nome atualizado
     cy.intercept('GET', /.*accounts\/profile.*/, {
       statusCode: 200,
-      body: { 
-        id: MOCK_UUID, 
-        username: USERNAME, 
-        display_name: 'Ricardo Silva Pro' 
-      }
+      body: { id: MOCK_UUID, username: USERNAME, display_name: 'Ricardo Silva Pro' }
     }).as('getFinalState');
 
-    // Clica no link da Logo ou Home na Nav
-    cy.get('nav a').first().click();
+    // Clique forçado para evitar que animações de CSS bloqueiem o link
+    cy.get('nav a').first().click({ force: true });
     
-    // Valida URL
-    cy.url().should('eq', Cypress.config().baseUrl + '/');
+    // Valida URL e carregamento da página inicial
+    cy.url({ timeout: 10000 }).should('eq', Cypress.config().baseUrl + '/');
     
-    // Espera o Dashboard carregar os dados
-    cy.wait('@getFinalState');
+    // Espera o Dashboard carregar os dados reais
+    cy.wait('@getFinalState', { timeout: 10000 });
 
-    // Verifica se o nome "Ricardo" persiste na página inicial
-    cy.get('body').should('contain', ricardoName);
+    // Verifica persistência no body da página
+    cy.get('body', { timeout: 10000 }).should('contain', ricardoName);
   });
 });

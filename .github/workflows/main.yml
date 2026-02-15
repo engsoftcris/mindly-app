@@ -2,7 +2,6 @@ name: CI/CD Pipeline - Mindly
 
 on:
   push:
-    # Agora ele roda em qualquer branch de feature para garantir que o código está bom
     branches: [ main, 'feature/**' ]
   pull_request:
     branches: [ main ]
@@ -68,17 +67,20 @@ jobs:
 
       - name: Cypress Run
         uses: cypress-io/github-action@v6
-        # Removi o "continue-on-error" para que você saiba quando o teste falhar de verdade!
         env:
-          VITE_GOOGLE_CLIENT_ID: "871089850123-test-id.apps.googleusercontent.com"
-          VITE_API_URL: "http://localhost:8000"
+          # ADICIONADO: Variáveis essenciais para o App não crashar no início
+          VITE_API_URL: "http://localhost:8000/api"
+          VITE_GOOGLE_CLIENT_ID: "871089850123-uf6ljhm2v6qh09rbi9rr5e3f7eq1vonk.apps.googleusercontent.com"
+          VITE_FIREBASE_API_KEY: "AIzaSyBu2ZPR8iIVJT7zNJ-mvPT7FD5NzoWO_VE"
+          VITE_FIREBASE_AUTH_DOMAIN: "mindly-app-96bfb.firebaseapp.com"
+          VITE_FIREBASE_PROJECT_ID: "mindly-app-96bfb"
+          VITE_FIREBASE_APP_ID: "1:871089850123:web:ba40bc306e6ca228f7040e"
         with:
           working-directory: ./frontend
           start: npm run dev
           wait-on: 'http://localhost:5173'
           browser: chrome
 
-  # NOVO JOB: Só roda se os testes passarem E se estivermos na branch MAIN
   deploy:
     needs: test-frontend-e2e
     if: github.ref == 'refs/heads/main'
