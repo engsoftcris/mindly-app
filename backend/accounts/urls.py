@@ -4,7 +4,8 @@ from .views import (
     UserProfileView, 
     GoogleLoginView, 
     PostViewSet,
-    HybridFeedView
+    HybridFeedView,
+    ProfileDetailView
 )
 from .views_picture import UserProfilePictureView
 
@@ -21,4 +22,5 @@ urlpatterns = [
     # 2. Router Paths (This includes /api/posts/)
     path('', include(router.urls)),
     path('profile/me/', UserProfileView.as_view(), name='my-profile'),
+    path("profiles/<uuid:pk>/", ProfileDetailView.as_view(), name="profile-detail"),
 ]

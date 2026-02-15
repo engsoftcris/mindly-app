@@ -1,10 +1,13 @@
-describe('Mindly - Suite de Testes: Storage e Moderação', () => {
+describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', () => {
   const MOCK_UUID = 'b369ce73-66ba-4dc9-a736-d79eb3e45e5b';
   const CLEAN_URL = "https://nsallopenmwbwkzrhgmx.supabase.co/storage/v1/object/public/mindly-media/posts/images/test.png";
   const VIDEO_URL = "https://example.com/video-teste.mp4";
 
   beforeEach(() => {
-    // Intercepts globais para evitar falhas de carregamento inicial
+    // Define o tamanho da tela para garantir que o layout desktop apareça
+    cy.viewport(1280, 800);
+    cy.clearLocalStorage();
+
     cy.intercept('GET', '**/api/accounts/profile**', {
       statusCode: 200,
       body: { id: MOCK_UUID, username: 'cristiano', display_name: 'Cristiano' }
@@ -17,81 +20,95 @@ describe('Mindly - Suite de Testes: Storage e Moderação', () => {
 
   context('Storage & URL Clean Fix', () => {
     beforeEach(() => {
-      cy.intercept('GET', '**/api/accounts/feed**', { statusCode: 200, body: { results: [] } }).as('getFeed');
+      // Intercepta a carga inicial da aba 'Para você'
+      cy.intercept('GET', '**/api/posts/**', { statusCode: 200, body: { results: [] } }).as('getPostsAll');
+      
       cy.intercept('POST', '**/api/posts/**', {
         statusCode: 201,
-        body: { id: 999, content: 'URL Fix Test', image: CLEAN_URL, author: { username: 'cristiano' } }
+        body: { 
+          id: 999, 
+          content: 'URL Fix Test', 
+          media_url: CLEAN_URL, 
+          author: { username: 'cristiano', id: 1 },
+          moderation_status: 'APPROVED',
+          created_at: new Date().toISOString()
+        }
       }).as('createPost');
       
       cy.visit('/');
-      cy.wait(['@getProfile', '@getFeed'], { timeout: 25000 });
+      cy.wait(['@getProfile', '@getPostsAll'], { timeout: 25000 });
     });
 
-    it('1. Deve abrir o modal de postagem e encontrar o textarea', () => {
-      cy.get('button').contains(/Post|Novo|Criar/i).first().click({force: true});
-      cy.get('textarea', { timeout: 15000 }).should('be.visible');
+   it('1. Deve encontrar o campo de postagem já aberto no topo da página', () => {
+      // Usamos 'have.attr' para validar o placeholder corretamente
+      cy.get('textarea', { timeout: 15000 })
+        .should('be.visible')
+        .and('have.attr', 'placeholder', "What's on your mind?");
     });
 
-    it('2. Deve validar a resposta da API (Sem /s3/ e Sem Assinaturas)', () => {
-      cy.get('button').contains(/Post|Novo|Criar/i).first().click({force: true});
-      cy.get('textarea').type('Testando formato de imagem...', { delay: 50 });
+    it('2. Deve validar o formato da URL no POST (Storage Fix)', () => {
+      cy.get('textarea').first().type('Validando link do Supabase...', { delay: 30 });
       cy.get('button[type="submit"]').should('not.be.disabled').click();
       
-      cy.wait('@createPost', { timeout: 25000 }).then((interception) => {
-        const imageUrl = interception.response.body.image;
+      cy.wait('@createPost', { timeout: 20000 }).then((interception) => {
+        const imageUrl = interception.response.body.media_url;
         expect(imageUrl).to.not.include('/s3/'); 
         expect(imageUrl).to.include('storage/v1/object/public');
+        cy.log('✅ URL Limpa: ' + imageUrl);
       });
     });
   });
 
-  context('Moderação de Conteúdo', () => {
-    it('3. Deve aplicar BLUR e Overlay em vídeos PENDING', () => {
-      cy.intercept('GET', '**/api/accounts/feed**', {
+  context('Moderação de Conteúdo (Visual)', () => {
+    const mockPost = (status, content) => ({
+      id: 10, 
+      author: { username: 'cristiano', id: 1 }, 
+      content: content,
+      media_url: VIDEO_URL, 
+      moderation_status: status, 
+      created_at: new Date().toISOString()
+    });
+
+    it('3. Deve aplicar BLUR em mídia PENDING', () => {
+      cy.intercept('GET', '**/api/posts/**', {
         statusCode: 200,
-        body: { results: [{
-          id: 10, author: { username: 'cristiano' }, content: 'Em análise',
-          media: VIDEO_URL, moderation_status: 'PENDING', created_at: new Date().toISOString()
-        }]}
+        body: { results: [mockPost('PENDING', 'Em análise')] }
       }).as('getPending');
 
       cy.visit('/');
-      cy.wait(['@getProfile', '@getPending'], { timeout: 20000 });
+      cy.wait(['@getProfile', '@getPending']);
       
-      cy.get('video', { timeout: 15000 }).should('have.class', 'blur-2xl');
+      // Verifica a classe de blur que você definiu no Dashboard.jsx
+      cy.get('video').should('have.class', 'blur-2xl');
       cy.contains('Conteúdo em Análise').should('be.visible');
     });
 
-    it('4. Deve mostrar vídeo normalmente em APPROVED', () => {
-      cy.intercept('GET', '**/api/accounts/feed**', {
+    it('4. Deve remover mídia e mostrar aviso em REJECTED', () => {
+      cy.intercept('GET', '**/api/posts/**', {
         statusCode: 200,
-        body: { results: [{
-          id: 11, author: { username: 'cristiano' }, content: 'Tudo OK',
-          media: VIDEO_URL, moderation_status: 'APPROVED', created_at: new Date().toISOString()
-        }]}
-      }).as('getApproved');
-
-      cy.visit('/');
-      cy.wait(['@getProfile', '@getApproved'], { timeout: 20000 });
-      
-      cy.get('video', { timeout: 15000 }).should('not.have.class', 'blur-2xl');
-      cy.get('video').should('have.attr', 'controls');
-    });
-
-    it('5. Deve mostrar aviso de diretrizes em REJECTED', () => {
-      cy.intercept('GET', '**/api/accounts/feed**', {
-        statusCode: 200,
-        body: { results: [{
-          id: 12, author: { username: 'cristiano' }, content: 'Bloqueado',
-          media: VIDEO_URL, moderation_status: 'REJECTED', created_at: new Date().toISOString()
-        }]}
+        body: { results: [mockPost('REJECTED', 'Conteúdo Proibido')] }
       }).as('getRejected');
 
       cy.visit('/');
-      cy.wait(['@getProfile', '@getRejected'], { timeout: 20000 });
+      cy.wait(['@getProfile', '@getRejected']);
       
+      // O vídeo não deve ser renderizado
       cy.get('video').should('not.exist');
-      cy.contains('Este post violou as diretrizes').should('be.visible');
+      // Texto exato do seu componente
+      cy.contains('Conteúdo removido por violação das diretrizes.').should('be.visible');
+    });
+
+    it('5. Deve exibir mídia normalmente em APPROVED', () => {
+      cy.intercept('GET', '**/api/posts/**', {
+        statusCode: 200,
+        body: { results: [mockPost('APPROVED', 'Tudo liberado')] }
+      }).as('getApproved');
+
+      cy.visit('/');
+      cy.wait(['@getProfile', '@getApproved']);
+      
+      cy.get('video').should('not.have.class', 'blur-2xl');
+      cy.get('video').should('have.attr', 'controls');
     });
   });
 });

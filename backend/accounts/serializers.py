@@ -28,7 +28,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "upload_picture",
             "social_id",
             "provider",
-            "is_private",
         ]
         read_only_fields = ["id", "username"]
 
@@ -106,6 +105,7 @@ class FeedAuthorSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
     # BUSCA O DISPLAY_NAME DO PERFIL ASSOCIADO AO USER
     display_name = serializers.ReadOnlyField(source='profile.display_name')
+    id = serializers.ReadOnlyField(source='profile.id')
 
     class Meta:
         model = User
@@ -119,30 +119,7 @@ class FeedAuthorSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.profile_picture.url) if request else obj.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
-
-class ProfileSerializer(serializers.ModelSerializer):
-    username = serializers.ReadOnlyField(source='user.username')
-    email = serializers.ReadOnlyField(source='user.email')
-    # BUSCA A FOTO DO USER:
-    profile_picture = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Profile
-        fields = ['id', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'created_at']
-        read_only_fields = ['id', 'created_at']
-
-    def get_profile_picture(self, obj):
-        # Reutilizamos a lógica: Se o user tiver foto aprovada, manda a URL
-        user = obj.user
-        request = self.context.get("request")
-        
-        if user.image_status == "APPROVED" and user.profile_picture:
-            return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
-        
-        # Fallback padrão
-        path = "/static/images/default-avatar.png"
-        return request.build_absolute_uri(path) if request else path
-
+    
 class PostSerializer(serializers.ModelSerializer):
     author = FeedAuthorSerializer(source='user', read_only=True)
     media_url = serializers.SerializerMethodField()  # ✅ ADICIONA ISSO
@@ -180,3 +157,63 @@ class PostSerializer(serializers.ModelSerializer):
 
     def get_media_url(self, obj):
         return obj.media.url if obj.media else None
+
+class ProfileSerializer(serializers.ModelSerializer):
+    username = serializers.ReadOnlyField(source='user.username')
+    email = serializers.ReadOnlyField(source='user.email')
+    profile_picture = serializers.SerializerMethodField()
+    # 1. Adicione o campo aqui para ele ser calculado
+    is_following = serializers.SerializerMethodField()
+    posts = PostSerializer(many=True, read_only=True, source='user.posts')
+
+    class Meta:
+        model = Profile
+        # 2. Garanta que is_private e is_following estejam aqui
+        fields = ['id', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'posts', 'is_private', 'is_following', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def get_profile_picture(self, obj):
+        # ... sua lógica atual (mantenha como está)
+        user = obj.user
+        request = self.context.get("request")
+        if user.image_status == "APPROVED" and user.profile_picture:
+            return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
+        path = "/static/images/default-avatar.png"
+        return request.build_absolute_uri(path) if request else path
+    
+    def get_is_following(self, obj):
+        request = self.context.get('request')
+        # Se o user logado for o dono do perfil, tecnicamente "ele se segue" ou apenas True
+        if request and request.user.is_authenticated:
+            return request.user.following.filter(id=obj.user.id).exists()
+        return False
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+        
+        if not request or not request.user.is_authenticated:
+            return data
+
+        # LÓGICA DE PRIVACIDADE CORRIGIDA:
+        is_owner = request.user == instance.user
+        
+        # Verificação direta no banco para não ter erro de contexto
+        is_follower = request.user.following.filter(id=instance.user.id).exists()
+
+        if instance.is_private and not is_owner and not is_follower:
+            return {
+                'id': data['id'],
+                'username': data['username'],
+                'display_name': data['display_name'],
+                'profile_picture': data['profile_picture'],
+                'is_private': True,
+                'is_following': False, # Se entrou aqui, ele não segue
+                'is_restricted': True,
+                'bio': "This profile is private. Follow to see their content.",
+                'posts': []
+            }
+        
+        # Se for dono ou seguidor, adicionamos a flag de restrição como False
+        data['is_restricted'] = False
+        return data

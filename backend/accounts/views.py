@@ -94,29 +94,30 @@ def save_full_name(backend, details, response, user=None, *args, **kwargs):
 
 
 class PostViewSet(viewsets.ModelViewSet):
-    # Change this so people can actually see the "English World" feed!
-    queryset = Post.objects.all().order_by('-created_at')
     serializer_class = PostSerializer
     permission_classes = [permissions.IsAuthenticated]
-
     parser_classes = (MultiPartParser, FormParser)
-    
+
+    def get_queryset(self):
+        user = self.request.user
+        # Lógica: Ver posts PÚBLICOS de qualquer pessoa OU posts que EU escrevi
+        return Post.objects.filter(
+            Q(user__profile__is_private=False) | Q(user=user)
+        ).distinct().order_by('-created_at')
+
     def get_permissions(self):
         """
-        Custom permissions: 
-        - Anyone (authenticated) can view and create.
-        - Only the owner can Edit (PUT/PATCH) or Delete.
+        - Qualquer um autenticado pode ver (list/retrieve) e criar.
+        - Para editar ou deletar, você pode futuramente adicionar uma permissão de IsOwner,
+          mas por enquanto o IsAuthenticated garante que apenas logados acessem.
         """
         if self.action in ['update', 'partial_update', 'destroy']:
-            # You might need to create a custom IsOwner permission later,
-            # but for now, IsAuthenticated is the baseline.
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
-        # This part is perfect! It connects the post to the logged-in user.
+        # Vincula o post ao usuário que está logado
         serializer.save(user=self.request.user)
-
 # Criteria: Load 20 posts per page for performance
 class FeedPagination(PageNumberPagination):
     page_size = 20
@@ -140,24 +141,27 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 class HybridFeedView(generics.ListAPIView):
     """
-    Returns a list of posts from users that the current user follows,
-    ordered by the most recent first. Includes pagination (20 per page).
+    Retorna APENAS posts de quem o usuário segue.
     """
     serializer_class = PostSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = FeedPagination
 
     def get_serializer_context(self):
-        # Mandatory to generate full URLs for profile pictures
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
 
     def get_queryset(self):
         user = self.request.user
+        # Filtramos APENAS pelos usuários que estão na lista de 'following'
         following_users = user.following.all()
         
-        # This logic says: "Show posts from people I follow OR posts from ME"
         return Post.objects.filter(
-            Q(user__in=following_users) | Q(user=user)
+            user__in=following_users
         ).distinct().order_by('-created_at')
+    
+class ProfileDetailView(generics.RetrieveAPIView):
+    queryset = Profile.objects.all()
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]

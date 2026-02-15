@@ -9,7 +9,8 @@ const ProfilePage = () => {
         display_name: '',
         bio: '',
         username: '',
-        email: ''
+        email: '',
+        is_private: false // 1. Novo campo no estado
     });
 
     const [loading, setLoading] = useState(true);
@@ -23,7 +24,8 @@ const ProfilePage = () => {
                     display_name: response.data.display_name || response.data.full_name || '',
                     bio: response.data.bio || '',
                     username: response.data.username || '',
-                    email: response.data.email || ''
+                    email: response.data.email || '',
+                    is_private: response.data.is_private || false // 2. Carrega do banco
                 });
                 setLoading(false);
             } catch (error) {
@@ -40,13 +42,15 @@ const ProfilePage = () => {
         try {
             const response = await api.patch('/accounts/profile/me/', {
                 display_name: profile.display_name,
-                bio: profile.bio
+                bio: profile.bio,
+                is_private: profile.is_private // 3. Envia para o backend
             });
 
             updateUser({ 
                 display_name: response.data.display_name,
                 bio: response.data.bio, 
-                profile_picture: response.data.profile_picture
+                profile_picture: response.data.profile_picture,
+                is_private: response.data.is_private // Atualiza o contexto global
             });
 
             setStatusMessage('Profile updated successfully! ✅');
@@ -101,6 +105,36 @@ const ProfilePage = () => {
                             onChange={(e) => setProfile({...profile, bio: e.target.value})}
                         />
                     </div>
+
+                    {/* --- NOVO: Privacy Switch --- */}
+                    <div className="flex items-center justify-between p-4 bg-[#16181C] rounded-xl border border-gray-800 group transition-all duration-200 hover:border-gray-700">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${profile.is_private ? 'bg-indigo-500/10 text-indigo-400' : 'bg-gray-800 text-gray-500'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold">Private Profile</h3>
+                                <p className="text-xs text-gray-500">Only approved followers can see your posts.</p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setProfile({ ...profile, is_private: !profile.is_private })}
+                            className={`${
+                                profile.is_private ? 'bg-indigo-600' : 'bg-gray-700'
+                            } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`}
+                        >
+                            <span
+                                className={`${
+                                    profile.is_private ? 'translate-x-5' : 'translate-x-0'
+                                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                            />
+                        </button>
+                    </div>
+                    {/* --- FIM DO PRIVACY SWITCH --- */}
 
                     {/* Botão Centralizado e Mensagem de Status */}
                     <div className="flex flex-col items-center gap-4 pt-4">

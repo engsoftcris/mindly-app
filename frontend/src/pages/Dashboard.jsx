@@ -1,40 +1,60 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "../context/AuthContext";
+import { Link } from "react-router-dom";
 import { postsAPI } from "../api/axios";
-import CreatePostModal from "../components/CreatePostModal";
+import CreatePost from "../components/CreatePost";
 
 const Dashboard = () => {
-  const { user } = useAuth();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [posts, setPosts] = useState([]);
   const [nextPage, setNextPage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('all'); // 'all' (Para você) ou 'following' (Seguindo)
 
-  const fetchFeed = useCallback(async (urlOrPage = "/accounts/feed/") => {
-    if (loading || !urlOrPage) return;
+  const loadingRef = useRef(false);
+
+  const fetchFeed = useCallback(async (urlOrPage = null) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
+
     try {
-      const response = await postsAPI.getFeed(urlOrPage);
-      const newPosts = response.data.results || response.data; 
+      let response;
+      // Se tivermos uma URL completa (paginação), usamos ela
+      if (urlOrPage && typeof urlOrPage === 'string' && urlOrPage.includes('http')) {
+        response = await postsAPI.getFeed(urlOrPage);
+      } else {
+        // Se for a primeira carga, escolhemos o endpoint com base na aba
+        const endpoint = activeTab === 'all' ? "/posts/" : "/accounts/feed/";
+        response = await postsAPI.getFeed(endpoint);
+      }
+
+      const newPosts = response.data.results || response.data;
       const nextUrl = response.data.next || null;
-      setPosts(prev => urlOrPage !== "/accounts/feed/" ? [...prev, ...newPosts] : newPosts);
+
+      // Se for paginação (scroll), adiciona aos existentes. Se for troca de aba, substitui.
+      setPosts(prev => (urlOrPage ? [...prev, ...newPosts] : newPosts));
       setNextPage(nextUrl);
     } catch (error) {
       console.error("Error fetching feed:", error);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
-  }, [loading]);
+  }, [activeTab]);
 
+  // Recarrega o feed sempre que mudar a aba
   useEffect(() => {
-    fetchFeed("/accounts/feed/");
-  }, []);
+    setPosts([]);
+    setNextPage(null);
+    fetchFeed();
+  }, [activeTab, fetchFeed]);
 
-  const handleRefresh = async () => {
-  setNextPage(null);
-  await fetchFeed("/accounts/feed/");
-};
+  const handlePostCreated = (newPost) => {
+    // Adiciona o novo post no topo apenas se estiver na aba "Para você"
+    // ou se o usuário quiser ver o próprio post na aba Seguindo
+    setPosts(prev => [newPost, ...prev]);
+  };
 
+  // Lógica de Scroll Infinito
   const observer = useRef();
   const lastPostElementRef = useCallback(node => {
     if (loading) return;
@@ -48,144 +68,135 @@ const Dashboard = () => {
   }, [loading, nextPage, fetchFeed]);
 
   return (
-    // FONTE DE COR E FUNDO ALTERADOS PARA O TEMA DARK #0F1419
-    <div className="min-h-screen bg-[#0F1419] text-white">
-      <div className="max-w-4xl mx-auto p-6 bg-[#0F1419]">
-        
-        {/* --- HEADER SECTION --- */}
-        <div className="flex items-center justify-between mb-8 border-b border-gray-800 pb-6">
-          <div className="flex items-center space-x-4">
-            <img
-              src={user?.profile_picture || `https://ui-avatars.com/api/?name=${user?.display_name || user?.username || 'User'}&background=0D8ABC&color=fff`}
-              alt="Profile"
-              className="w-16 h-16 rounded-full border-2 border-blue-500 object-cover"
-            />
-            <div>
-              <h1 className="text-2xl font-bold text-white">Seu Mundo Mindly</h1>
-              <p className="text-gray-400 text-sm italic">Onde as ideias fluem...</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-lg transition-all"
+    <div className="w-full min-h-screen bg-black">
+      {/* --- HEADER COM ABAS --- */}
+      <div className="sticky top-0 z-30 bg-black/80 backdrop-blur-md border-b border-gray-800">
+        <div className="flex w-full">
+          <button 
+            onClick={() => setActiveTab('all')}
+            className="flex-1 py-4 hover:bg-white/5 transition relative"
           >
-            + New Post
+            <span className={`text-sm font-bold ${activeTab === 'all' ? 'text-white' : 'text-gray-500'}`}>Para você</span>
+            {activeTab === 'all' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-blue-500 rounded-full"></div>}
+          </button>
+          <button 
+            onClick={() => setActiveTab('following')}
+            className="flex-1 py-4 hover:bg-white/5 transition relative"
+          >
+            <span className={`text-sm font-bold ${activeTab === 'following' ? 'text-white' : 'text-gray-500'}`}>Seguindo</span>
+            {activeTab === 'following' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-1 bg-blue-500 rounded-full"></div>}
           </button>
         </div>
+      </div>
 
-        {/* --- FEED SECTION --- */}
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold border-l-4 border-blue-500 pl-3 mb-6">Network Feed</h2>
+      <CreatePost onPostCreated={handlePostCreated} />
 
-          {posts.map((post, index) => {
+      {/* --- LISTAGEM DE POSTS --- */}
+      <div className="divide-y divide-gray-800">
+        {posts.length > 0 ? (
+          posts.map((post, index) => {
             const isLastElement = posts.length === index + 1;
             return (
               <div
                 key={post.id}
                 ref={isLastElement ? lastPostElementRef : null}
-                className="p-5 bg-[#161b22] rounded-xl border border-gray-800 hover:border-gray-700 transition-colors shadow-sm"
+                className="p-4 hover:bg-white/[0.02] transition-colors flex gap-3"
               >
-                {/* Author Info */}
-                <div className="flex items-center space-x-3 mb-4">
+                {/* --- AVATAR --- */}
+                <Link to={`/profile/${post.author?.uuid || post.author?.id}`} className="flex-shrink-0">
                   <img
-                    src={post.author?.profile_picture || `https://ui-avatars.com/api/?name=${post.author?.username || 'User'}&background=random`}
-                    alt="Author"
-                    className="w-10 h-10 rounded-full border border-gray-700"
+                    src={post.author?.profile_picture || `https://ui-avatars.com/api/?name=${post.author?.username}&background=random`}
+                    className="w-12 h-12 rounded-full object-cover border border-gray-800 hover:brightness-90 transition"
+                    alt="avatar"
                   />
-                  <div className="flex flex-col">
-                    <span className="font-bold text-sm text-white">
+                </Link>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Link 
+                      to={`/profile/${post.author?.uuid || post.author?.id}`} 
+                      className="font-bold text-white hover:underline cursor-pointer"
+                    >
                       {post.author?.display_name || post.author?.username}
-                    </span>
-                    <span className="text-gray-500 text-xs">@{post.author?.username}</span>
+                    </Link>
+                    <span className="text-gray-500 text-sm">@{post.author?.username}</span>
                   </div>
-                </div>
 
-                <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                  <p className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]">
+                    {post.content}
+                  </p>
 
-             {/* --- CÓDIGO ATUALIZADO DENTRO DO MAP --- */}
-{
-  (post.media_url || post.media) && (() => {
-    const mediaSrc = post.media_url || post.media;
-    const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(mediaSrc);
-    
-    const isPending = post.moderation_status === "PENDING";
-    const isRejected = post.moderation_status === "REJECTED";
+                  {/* Renderização de Mídia */}
+                  {(post.media_url || post.media) && (() => {
+                    const mediaSrc = post.media_url || post.media;
+                    const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(mediaSrc);
+                    const isPending = post.moderation_status === "PENDING";
+                    const isRejected = post.moderation_status === "REJECTED";
 
-    // 1. CASO REJEITADO: Mostra apenas o aviso de diretrizes
-    if (isRejected) {
-      return (
-        <div className="mt-3 p-6 rounded-xl border border-red-900/30 bg-red-900/10 flex flex-col items-center justify-center text-center">
-          <svg className="w-8 h-8 text-red-500/60 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <p className="text-red-500 font-bold text-xs uppercase tracking-widest">Conteúdo Removido</p>
-          <p className="text-gray-500 text-[10px] mt-1 italic">Este post violou as diretrizes da comunidade e não está mais disponível.</p>
-        </div>
-      );
-    }
+                    if (isRejected) return (
+                      <div className="mt-3 p-4 rounded-xl border border-red-900/30 bg-red-900/10 text-center text-red-500 text-xs font-bold">
+                        Conteúdo removido por violação das diretrizes.
+                      </div>
+                    );
 
-    // 2. CASO PENDENTE OU APROVADO: Mostra a mídia (com ou sem blur)
-    return (
-      <div className="relative mt-3 overflow-hidden rounded-xl border border-gray-800 bg-[#0d1117] group">
-        {isVideo ? (
-          <video
-            src={mediaSrc}
-            controls={!isPending}
-            playsInline
-            className={`max-h-96 w-full object-contain transition-all duration-500 ${isPending ? "blur-2xl scale-110 opacity-40" : ""}`}
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        ) : (
-          <img
-            src={mediaSrc}
-            alt="Post media"
-            className={`max-h-96 w-full object-contain transition-all duration-500 ${isPending ? "blur-2xl scale-110 opacity-40" : ""}`}
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        )}
-
-        {/* Overlay para PENDING */}
-        {isPending && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-            <div className="bg-blue-500/20 backdrop-blur-md border border-blue-500/50 p-3 rounded-2xl shadow-2xl">
-              <svg className="w-8 h-8 text-blue-400 mx-auto mb-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              <p className="text-blue-400 font-bold text-xs uppercase tracking-tighter">Conteúdo em Análise</p>
-              <p className="text-gray-300 text-[10px] mt-1 max-w-[150px]">Ficará visível para a rede após aprovação.</p>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  })()
-}
-                <div className="mt-4 text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
-                  {new Date(post.created_at).toLocaleString()}
+                    return (
+                      <div className="relative mt-3 overflow-hidden rounded-2xl border border-gray-800 bg-black">
+                        {isVideo ? (
+                          <video src={mediaSrc} controls={!isPending} className={`max-h-96 w-full object-cover ${isPending ? "blur-2xl opacity-40" : ""}`} />
+                        ) : (
+                          <img src={mediaSrc} className={`max-h-96 w-full object-cover ${isPending ? "blur-2xl opacity-40" : ""}`} alt="Post" />
+                        )}
+                        {isPending && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm text-blue-400 font-bold text-xs uppercase p-2">
+                            Conteúdo em Análise
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  
+                  <div className="mt-3 text-[11px] text-gray-600">
+                    {new Date(post.created_at).toLocaleString()}
+                  </div>
                 </div>
               </div>
             );
-          })}
-        </div>
-
-        {loading && (
-          <div className="flex justify-center mt-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
-        )}
-        
-        {!nextPage && posts.length > 0 && (
-          <p className="text-center mt-10 text-gray-600 text-sm">✨ Você chegou ao fim do mundo!</p>
+          })
+        ) : (
+          /* --- ESTADO VAZIO (MENSAGEM DE INCENTIVO) --- */
+          !loading && (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              {activeTab === 'following' ? (
+                <div className="max-w-sm">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500/10 rounded-full mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-extrabold text-white mb-2">Focus on your circle</h2>
+                  <p className="text-gray-500 mb-6">
+                    When you follow people, their posts will show up here. Start by finding some interesting accounts!
+                  </p>
+                  <button 
+                    onClick={() => setActiveTab('all')}
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full transition-all transform active:scale-95"
+                  >
+                    Find people to follow
+                  </button>
+                </div>
+              ) : (
+                <p className="text-gray-500 font-medium">No posts to show right now.</p>
+              )}
+            </div>
+          )
         )}
       </div>
 
-      <CreatePostModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        refreshPosts={handleRefresh}
-      />
+      {loading && (
+        <div className="p-8 flex justify-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+        </div>
+      )}
     </div>
   );
 };

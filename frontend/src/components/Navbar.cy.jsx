@@ -23,15 +23,18 @@ describe('<Navbar />', () => {
     );
   };
 
-  it('Deve mostrar apenas o primeiro nome (Cristiano) quando logado', () => {
+ it('Deve mostrar apenas o primeiro nome (Cristiano) quando logado', () => {
     mountNavbar({ 
       display_name: 'Cristiano Tobias', 
       username: 'cristiano40' 
     });
 
-    // Verifica se o split(' ')[0] que está na tua Navbar funciona
-    cy.contains('Olá, Cristiano').should('be.visible');
+    // Removido o "Olá, " pois não existe mais no seu componente
+    cy.get('p.text-white').should('contain', 'Cristiano');
     cy.contains('Tobias').should('not.exist');
+    
+    // Verifica se o @username também aparece embaixo
+    cy.contains('@cristiano40').should('be.visible');
   });
 
   it('Deve mostrar o username quando o display_name está vazio', () => {
@@ -40,7 +43,8 @@ describe('<Navbar />', () => {
       username: 'tobias_dev' 
     });
 
-    cy.contains('Olá, tobias_dev').should('be.visible');
+    // O fallback agora é apenas o username direto
+    cy.get('p.text-white').should('contain', 'tobias_dev');
   });
 
   it('Deve mostrar o link "Entrar" quando o user é null', () => {
