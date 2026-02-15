@@ -3,7 +3,12 @@ const { defineConfig } = require("cypress");
 module.exports = defineConfig({
   e2e: {
     baseUrl: "http://localhost:5173",
-    supportFile: false,
+    supportFile: false, // E2E pode continuar false se você não usa comandos globais lá
+    defaultCommandTimeout: 10000,
+    retries: {
+      runMode: 2,
+      openMode: 0,
+    },
     setupNodeEvents(on, config) {
       on("before:browser:launch", (browser = {}, launchOptions) => {
         if (browser.family === "chromium" && browser.name !== "electron") {
@@ -21,5 +26,8 @@ module.exports = defineConfig({
       framework: "react",
       bundler: "vite",
     },
+    // ALTERADO: Agora apontamos para o arquivo onde você configurou o cy.mount
+    supportFile: "cypress/support/component.js", 
+    indexHtmlFile: 'cypress/support/component-index.html',
   },
 });

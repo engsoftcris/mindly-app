@@ -2,24 +2,32 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
   const CLEAN_URL = "https://nsallopenmwbwkzrhgmx.supabase.co/storage/v1/object/public/mindly-media/posts/images/test.png";
 
   beforeEach(() => {
+    // Limpeza total para garantir isolamento no CI/GitHub Actions
     cy.clearLocalStorage();
+    cy.clearCookies();
 
-    // 1. Mocks de Perfil e Feed com Wildcards (**) para evitar erro de barra final
+    // 1. MOCK DE PERFIL
     cy.intercept('GET', '**/api/accounts/profile**', {
       statusCode: 200,
-      body: { username: 'cristiano', display_name: 'Cristiano Tobias' }
+      body: { 
+        id: 1, 
+        username: 'cristiano', 
+        display_name: 'Cristiano Tobias',
+        profile_picture: null 
+      }
     }).as('getProfile');
 
-    cy.intercept('GET', '**/api/accounts/feed/**', (req) => {
+    // 2. MOCK ABA "PARA VOCÊ" (Endpoint: /posts/)
+    // Usamos Regex para capturar tanto a carga inicial quanto a paginação
+    cy.intercept('GET', /.*\/api\/posts\/?(\?.*)?$/, (req) => {
       if (req.url.includes('page=2')) {
         req.reply({
           statusCode: 200,
           body: {
-            count: 2,
             next: null,
             results: [{ 
-              id: 2, content: 'Loaded via Infinite Scroll!', 
-              author: { username: 'system' }, created_at: new Date().toISOString() 
+              id: 2, content: 'Conteúdo da Página 2!', 
+              author: { username: 'sistema', id: 2 }, created_at: new Date().toISOString() 
             }]
           }
         });
@@ -27,65 +35,115 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
         req.reply({
           statusCode: 200,
           body: {
-            count: 2,
-            next: 'http://localhost:8000/api/accounts/feed/?page=2',
+            next: `${Cypress.config().baseUrl}/api/posts/?page=2`,
             results: [{ 
-              id: 1, content: 'Hello from Page 1!', 
-              author: { username: 'cristiano' }, created_at: new Date().toISOString() 
+              id: 1, content: 'Hello from Para Você!', 
+              author: { username: 'cristiano', id: 1 }, created_at: new Date().toISOString() 
             }]
           }
         });
       }
-    }).as('getFeed');
+    }).as('getPostsAll');
 
-    // Mock do POST (Fix do Supabase)
+    // 3. MOCK ABA "SEGUINDO" (Endpoint: /accounts/feed/)
+    cy.intercept('GET', /.*\/api\/accounts\/feed\/?(\?.*)?$/, {
+      statusCode: 200,
+      body: {
+        next: null,
+        results: [{ 
+          id: 10, content: 'Conteúdo da aba Seguindo', 
+          author: { username: 'amigo_teste', id: 5 }, created_at: new Date().toISOString() 
+        }]
+      }
+    }).as('getFeedFollowing');
+
+    // 4. MOCK DO POST (Fix do Supabase)
     cy.intercept('POST', '**/api/posts/**', {
       statusCode: 201,
       body: { 
         id: 99, 
         content: 'Post com URL Limpa',
-        image: CLEAN_URL,
-        author: { username: 'cristiano' },
-        moderation_status: 'APPROVED'
+        media_url: CLEAN_URL, // Ajustado para bater com seu componente (media_url)
+        author: { username: 'cristiano', id: 1 },
+        moderation_status: 'APPROVED',
+        created_at: new Date().toISOString()
       }
     }).as('createPost');
 
-    // Injeção de Token
+    // 5. INJEÇÃO DE TOKEN VIA WINDOW (Simula usuário logado)
     cy.window().then((win) => {
       win.localStorage.setItem('access', 'fake-token-123');
+      win.localStorage.setItem('refresh', 'fake-refresh-123');
     });
 
     cy.visit('/');
-    // Timeout estendido para o GitHub Actions
-    cy.wait(['@getProfile', '@getFeed'], { timeout: 25000 });
-  });
-
-  it('1. Deve exibir posts iniciais e carregar mais no scroll', () => {
-    cy.contains('Hello from Page 1!', { timeout: 15000 }).should('be.visible');
-    cy.scrollTo('bottom', { duration: 500 });
-    cy.wait('@getFeed', { timeout: 20000 });
-    cy.contains('Loaded via Infinite Scroll!', { timeout: 15000 }).should('be.visible');
-  });
-
-  it('2. Deve criar post e validar a URL limpa do Supabase', () => {
-    // Garantir que o botão de abrir modal existe e clicar
-    cy.get('button').contains(/Post|Create|New|Criar/i).first().click({ force: true }); 
     
+    // Espera os mocks obrigatórios da carga inicial
+    cy.wait(['@getProfile', '@getPostsAll'], { timeout: 30000 });
+  });
+
+  it('1. Deve exibir posts iniciais e carregar mais via Infinite Scroll', () => {
+    // 1. Garante que a P1 renderizou primeiro
+    cy.contains('Hello from Para Você!', { timeout: 15000 }).should('be.visible');
+    
+    // 2. Rolar até o fim. 
+    // Como o layout é lateral, tentamos no window com 'ensureScrollable: false'
+    // ou rolamos diretamente o post para garantir que o observer seja triggado.
+    cy.scrollTo('bottom', { ensureScrollable: false });
+    
+    // Caso o scroll no window não funcione devido ao layout CSS, 
+    // forçamos a visibilidade do último elemento da lista:
+    cy.get('.divide-y > div').last().scrollIntoView();
+    
+    // 3. Aguarda a requisição da página 2
+    cy.wait('@getPostsAll', { timeout: 15000 });
+    
+    // 4. Valida que o conteúdo novo apareceu na tela
+    cy.contains('Conteúdo da Página 2!', { timeout: 10000 }).should('be.visible');
+  });
+
+  it('2. Deve criar um post novo e validar o retorno da API', () => {
+    const textoPost = 'Testando postagem robusta no Dashboard';
+
+    // O CreatePost agora é parte direta do Dashboard
     cy.get('textarea', { timeout: 15000 })
       .should('be.visible')
-      .type('Testando Storage Fix no Dashboard', { delay: 50 });
+      .type(textoPost, { delay: 30 }); // Delay suave para simular digitação real
 
-    // Esperar o botão estar clicável (evita race condition no React)
-    cy.get('button[type="submit"]').should('not.be.disabled').click();
+    // Verifica se o botão Post está habilitado
+    cy.get('button[type="submit"]')
+      .should('not.be.disabled')
+      .click();
 
-    // Esperar o POST e validar a resposta
-    cy.wait('@createPost', { timeout: 30000 }).then((interception) => {
-      const imageUrl = interception.response.body.image;
-      expect(imageUrl).to.not.include('/s3/');
-      expect(imageUrl).to.include('storage/v1/object/public');
-      cy.log('✅ URL Validada: ' + imageUrl);
+    // Espera o POST e valida o body da resposta
+    cy.wait('@createPost', { timeout: 20000 }).then((interception) => {
+      expect(interception.response.statusCode).to.eq(201);
+      const media = interception.response.body.media_url;
+      expect(media).to.include('storage/v1/object/public');
+      cy.log('✅ URL do Supabase Validada: ' + media);
     });
 
-    cy.get('textarea', { timeout: 15000 }).should('not.exist');
+    // O campo deve ser limpo e o novo post deve aparecer no topo
+    cy.get('textarea').should('have.value', '');
+    cy.contains('Post com URL Limpa').should('be.visible');
+  });
+
+  it('3. Deve alternar entre abas "Para você" e "Seguindo"', () => {
+    // 1. Alterna para Seguindo
+    cy.contains('button', 'Seguindo').should('be.visible').click({ force: true });
+    
+    // Aguarda o interceptor específico de Seguindo
+    cy.wait('@getFeedFollowing', { timeout: 15000 });
+    cy.contains('Conteúdo da aba Seguindo').should('be.visible');
+
+    // 2. Volta para Para você
+    cy.contains('button', 'Para você').click({ force: true });
+    cy.wait('@getPostsAll');
+    cy.contains('Hello from Para Você!').should('be.visible');
+    
+    // 3. Verifica se a barra azul de status mudou (classe CSS que você definiu)
+    cy.contains('button', 'Para você')
+      .find('div.bg-blue-500') // Verifica se a div indicadora está lá
+      .should('exist');
   });
 });

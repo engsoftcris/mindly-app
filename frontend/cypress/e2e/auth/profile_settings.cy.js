@@ -26,13 +26,20 @@ describe('Profile Settings & Real-time Sync (UUID Era) - Robust Version', () => 
     cy.wait('@getProfileMe', { timeout: 10000 });
   });
 
-  it('1. Deve exibir o nome "Cristiano" na Navbar (extraído do display_name)', () => {
-    // Aumentamos o timeout para garantir que o AuthContext carregou na UI
-    cy.get('nav', { timeout: 12000 })
+ it('1. Deve exibir o nome "Cristiano" na Navbar (extraído do display_name)', () => {
+    // Forçamos uma resolução de tela larga para o Tailwind aplicar o 'xl:block'
+    cy.viewport(1280, 800); 
+
+    // Agora o parágrafo deve estar visível
+    cy.get('nav p.text-white', { timeout: 12000 })
       .should('be.visible')
       .and('contain', 'Cristiano');
     
-    cy.get('nav').should('not.contain', USERNAME);
+    // O username aparece na parte cinza
+    cy.get('nav p.text-gray-500').should('be.visible').and('contain', USERNAME);
+    
+    // Garante que o sobrenome foi cortado
+    cy.get('nav p.text-white').should('not.contain', 'Original');
   });
 
   it('2. Sync Test: Deve atualizar para "Ricardo" e refletir na Navbar instantaneamente', () => {

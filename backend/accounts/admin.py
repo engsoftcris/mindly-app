@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from .models import Post
 from PIL import Image
 
-from .models import User
+from .models import User, Profile
 
 
 class UserAdminForm(forms.ModelForm):
@@ -49,11 +49,10 @@ class CustomUserAdmin(BaseUserAdmin):
         "full_name",
         "image_status",
         "photo_list_preview",
-        "is_private",
         "is_staff",
     )
 
-    list_filter = ("image_status", "is_private", "is_active", "is_staff")
+    list_filter = ("image_status", "is_active", "is_staff")
 
     readonly_fields = ("photo_preview",)
 
@@ -69,8 +68,7 @@ class CustomUserAdmin(BaseUserAdmin):
                     "photo_preview",
                     "image_status",
                     "phone",
-                    "is_private",
-                )
+                    )
             },
         ),
         (
@@ -161,3 +159,8 @@ class PostAdmin(admin.ModelAdmin):
         return "No Media"
     
     media_preview.short_description = 'Media Type'
+
+@admin.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'display_name', 'is_private'] # Aqui sim!
+    list_filter = ['is_private']

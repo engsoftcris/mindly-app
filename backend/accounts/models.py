@@ -44,7 +44,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     image_status = models.CharField(max_length=10, choices=IMAGE_STATUS_CHOICES, default="PENDING")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    is_private = models.BooleanField(default=False)
     following = models.ManyToManyField(
         "self",
         symmetrical=False,
@@ -81,6 +80,7 @@ class Profile(models.Model):
     # Timestamps (always good practice)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_private = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Profile: {self.user.email} ({self.id})"

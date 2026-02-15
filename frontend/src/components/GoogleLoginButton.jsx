@@ -10,13 +10,11 @@ const GoogleLoginButton = () => {
       try {
         const response = await googleLoginApi(tokenResponse.access_token);
         
-        // Salva os tokens exatamente como o seu sistema espera (conforme o api.js)
         localStorage.setItem('access', response.data.access);
         localStorage.setItem('refresh', response.data.refresh);
         
-        // Redireciona para a página principal
         navigate('/'); 
-        window.location.reload(); // Recarrega para o AuthContext ler os novos tokens
+        window.location.reload(); 
       } catch (error) {
         console.error('Erro no login Google:', error.response?.data || error.message);
         alert('Erro ao autenticar com Google no servidor.');
@@ -29,10 +27,23 @@ const GoogleLoginButton = () => {
     <button 
       onClick={() => login()}
       type="button"
-      className="w-full flex justify-center items-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+      // ADICIONADO: cursor-pointer e ajustes de cores para o seu tema dark
+      className="
+        w-full flex justify-center items-center 
+        gap-3 py-3 px-4 
+        bg-white hover:bg-gray-100
+        text-black font-bold text-sm
+        rounded-xl shadow-sm 
+        transition-all duration-200
+        cursor-pointer
+      "
     >
-      <img className="h-5 w-5 mr-2" src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo" />
-      Google
+      <img 
+        className="h-5 w-5" 
+        src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
+        alt="Google logo" 
+      />
+      Continuar com Google
     </button>
   );
 };
