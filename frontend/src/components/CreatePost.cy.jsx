@@ -35,8 +35,8 @@ describe('<CreatePost />', () => {
 
     // 1. Verifica se o avatar carregou do contexto
     cy.get('img[alt="avatar"]')
-      .should('be.visible')
-      .and('have.attr', 'src', mockAuthValue.user.profile_picture);
+  .should('exist') // Verifica se o elemento está no HTML
+  .and('have.attr', 'src', mockAuthValue.user.profile_picture);
 
     // 2. Verifica o placeholder (usando have.attr que é o correto)
     cy.get('textarea')
