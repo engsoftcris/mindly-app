@@ -7,6 +7,7 @@ const PublicProfile = () => {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [activeTab, setActiveTab] = useState('all'); 
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -21,9 +22,16 @@ const PublicProfile = () => {
                 setLoading(false);
             }
         };
-
         if (id) fetchProfile();
     }, [id]);
+
+    const photos = profile?.posts?.filter(p => 
+        p.media_url && !/\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) && p.moderation_status !== "REJECTED"
+    ) || [];
+
+    const videos = profile?.posts?.filter(p => 
+        p.media_url && /\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) && p.moderation_status !== "REJECTED"
+    ) || [];
 
     if (loading) return (
         <div className="min-h-screen bg-[#0F1419] flex items-center justify-center">
@@ -32,9 +40,7 @@ const PublicProfile = () => {
     );
 
     if (error) return (
-        <div className="min-h-screen bg-[#0F1419] text-white flex items-center justify-center">
-            <p className="text-gray-400">{error}</p>
-        </div>
+        <div className="min-h-screen bg-[#0F1419] text-white flex items-center justify-center font-bold">{error}</div>
     );
 
     return (
@@ -42,98 +48,116 @@ const PublicProfile = () => {
             <div className="w-full max-w-xl bg-black border border-gray-800 rounded-2xl overflow-hidden h-fit">
                 
                 <div className="h-32 bg-gray-900"></div>
-
-                <div className="p-6 relative">
+                <div className="p-6 relative border-b border-gray-800">
                     <div className="absolute -top-12 left-6">
-                        <img 
-                            src={profile.profile_picture} 
-                            alt={profile.username}
-                            className="w-24 h-24 rounded-full border-4 border-black bg-black object-cover"
-                        />
+                        <img src={profile.profile_picture} className="w-24 h-24 rounded-full border-4 border-black bg-black object-cover" alt="" />
                     </div>
-
                     <div className="mt-14">
                         <h1 className="text-xl font-extrabold">{profile.display_name || profile.username}</h1>
                         <p className="text-gray-500">@{profile.username}</p>
                     </div>
-
                     <p className="mt-4 text-gray-200 whitespace-pre-wrap">{profile.bio || "No bio yet."}</p>
 
-                    <div className="flex gap-4 mt-4 text-sm text-gray-500">
-                        <span><strong className="text-white">0</strong> Following</span>
-                        <span><strong className="text-white">0</strong> Followers</span>
+                    {/* SEÇÃO DE SEGUIDORES E SEGUINDO (UI Preparada para a próxima Task) */}
+                    <div className="mt-4 flex gap-5 text-[15px]">
+                        <div className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
+                            <span className="font-bold text-white">
+                                {profile.following_count || 0}
+                            </span>
+                            <span className="text-gray-500">Following</span>
+                        </div>
+                        <div className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
+                            <span className="font-bold text-white">
+                                {profile.followers_count || 0}
+                            </span>
+                            <span className="text-gray-500">Followers</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* --- LÓGICA DE PRIVACIDADE --- */}
-                <div className="border-t border-gray-800 mt-2">
+                {/* TABS DE NAVEGAÇÃO */}
+                <div className="flex border-b border-gray-800 sticky top-0 bg-black/80 backdrop-blur-md z-10">
+                    {['all', 'photos', 'videos'].map((tab) => (
+                        <button key={tab} onClick={() => setActiveTab(tab)} className="flex-1 py-4 hover:bg-white/5 transition relative capitalize">
+                            <span className={`text-sm font-bold ${activeTab === tab ? "text-white" : "text-gray-500"}`}>
+                                {tab === 'all' ? 'Posts' : tab}
+                            </span>
+                            {activeTab === tab && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-[#1D9BF0] rounded-full" />}
+                        </button>
+                    ))}
+                </div>
+
+                <div>
                     {profile.is_restricted ? (
-                        /* TELA TRANCADA (CADEADO) */
-                        <div className="flex flex-col items-center justify-center p-12 text-center">
-                            <div className="p-4 bg-gray-900 rounded-full mb-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                </svg>
-                            </div>
-                            <h2 className="text-xl font-bold">These posts are protected</h2>
-                            <p className="text-gray-500 mt-2 text-sm max-w-xs">
-                                Only approved followers can see @{profile.username}'s posts. Click Follow to request access.
-                            </p>
-                            <button className="mt-6 bg-white text-black px-8 py-2 rounded-full font-bold hover:bg-gray-200 transition-all">
-                                Follow
-                            </button>
+                        <div className="flex flex-col items-center justify-center p-12 text-center text-gray-500">
+                             <h2 className="text-xl font-bold text-white">These posts are protected</h2>
                         </div>
                     ) : (
-                        /* LISTA DE POSTS COM TRAVA DE MODERAÇÃO */
-                        <div className="divide-y divide-gray-800">
-                            {profile.posts && profile.posts.length > 0 ? (
-                                profile.posts.map(post => {
-                                    const isVideo = post.media_url && /\.(mp4|webm|mov|mkv|avi)$/i.test(post.media_url);
-                                    const isPending = post.moderation_status === "PENDING";
-                                    const isRejected = post.moderation_status === "REJECTED";
+                        <div className="min-h-[300px]">
+                            {/* ABA DE POSTS (FEED) */}
+                            {activeTab === 'all' && (
+                                <div className="divide-y divide-gray-800">
+                                    {profile.posts?.length > 0 ? profile.posts.map(post => {
+                                        if (post.moderation_status === "REJECTED") return null;
+                                        const isVideo = post.media_url && /\.(mp4|webm|mov|mkv|avi)$/i.test(post.media_url);
+                                        const isPending = post.moderation_status === "PENDING";
 
-                                    if (isRejected) return null; // Não mostra nada se for rejeitado
+                                        return (
+                                            <div key={post.id} className="p-4 hover:bg-white/[0.01]">
+                                                <p className="text-[15px] text-gray-200 mb-3">{post.content}</p>
+                                                {post.media_url && (
+                                                    <div className="relative overflow-hidden rounded-2xl border border-gray-800 bg-black">
+                                                        {isVideo ? (
+                                                            <video src={post.media_url} controls={!isPending} className={`max-h-[450px] w-full object-cover ${isPending ? "blur-2xl opacity-40" : ""}`} />
+                                                        ) : (
+                                                            <img src={post.media_url} className={`max-h-[450px] w-full object-cover ${isPending ? "blur-2xl opacity-40" : ""}`} alt="" />
+                                                        )}
+                                                        {isPending && (
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                                                                <span className="bg-[#1D9BF0] text-white text-[10px] font-bold px-2 py-1 rounded uppercase">Under Review</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <span className="text-xs text-gray-600 mt-3 block">{new Date(post.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                        );
+                                    }) : <div className="p-20 text-center text-gray-500">No posts yet.</div>}
+                                </div>
+                            )}
 
-                                    return (
-                                        <div key={post.id} className="p-4 hover:bg-white/[0.02] transition">
-                                            <p className="text-gray-200 whitespace-pre-wrap">{post.content}</p>
-                                            
-                                            {post.media_url && (
-                                                <div className="relative mt-3 overflow-hidden rounded-2xl border border-gray-800 bg-black">
-                                                    {isVideo ? (
-                                                        <video 
-                                                            src={post.media_url} 
-                                                            controls={!isPending} // Desativa controles se estiver em análise
-                                                            className={`max-h-96 w-full object-cover ${isPending ? "blur-2xl opacity-40" : ""}`} 
-                                                        />
-                                                    ) : (
-                                                        <img 
-                                                            src={post.media_url} 
-                                                            alt="Post content" 
-                                                            className={`max-h-96 w-full object-cover ${isPending ? "blur-2xl opacity-40" : ""}`} 
-                                                        />
-                                                    )}
+                            {/* ABA DE GALERIA (GRID 3 COLUNAS - TAL-20) */}
+                            {activeTab !== 'all' && (
+                                <div className="grid grid-cols-3 gap-1 p-1">
+                                    {(activeTab === 'photos' ? photos : videos).length > 0 ? (activeTab === 'photos' ? photos : videos).map(post => {
+                                        const isPending = post.moderation_status === "PENDING";
+                                        const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(post.media_url);
 
-                                                    {/* Badge de "Em Análise" sobre o desfoque */}
-                                                    {isPending && (
-                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-                                                            <span className="bg-[#1D9BF0] text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-                                                                Under Review
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                            
-                                            <span className="text-xs text-gray-600 mt-2 block">
-                                                {new Date(post.created_at).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <div className="p-12 text-center text-gray-500">
-                                    This user hasn't posted anything yet.
+                                        return (
+                                            <div key={post.id} className="relative aspect-square bg-gray-900 overflow-hidden group cursor-pointer">
+                                                {/* Imagem ou Video Thumbnail */}
+                                                {isVideo ? (
+                                                    <video src={post.media_url} className={`w-full h-full object-cover ${isPending ? "blur-2xl opacity-30" : ""}`} />
+                                                ) : (
+                                                    <img src={post.media_url} className={`w-full h-full object-cover ${isPending ? "blur-2xl opacity-30" : ""}`} alt="" />
+                                                )}
+                                                
+                                                {/* INDICADOR VISUAL DE VÍDEO (DoD TAL-20) */}
+                                                {isVideo && !isPending && (
+                                                    <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-md">
+                                                        <svg viewBox="0 0 24 24" className="w-3 h-3 text-white fill-current"><path d="M8 5v14l11-7z"/></svg>
+                                                    </div>
+                                                )}
+
+                                                {/* MODERAÇÃO NO GRID */}
+                                                {isPending && (
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <span className="text-[9px] bg-[#1D9BF0] text-white font-bold px-1 py-0.5 rounded opacity-90 uppercase">Review</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }) : <div className="col-span-3 p-20 text-center text-gray-500">No media found.</div>}
                                 </div>
                             )}
                         </div>

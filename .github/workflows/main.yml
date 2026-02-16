@@ -3,9 +3,6 @@ name: CI/CD Pipeline - Mindly
 on:
   push:
     branches: [ main, 'feature/**' ]
-  pull_request:
-    branches: [ main ]
-
 jobs:
   test-backend:
     runs-on: ubuntu-latest

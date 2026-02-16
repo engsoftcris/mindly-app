@@ -36,7 +36,6 @@ function App() {
         <main className="w-[600px] border-x border-gray-800 bg-black min-h-screen flex-shrink-0 no-scrollbar overflow-y-auto">
           <Routes>
   <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-  
   {/* A rota com ID deve vir antes para o Router testar o parâmetro primeiro */}
   <Route path="/profile/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
   
