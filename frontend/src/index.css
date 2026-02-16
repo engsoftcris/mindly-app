@@ -29,3 +29,5 @@
     scrollbar-width: none;  /* Firefox */
   }
 }
+
+html { scrollbar-gutter: stable; }

@@ -4,7 +4,6 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
 describe('<PublicProfile /> - Teste de Componente Isolado', () => {
   
-  // Função auxiliar para montar o componente com o contexto do Router
   const mountComponent = (id) => {
     cy.mount(
       <MemoryRouter initialEntries={[`/profile/${id}`]}>
@@ -15,29 +14,37 @@ describe('<PublicProfile /> - Teste de Componente Isolado', () => {
     )
   }
 
-  it('Deve mostrar o CADEADO quando o perfil for restrito', () => {
-    // Mock direto da chamada que o componente faz
+  it('Deve mostrar a mensagem de proteção quando o perfil for restrito', () => {
     cy.intercept('GET', '**/accounts/profiles/user-privado/', {
       statusCode: 200,
       body: {
         username: 'privado',
         display_name: 'Perfil Fechado',
-        is_restricted: true, // A trava que queremos testar
-        profile_picture: 'https://via.placeholder.com/150',
+        is_restricted: true,
+        profile_picture: null,
+        bio: 'Minha bio privada',
+        following_count: 10,
+        followers_count: 50,
         posts: []
       }
     }).as('getProfile')
 
     mountComponent('user-privado')
 
-    // Valida se o componente reagiu corretamente ao is_restricted
+    // 1. Valida se a mensagem de restrição aparece
     cy.contains('These posts are protected').should('be.visible')
-    cy.get('button').contains('Follow').should('be.visible')
-    cy.get('svg').should('exist') // O ícone do cadeado
-    cy.get('.divide-y').should('not.exist') // A lista de posts não deve ser montada
+    
+    // 2. Valida se os contadores que adicionamos agora aparecem
+    cy.contains('10').should('be.visible')
+    cy.contains('Following').should('be.visible')
+    cy.contains('50').should('be.visible')
+    cy.contains('Followers').should('be.visible')
+
+    // 3. Valida que a lista de posts (divide-y) NÃO foi renderizada
+    cy.get('.divide-y').should('not.exist')
   })
 
-  it('Deve renderizar os POSTS quando o perfil for aberto', () => {
+  it('Deve renderizar os POSTS e as TABS quando o perfil for aberto', () => {
     cy.intercept('GET', '**/accounts/profiles/user-publico/', {
       statusCode: 200,
       body: {
@@ -48,6 +55,7 @@ describe('<PublicProfile /> - Teste de Componente Isolado', () => {
           {
             id: 1,
             content: 'Post Visível!',
+            media_url: null,
             moderation_status: 'APPROVED',
             created_at: new Date().toISOString()
           }
@@ -57,7 +65,16 @@ describe('<PublicProfile /> - Teste de Componente Isolado', () => {
 
     mountComponent('user-publico')
 
+    // 1. Valida o conteúdo do post
     cy.contains('Post Visível!').should('be.visible')
+    
+    // 2. Valida se as abas de navegação estão lá. 
+    // Como você usou capitalize no CSS, o texto no DOM é 'photos' e 'videos'
+    cy.get('button').contains('photos', { matchCase: false }).should('be.visible')
+    cy.get('button').contains('videos', { matchCase: false }).should('be.visible')
+    cy.get('button').contains('Posts').should('be.visible') // Aba 'all' vira 'Posts' no seu código
+    
+    // 3. Valida a estrutura
     cy.get('.divide-y').should('exist')
     cy.contains('These posts are protected').should('not.exist')
   })

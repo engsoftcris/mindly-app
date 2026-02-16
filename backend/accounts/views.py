@@ -165,3 +165,51 @@ class ProfileDetailView(generics.RetrieveAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
+
+class UserPostsListView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = FeedPagination
+
+    def get_queryset(self):
+        profile_id = self.kwargs.get('pk') # Pega o UUID do perfil da URL
+        
+        # 1. Busca o perfil e garante que posts REJEITADOS nunca apareçam (Regra de Negócio)
+        queryset = Post.objects.filter(
+            user__profile__id=profile_id
+        ).exclude(moderation_status="REJECTED")
+        
+        # 2. Lógica de Privacidade
+        try:
+            profile = Profile.objects.get(id=profile_id)
+        except Profile.DoesNotExist:
+            return Post.objects.none()
+
+        if profile.is_private and profile.user != self.request.user:
+            # TODO: Adicionar lógica de "se eu sigo, eu vejo" aqui futuramente
+            return Post.objects.none()
+
+        # 3. FILTRO DA TAREFA TAL-20 (Mídia)
+        media_only = self.request.query_params.get('media_only')
+        content_type = self.request.query_params.get('type') # 'image' ou 'video'
+
+        if media_only == 'true':
+            # Remove posts que não têm mídia (ajustado para campo 'media')
+            queryset = queryset.exclude(media__isnull=True).exclude(media='')
+
+        if content_type:
+            image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+            video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
+            
+            if content_type == 'image':
+                q_objects = Q()
+                for ext in image_extensions:
+                    q_objects |= Q(media__icontains=ext)
+                queryset = queryset.filter(q_objects)
+            elif content_type == 'video':
+                q_objects = Q()
+                for ext in video_extensions:
+                    q_objects |= Q(media__icontains=ext)
+                queryset = queryset.filter(q_objects)
+
+        return queryset.order_by('-created_at')
