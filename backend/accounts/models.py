@@ -48,8 +48,10 @@ class User(AbstractBaseUser, PermissionsMixin):
         "self",
         symmetrical=False,
         related_name="followers",
-        blank=True
+        blank=True,
+        through="Follow" 
     )
+    
     date_joined = models.DateTimeField(auto_now_add=True)
 
     objects = UserManager()
@@ -116,3 +118,45 @@ class Post(models.Model):
 
     def __str__(self):
         return f"Post by {self.user.username} ({self.moderation_status})"
+    
+# --- SOCIAL MODELS ---
+
+class Follow(models.Model):
+    follower = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name="rel_follower"
+    )
+    following = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name="rel_following"
+    )
+    unfollowed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True) # Essencial para a regra de 48h
+
+    class Meta:
+        unique_together = ("follower", "following")
+
+    def __str__(self):
+        return f"{self.follower} follows {self.following}"
+
+
+class Block(models.Model):
+    blocker = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name="blocking_set"
+    )
+    blocked = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name="blocked_by_set"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("blocker", "blocked")
+
+    def __str__(self):
+        return f"{self.blocker} bloqueou {self.blocked}"
