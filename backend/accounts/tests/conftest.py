@@ -27,3 +27,13 @@ def auth_client(api_client, user):
     """Cliente já autenticado para testar endpoints privados"""
     api_client.force_authenticate(user=user)
     return api_client
+
+from accounts.models import Post # Garanta que o import do Post está no topo
+
+@pytest.fixture
+def post(db, user):
+    """Cria um post de teste vinculado ao usuário da fixture user"""
+    return Post.objects.create(
+        user=user, 
+        content="Conteúdo de teste para a TAL-16 🚀"
+    )
