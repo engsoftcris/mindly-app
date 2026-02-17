@@ -1,8 +1,16 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import UserActionMenu from './UserActionMenu';
+import LikeButton from './LikeButton';
 
 const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
+  const handleLikeUpdate = (postId, isLiked, likesCount) => {
+    setPosts(prev => prev.map(p => 
+      p.id === postId 
+        ? { ...p, is_liked: isLiked, likes_count: likesCount } 
+        : p
+    ));
+  };
   return (
     <div className="divide-y divide-gray-800">
       {posts.map((post, index) => {
@@ -44,7 +52,9 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                     setPosts(prev => prev.filter(p => p.id !== id && p.author?.id !== id && p.author?.uuid !== id));
                   }}
                 />
+                
               </div>
+              
 
               <p className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]">
                 {post.content}
@@ -79,7 +89,12 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                 );
               })()}
               
+              
               <div className="mt-3 text-[11px] text-gray-600">
+                <LikeButton 
+                  post={post} 
+                  onLikeToggle={handleLikeUpdate} 
+                />
                 {new Date(post.created_at).toLocaleString()}
               </div>
             </div>

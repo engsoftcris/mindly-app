@@ -3,7 +3,7 @@ const { defineConfig } = require("cypress");
 module.exports = defineConfig({
   e2e: {
     baseUrl: "http://localhost:5173",
-    supportFile: false, // E2E pode continuar false se você não usa comandos globais lá
+    supportFile: "cypress/support/e2e.js", 
     defaultCommandTimeout: 10000,
     retries: {
       runMode: 2,
