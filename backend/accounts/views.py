@@ -206,6 +206,25 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    # NOVO: Garantir que só o dono apaga e que faz Soft Delete
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # 1. Verificação de dono
+        if instance.user != request.user:
+            return Response(
+                {"error": "Não tens permissão para apagar este post."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 2. Executa o Soft Delete (nosso método customizado no Model)
+        instance.delete()
+        
+        return Response(
+            {"message": "Post removido com sucesso (Soft Delete)."}, 
+            status=status.HTTP_204_NO_CONTENT
+        )
+
 class HybridFeedView(generics.ListAPIView):
     serializer_class = PostSerializer
     permission_classes = [permissions.IsAuthenticated]

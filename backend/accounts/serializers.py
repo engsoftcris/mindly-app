@@ -127,8 +127,8 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'content', 'media', 'media_url', 'moderation_status', 'created_at']  # ✅ ADD AQUI
-        read_only_fields = ['id', 'author', 'created_at', 'media_url']
+        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at']  # ✅ ADD AQUI
+        read_only_fields = ['id', 'author', 'created_at', 'media_url', 'is_deleted']
 
     def validate_content(self, value):
         if len(value) > 280:

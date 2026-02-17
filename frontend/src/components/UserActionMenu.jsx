@@ -5,6 +5,13 @@ import { toast } from 'react-toastify';
 const UserActionMenu = ({ targetProfile, postId, isOwnPost, onActionComplete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+  if (!isOpen) {
+    setConfirmDelete(false);
+  }
+}, [isOpen]);
 
   // Fecha o menu ao clicar fora
   useEffect(() => {
@@ -33,10 +40,28 @@ const UserActionMenu = ({ targetProfile, postId, isOwnPost, onActionComplete }) 
       toast.error("Erro ao bloquear.");
     }
   };
+  const handleDeletePost = async (e) => {
+    e.stopPropagation(); // Evita navegar para o post ao clicar
+    
+    // Confirmação rápida (Opcional, mas recomendado para UX)
+   // Se for o primeiro clique, apenas pede confirmação visual
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+
+    try {
+      await api.delete(`/accounts/posts/${postId}/`);
+      toast.success("Post eliminado.");
+      setIsOpen(false);
+      if (onActionComplete) onActionComplete(postId);
+    } catch (err) {
+      toast.error("Erro ao eliminar.");
+    }
+  };
 
   return (
     <div className="relative inline-block" ref={menuRef}>
-      {/* O BOTÃO QUE TEM QUE APARECER */}
       <button 
         onClick={(e) => {
           e.preventDefault();
@@ -57,9 +82,30 @@ const UserActionMenu = ({ targetProfile, postId, isOwnPost, onActionComplete }) 
         <div className="absolute right-0 mt-2 w-48 bg-black border border-gray-800 rounded-xl shadow-2xl z-[999] overflow-hidden">
           <div className="py-1">
             {isOwnPost ? (
-              <button className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-white/5 font-bold">
-                🗑️ Eliminar Post
-              </button>
+              <div className="flex flex-col">
+                <button 
+                  onClick={handleDeletePost}
+                  className={`w-full text-left px-4 py-3 text-sm font-bold transition-all duration-200 ${
+                    confirmDelete 
+                      ? "bg-red-600 text-white text-center" 
+                      : "text-red-500 hover:bg-white/5"
+                  }`}
+                >
+                  {confirmDelete ? "CONFIRMAR DELETAR?" : "🗑️ Deletar Post"}
+                </button>
+                
+                {confirmDelete && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDelete(false);
+                    }}
+                    className="w-full text-center px-4 py-2 text-xs text-gray-400 hover:bg-white/10 transition-colors border-t border-gray-800"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
             ) : (
               <button 
                 onClick={handleBlock}
