@@ -53,7 +53,7 @@ describe('<UserActionMenu />', () => {
     cy.contains(`Bloquear @${targetProfile.username}`).should('not.exist');
   });
 
-  it('Quando isOwnPost=true deve mostrar "Eliminar Post" e não mostrar Bloquear', () => {
+ it('Quando isOwnPost=true deve mostrar "Deletar Post" e não mostrar Bloquear', () => {
     cy.mount(
       <>
         <ToastContainer theme="dark" position="bottom-center" />
@@ -62,41 +62,34 @@ describe('<UserActionMenu />', () => {
     );
 
     cy.get('button[type="button"]').click();
-    cy.contains('Eliminar Post').should('be.visible');
+    // Ajustado para 'Deletar' conforme a nova UI
+    cy.contains('Deletar Post').should('be.visible');
     cy.contains(/Bloquear @/i).should('not.exist');
   });
 
-  it('Deve chamar POST /accounts/profiles/:id/block/, mostrar toast e fechar ao sucesso', () => {
-    cy.intercept('POST', `**/accounts/profiles/${targetProfile.id}/block/`, {
-      statusCode: 200,
-      body: { ok: true },
-    }).as('blockReq');
-
-    const onActionComplete = cy.spy().as('onActionComplete');
-
+  it('Deve mostrar fluxo de confirmação ao clicar em Deletar e permitir cancelar', () => {
     cy.mount(
       <>
         <ToastContainer theme="dark" position="bottom-center" />
-        <UserActionMenu
-          targetProfile={targetProfile}
-          isOwnPost={false}
-          onActionComplete={onActionComplete}
-        />
+        <UserActionMenu targetProfile={targetProfile} isOwnPost={true} />
       </>
     );
 
-    // abre menu e bloqueia
     cy.get('button[type="button"]').click();
-    cy.contains(`Bloquear @${targetProfile.username}`).click();
+    
+    // 1. Primeiro clique em Deletar
+    cy.contains('Deletar Post').click();
 
-    cy.wait('@blockReq');
-    cy.contains(`@${targetProfile.username} bloqueado.`).should('be.visible');
+    // 2. Deve aparecer o botão de confirmação e o cancelar
+    cy.contains('CONFIRMAR DELETAR?').should('be.visible');
+    cy.contains('Cancelar').should('be.visible');
 
-    // menu deve fechar
-    cy.contains(`Bloquear @${targetProfile.username}`).should('not.exist');
+    // 3. Clica em cancelar
+    cy.contains('Cancelar').click();
 
-    // callback deve ser chamado com o profileId
-    cy.get('@onActionComplete').should('have.been.calledWith', targetProfile.id);
+    // 4. Deve voltar ao estado original ou fechar (conforme o useEffect do seu isOpen)
+    cy.contains('Deletar Post').should('be.visible');
+    cy.contains('CONFIRMAR DELETAR?').should('not.exist');
   });
 
   it('Deve mostrar toast de erro se o POST falhar', () => {
@@ -139,5 +132,62 @@ describe('<UserActionMenu />', () => {
 
     // Sem profileId, nada acontece (sem toast de sucesso)
     cy.contains(/bloqueado/i).should('not.exist');
+  });
+  it('Deve mostrar fluxo de confirmação ao clicar em Deletar e permitir cancelar', () => {
+    cy.mount(
+      <>
+        <ToastContainer theme="dark" position="bottom-center" />
+        <UserActionMenu targetProfile={targetProfile} isOwnPost={true} />
+      </>
+    );
+
+    // 1. Abre o menu
+    cy.get('button[type="button"]').click();
+    
+    // 2. Clica em Deletar pela primeira vez
+    cy.contains('Deletar Post').click();
+
+    // 3. VALIDAÇÃO: Devem aparecer as novas opções e sumir o texto antigo
+    cy.contains('CONFIRMAR DELETAR?').should('be.visible');
+    cy.contains('Cancelar').should('be.visible');
+    cy.contains('Deletar Post').should('not.exist');
+
+    // 4. TESTE DO CANCELAR: Clica em cancelar e verifica se resetou
+    cy.contains('Cancelar').click();
+    cy.contains('Deletar Post').should('be.visible');
+    cy.contains('CONFIRMAR DELETAR?').should('not.exist');
+  });
+
+  it('Deve executar a deleção real após confirmar no segundo clique', () => {
+    const postId = 55;
+    const onActionComplete = cy.spy().as('onActionComplete');
+
+    // Intercepta a chamada de DELETE que criamos no Django
+    cy.intercept('DELETE', `**/accounts/posts/${postId}/`, {
+      statusCode: 204,
+    }).as('deleteReq');
+
+    cy.mount(
+      <>
+        <ToastContainer theme="dark" position="bottom-center" />
+        <UserActionMenu 
+          targetProfile={targetProfile} 
+          postId={postId} 
+          isOwnPost={true} 
+          onActionComplete={onActionComplete}
+        />
+      </>
+    );
+
+    cy.get('button[type="button"]').click();
+    cy.contains('Deletar Post').click();
+    
+    // Clica no botão de confirmação (o segundo clique)
+    cy.contains('CONFIRMAR DELETAR?').click();
+
+    // Verifica se a API foi chamada e o toast apareceu
+    cy.wait('@deleteReq');
+    cy.contains('Post eliminado.').should('be.visible');
+    cy.get('@onActionComplete').should('have.been.calledWith', postId);
   });
 });

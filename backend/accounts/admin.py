@@ -141,10 +141,22 @@ class CustomUserAdmin(BaseUserAdmin):
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
     # Added 'media_preview' to the list
-    list_display = ('user', 'content_preview', 'media_preview', 'created_at')
-    list_filter = ('created_at', 'user')
+    list_display = ('user', 'content_preview', 'media_preview', 'is_deleted', 'created_at')
+    list_filter = ('created_at', 'user','is_deleted')
     search_fields = ('content', 'user__username')
 
+    # FAZ O ADMIN VER TUDO (Mesmo os is_deleted=True)
+    def get_queryset(self, request):
+        return Post.all_objects.all()
+
+    # Se o Admin usar a ação de deletar do painel, ele apaga de verdade (Hard Delete)
+    def delete_model(self, request, obj):
+        obj.delete(force=True)
+
+    def delete_queryset(self, request, queryset):
+        # Para a ação em massa no Admin (Delete selected items)
+        for obj in queryset:
+            obj.delete(force=True)
     def content_preview(self, obj):
         return obj.content[:50] + "..." if len(obj.content) > 50 else obj.content
     

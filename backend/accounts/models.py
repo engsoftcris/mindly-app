@@ -10,6 +10,10 @@ from django.conf import settings
 import uuid
 
 
+class PostManager(models.Manager):
+    def get_queryset(self):
+        # O site/app só verá o que NÃO está marcado como deletado
+        return super().get_queryset().filter(is_deleted=False)
 
 # --- USER MODELS ---
 
@@ -98,6 +102,7 @@ class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField(validators=[MaxLengthValidator(280)])
     media = models.FileField(upload_to=get_post_media_path, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     
     # Campo essencial para o seu Overlay no React funcionar
     moderation_status = models.CharField(
@@ -107,6 +112,17 @@ class Post(models.Model):
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
+    # Managers
+    objects = PostManager()          # Manager padrão (Filtra deletados)
+    all_objects = models.Manager()   # Manager completo (Para o Admin)
+
+    # Sobrescreve o delete para o código geral
+    def delete(self, force=False, *args, **kwargs):
+        if force:
+            super().delete(*args, **kwargs) # Apaga do banco
+        else:
+            self.is_deleted = True # Apenas esconde
+            self.save()
 
     class Meta:
         ordering = ['-created_at']
