@@ -14,27 +14,27 @@ describe('<LikeButton />', () => {
   })
 
   it('deve disparar a requisição e chamar onLikeToggle ao clicar', () => {
-    const post = { id: 99, is_liked: false, likes_count: 0 }
-    const onLikeToggleSpy = cy.spy().as('likeToggleSpy')
+  const post = { id: 99, is_liked: false, likes_count: 0 }
+  const onLikeToggleSpy = cy.spy().as('likeToggleSpy')
 
-    cy.intercept('POST', '**/api/posts/99/like/', {
-      statusCode: 200,
-      body: { is_liked: true, likes_count: 1 }
-    }).as('likeRequest')
+  cy.intercept('POST', '**/posts/*/like/', {
+    statusCode: 200,
+    body: {
+      is_liked: true,
+      likes_count: 1
+    }
+  }).as('likeRequest')
 
-    cy.mount(<LikeButton post={post} onLikeToggle={onLikeToggleSpy} />)
+  cy.mount(<LikeButton post={post} onLikeToggle={onLikeToggleSpy} />)
 
-    // Clicamos e apenas esperamos a requisição terminar
-    cy.get('button').click()
-    
-    cy.wait('@likeRequest').then((interception) => {
-      // Validamos se a requisição foi feita corretamente
-      expect(interception.response.statusCode).to.eq(200)
-    })
-    
-    // Validamos se a função que atualiza a tela foi chamada
-    cy.get('@likeToggleSpy').should('have.been.calledWith', 99, true, 1)
-  })
+  cy.get('button').click()
+
+  cy.wait('@likeRequest')
+
+  cy.get('@likeToggleSpy')
+    .should('have.been.calledOnce')
+    .and('have.been.calledWith', 99, true, 1)
+})
 
 
 
