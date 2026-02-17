@@ -25,25 +25,25 @@ describe('<LikeButton />', () => {
     const post = { id: 99, is_liked: false, likes_count: 0 }
     const onLikeToggleSpy = cy.spy().as('likeToggleSpy')
 
-    // ADICIONE UM DELAY AQUI (ex: 500ms)
+    // 1. Adicionamos um delay artificial para garantir que o estado de "loading" apareça
     cy.intercept('POST', '**/api/posts/99/like/', {
-      delay: 500, // <--- Isso segura a requisição por meio segundo
+      delay: 500, // <--- 500ms é o suficiente para o Cypress detectar o disabled
       statusCode: 200,
       body: { is_liked: true, likes_count: 1 }
     }).as('likeRequest')
 
     cy.mount(<LikeButton post={post} onLikeToggle={onLikeToggleSpy} />)
 
-    // Clica no botão
+    // 2. Clica no botão
     cy.get('button').click()
 
-    // Agora o botão VAI estar desabilitado porque a API está "esperando" os 500ms
+    // 3. Agora o teste vai passar porque a requisição está "presa" nos 500ms de delay
     cy.get('button').should('be.disabled')
 
-    // Espera a resposta e valida o callback
+    // 4. Libera a requisição e valida o final do processo
     cy.wait('@likeRequest')
     
-    // Opcional: validar que ele voltou a ficar habilitado após o wait
+    // O botão deve voltar a ficar habilitado após o sucesso
     cy.get('button').should('not.be.disabled')
     
     cy.get('@likeToggleSpy').should('have.been.calledWith', 99, true, 1)
