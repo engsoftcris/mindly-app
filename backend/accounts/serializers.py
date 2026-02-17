@@ -123,11 +123,13 @@ class FeedAuthorSerializer(serializers.ModelSerializer):
     
 class PostSerializer(serializers.ModelSerializer):
     author = FeedAuthorSerializer(source='user', read_only=True)
-    media_url = serializers.SerializerMethodField()  # ✅ ADICIONA ISSO
+    media_url = serializers.SerializerMethodField()  
+    likes_count = serializers.IntegerField(source='likes.count', read_only=True)
+    is_liked = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at']  # ✅ ADD AQUI
+        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at','likes_count', 'is_liked']  # ✅ ADD AQUI
         read_only_fields = ['id', 'author', 'created_at', 'media_url', 'is_deleted']
 
     def validate_content(self, value):
@@ -158,6 +160,12 @@ class PostSerializer(serializers.ModelSerializer):
 
     def get_media_url(self, obj):
         return obj.media.url if obj.media else None
+    
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            return obj.likes.filter(user=request.user).exists()
+        return False
 
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.id')

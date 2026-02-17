@@ -20,7 +20,7 @@ from datetime import datetime
 from django.db.models import Q
 
 # Seus modelos e serializers
-from .models import Profile, Block, Post, Follow
+from .models import Profile, Block, Post, Follow, Like
 from .serializers import (
     GoogleAuthSerializer,
     PostSerializer,
@@ -224,6 +224,27 @@ class PostViewSet(viewsets.ModelViewSet):
             {"message": "Post removido com sucesso (Soft Delete)."}, 
             status=status.HTTP_204_NO_CONTENT
         )
+    @action(detail=True, methods=['post'], url_path='like')
+    def toggle_like(self, request, pk=None):
+        post = self.get_object()
+        user = request.user
+        
+        # Check if the like already exists
+        like_queryset = Like.objects.filter(user=user, post=post)
+        
+        if like_queryset.exists():
+            # UNLIKE: If it exists, remove it
+            like_queryset.delete()
+            is_liked = False
+        else:
+            # LIKE: If it doesn't exist, create it
+            Like.objects.create(user=user, post=post)
+            is_liked = True
+            
+        return Response({
+            'is_liked': is_liked,
+            'likes_count': post.likes.count()
+        }, status=status.HTTP_200_OK)
 
 class HybridFeedView(generics.ListAPIView):
     serializer_class = PostSerializer
