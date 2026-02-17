@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
+import FollowButton from '../components/FollowButton';
+import UserActionMenu from '../components/UserActionMenu';
 
 const PublicProfile = () => {
     const { id } = useParams();
@@ -8,6 +11,7 @@ const PublicProfile = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('all'); 
+    const { user: currentUser } = useAuth();
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -52,6 +56,25 @@ const PublicProfile = () => {
                     <div className="absolute -top-12 left-6">
                         <img src={profile.profile_picture} className="w-24 h-24 rounded-full border-4 border-black bg-black object-cover" alt="" />
                     </div>
+                  <div className="flex justify-end mb-2">
+   
+    <div className="flex justify-end items-center gap-2 mb-2">
+    {/* 1. Menu de Ações (Bloquear) agora fica à ESQUERDA */}
+    {profile && currentUser && String(currentUser.id) !== String(profile.id) && (
+        <UserActionMenu 
+            targetProfile={profile} 
+        />
+    )}
+
+    {/* 2. Botão de Seguir agora fica à DIREITA */}
+    {profile && currentUser && String(currentUser.id) !== String(profile.id) && (
+        <FollowButton 
+            profileId={profile.id} 
+            initialIsFollowing={profile.is_following} 
+        />
+    )}
+</div>
+</div>
                     <div className="mt-14">
                         <h1 className="text-xl font-extrabold">{profile.display_name || profile.username}</h1>
                         <p className="text-gray-500">@{profile.username}</p>

@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from .models import Post
 from PIL import Image
 
-from .models import User, Profile
+from .models import User, Profile, Block, Follow
 
 
 class UserAdminForm(forms.ModelForm):
@@ -164,3 +164,13 @@ class PostAdmin(admin.ModelAdmin):
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ['user', 'display_name', 'is_private'] # Aqui sim!
     list_filter = ['is_private']
+
+@admin.register(Block)
+class BlockAdmin(admin.ModelAdmin):
+    list_display = ('blocker', 'blocked', 'created_at')
+    search_fields = ('blocker__username', 'blocked__username')
+    list_filter = ('created_at',)
+
+@admin.register(Follow)
+class FollowAdmin(admin.ModelAdmin):
+    list_display = ('follower', 'following', 'created_at', 'unfollowed_at')

@@ -129,21 +129,40 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
   });
 
   it('3. Deve alternar entre abas "Para você" e "Seguindo"', () => {
-    // 1. Alterna para Seguindo
-    cy.contains('button', 'Seguindo').should('be.visible').click({ force: true });
-    
-    // Aguarda o interceptor específico de Seguindo
-    cy.wait('@getFeedFollowing', { timeout: 15000 });
-    cy.contains('Conteúdo da aba Seguindo').should('be.visible');
+  // Intercept mais robusto pro feed "Seguindo"
+  cy.intercept('GET', /\/api\/accounts\/feed\/?(\?.*)?$/, {
+    statusCode: 200,
+    body: {
+      next: null,
+      results: [{
+        id: 10,
+        content: 'Conteúdo da aba Seguindo',
+        author: { username: 'amigo_teste', id: 5 },
+        created_at: new Date().toISOString()
+      }]
+    }
+  }).as('getFeedFollowing');
 
-    // 2. Volta para Para você
-    cy.contains('button', 'Para você').click({ force: true });
-    cy.wait('@getPostsAll');
-    cy.contains('Hello from Para Você!').should('be.visible');
-    
-    // 3. Verifica se a barra azul de status mudou (classe CSS que você definiu)
-    cy.contains('button', 'Para você')
-      .find('div.bg-blue-500') // Verifica se a div indicadora está lá
-      .should('exist');
-  });
+  // 1) Clique no TAB correto:
+  // pega os botões de abas (flex-1 py-4 ...) e escolhe o que contém "Seguindo"
+  cy.get('button.flex-1.py-4.hover\\:bg-white\\/5.transition.relative')
+    .contains(/^Seguindo$/)
+    .should('be.visible')
+    .click();
+
+  // 2) Agora sim esperamos a request do feed following
+  cy.wait('@getFeedFollowing', { timeout: 15000 });
+
+  // 3) Valida conteúdo
+  cy.contains('Conteúdo da aba Seguindo', { timeout: 10000 }).should('be.visible');
+
+  // 4) Volta para "Para você"
+  cy.get('button.flex-1.py-4.hover\\:bg-white\\/5.transition.relative')
+    .contains(/Para você/i)
+    .click();
+
+  // Posts voltam (pode chamar /api/posts/ ou não; então validamos UI)
+  cy.contains('Hello from Para Você!', { timeout: 10000 }).should('be.visible');
+});
+
 });

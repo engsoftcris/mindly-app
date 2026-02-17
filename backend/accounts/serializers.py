@@ -6,6 +6,7 @@ from django.core.files.base import ContentFile
 import os
 from rest_framework import serializers
 from .models import Post, User, Profile
+from .models import Block, Follow
 
 
 
@@ -159,6 +160,7 @@ class PostSerializer(serializers.ModelSerializer):
         return obj.media.url if obj.media else None
 
 class ProfileSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.id')
     username = serializers.ReadOnlyField(source='user.username')
     email = serializers.ReadOnlyField(source='user.email')
     profile_picture = serializers.SerializerMethodField()
@@ -169,7 +171,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         # 2. Garanta que is_private e is_following estejam aqui
-        fields = ['id', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'posts', 'is_private', 'is_following', 'created_at']
+        fields = ['id','user', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'posts', 'is_private', 'is_following', 'created_at']
         read_only_fields = ['id', 'created_at']
 
     def get_profile_picture(self, obj):
@@ -183,9 +185,14 @@ class ProfileSerializer(serializers.ModelSerializer):
     
     def get_is_following(self, obj):
         request = self.context.get('request')
-        # Se o user logado for o dono do perfil, tecnicamente "ele se segue" ou apenas True
         if request and request.user.is_authenticated:
-            return request.user.following.filter(id=obj.user.id).exists()
+            # O Segredo: obj é um Profile, então usamos obj.user 
+            # para comparar com o campo 'following' do model Follow
+            return Follow.objects.filter(
+                follower=request.user, 
+                following=obj.user,  # Aqui deve ser obj.user
+                unfollowed_at__isnull=True
+            ).exists()
         return False
 
     def to_representation(self, instance):
@@ -195,11 +202,14 @@ class ProfileSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return data
 
-        # LÓGICA DE PRIVACIDADE CORRIGIDA:
         is_owner = request.user == instance.user
         
-        # Verificação direta no banco para não ter erro de contexto
-        is_follower = request.user.following.filter(id=instance.user.id).exists()
+        # AJUSTE: Usando a tabela Follow explicitamente para checar privacidade
+        is_follower = Follow.objects.filter(
+            follower=request.user, 
+            following=instance.user, 
+            unfollowed_at__isnull=True
+        ).exists()
 
         if instance.is_private and not is_owner and not is_follower:
             return {
@@ -208,12 +218,22 @@ class ProfileSerializer(serializers.ModelSerializer):
                 'display_name': data['display_name'],
                 'profile_picture': data['profile_picture'],
                 'is_private': True,
-                'is_following': False, # Se entrou aqui, ele não segue
+                'is_following': False,
                 'is_restricted': True,
-                'bio': "This profile is private. Follow to see their content.",
+                'bio': "Este perfil é privado. Segue para ver o conteúdo.",
                 'posts': []
             }
         
-        # Se for dono ou seguidor, adicionamos a flag de restrição como False
         data['is_restricted'] = False
+        return data
+
+class BlockSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Block
+        fields = ['id', 'blocker', 'blocked', 'created_at']
+        read_only_fields = ['blocker', 'created_at']
+
+    def validate(self, data):
+        if self.context['request'].user == data['blocked']:
+            raise serializers.ValidationError("Não podes bloquear-te a ti próprio.")
         return data

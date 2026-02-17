@@ -1,10 +1,12 @@
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import ProfilePage from "./components/ProfilePage"; // Suas configurações
-import PublicProfile from "./components/PublicProfile"; // O Perfil que criamos agora! ✅
+import ProfilePage from "./components/ProfilePage"; 
+import PublicProfile from "./components/PublicProfile"; 
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
 
@@ -22,6 +24,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        {/* Adicionado aqui também para o caso de erros no login */}
+        <ToastContainer theme="dark" position="bottom-center" />
       </div>
     );
   }
@@ -35,15 +39,11 @@ function App() {
 
         <main className="w-[600px] border-x border-gray-800 bg-black min-h-screen flex-shrink-0 no-scrollbar overflow-y-auto">
           <Routes>
-  <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-  {/* A rota com ID deve vir antes para o Router testar o parâmetro primeiro */}
-  <Route path="/profile/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
-  
-  {/* A rota sem ID é a sua página de configurações */}
-  <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
-  
-  <Route path="*" element={<Navigate to="/" replace />} />
-</Routes>
+            <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/profile/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
+            <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </main>
 
         <aside className="hidden lg:block w-[350px] ml-4">
@@ -54,6 +54,16 @@ function App() {
           </div>
         </aside>
       </div>
+
+      {/* LUGAR CORRETO DO TOAST CONTAINER: Dentro do return principal */}
+      <ToastContainer 
+          position="bottom-center" 
+          autoClose={4000} 
+          hideProgressBar={false}
+          closeOnClick
+          pauseOnHover
+          theme="dark" 
+      />
     </div>
   );
 }
