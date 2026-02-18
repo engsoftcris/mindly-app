@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const UserActionMenu = ({ targetProfile, postId, isOwnPost, onActionComplete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
   if (!isOpen) {
@@ -36,6 +38,7 @@ const UserActionMenu = ({ targetProfile, postId, isOwnPost, onActionComplete }) 
       toast.success(`@${username} bloqueado.`);
       setIsOpen(false);
       if (onActionComplete) onActionComplete(profileId);
+      navigate('/feed');
     } catch (err) {
       toast.error("Erro ao bloquear.");
     }

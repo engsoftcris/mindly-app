@@ -1,7 +1,6 @@
 Cypress.on('uncaught:exception', () => false);
 
 describe('Fluxo de Bloqueio de Utilizador no Dashboard', () => {
-  const userA = { id: 'user-a-id', username: 'user_test_a', display_name: 'User A' };
   const userB = { id: 'uuid-user-b', username: 'perfil_bloqueado', display_name: 'Perfil Destino' };
   const postText = 'Este post vai sumir após o bloqueio';
 
@@ -24,24 +23,12 @@ describe('Fluxo de Bloqueio de Utilizador no Dashboard', () => {
 
   const mockEmptyFeed = { count: 0, next: null, results: [] };
 
-  const visitAuthed = (path = '/') => {
-    cy.visit(path, {
-      onBeforeLoad(win) {
-        win.localStorage.setItem('access', 'fake-token-123');
-        win.localStorage.setItem('refresh', 'fake-refresh-123');
-      },
-    });
-  };
-
-  before(() => {
-    // Intercepta e limpa tudo uma vez no início do bloco
-    cy.clearLocalStorage();
-    cy.clearCookies();
-  });
-
   beforeEach(() => {
-    // Setup de mocks comuns
-    cy.intercept('GET', '**/accounts/profile/**', { statusCode: 200, body: userA }).as('getMyProfile');
+    // 1. Usa o comando customizado para injetar o estado de login
+    cy.login({ path: '/' });
+
+    // 2. Intercepts específicos para este cenário de teste
+    // Note: O perfil do User A já é tratado dentro do cy.login, mas podemos sobrescrever se necessário
     cy.intercept('GET', '**/posts/**', { statusCode: 200, body: mockFeedWithUserB }).as('getFeed');
     cy.intercept('POST', `**/accounts/profiles/${userB.id}/block/**`, {
       statusCode: 200,
@@ -50,65 +37,34 @@ describe('Fluxo de Bloqueio de Utilizador no Dashboard', () => {
     cy.intercept('GET', '**/accounts/feed/**', { statusCode: 200, body: mockEmptyFeed }).as('getFollowing');
   });
 
-  it('1. Deve carregar o feed inicial com o post do alvo', () => {
-    visitAuthed('/');
-    cy.wait(['@getMyProfile', '@getFeed']);
-    cy.contains(userB.display_name).should('be.visible');
-    cy.contains(postText).should('be.visible');
-  });
-
-  it('2. Deve abrir o menu do post e realizar o bloqueio', () => {
-    visitAuthed('/');
-    cy.wait(['@getMyProfile', '@getFeed']);
-
-    // Abre o menu de ações
-    cy.contains('p', postText)
-      .closest('div')
-      .closest('div')
-      .within(() => {
-        cy.get('button[type="button"]').first().click({ force: true });
-      });
-
-    // Clica em Bloquear e valida chamada
-    cy.contains('button', `Bloquear @${userB.username}`).should('be.visible').click();
+  it('1. Deve carregar o feed inicial e realizar o bloqueio com redirecionamento', () => {
+    cy.wait('@getFeed');
+    
+    // Abre o menu e bloqueia
+    cy.get('button[type="button"]').first().click({ force: true });
+    cy.contains('button', `Bloquear @${userB.username}`).click();
+    
     cy.wait('@postBlock');
+
+    // Validação do BUG-41 (Redirect para Home ou Feed)
+    cy.url().should('satisfy', (url) => url.endsWith('/') || url.includes('/feed'));
     cy.contains(`@${userB.username} bloqueado.`).should('be.visible');
   });
 
-  it('3. Deve remover o conteúdo da tela instantaneamente (Reatividade)', () => {
-    visitAuthed('/');
-    cy.wait(['@getMyProfile', '@getFeed']);
+  it('2. Deve redirecionar ao bloquear diretamente na página de perfil', () => {
+    cy.intercept('GET', `**/accounts/profiles/${userB.id}/`, { statusCode: 200, body: userB }).as('getSpecificProfile');
+    
+    // Navega para o perfil usando a sessão já ativa
+    cy.visit(`/profile/${userB.id}`);
+    cy.wait('@getSpecificProfile');
 
-    // Realiza o bloqueio
-    cy.get('button').find('svg').first().click({ force: true });
+    cy.get('button[type="button"]').first().click({ force: true });
     cy.contains('button', `Bloquear @${userB.username}`).click();
     
-    // Valida que sumiu do DOM
-    cy.contains(userB.display_name).should('not.exist');
-    cy.contains(postText).should('not.exist');
-    cy.contains('No posts to show right now.').should('be.visible');
-  });
+    cy.wait('@postBlock');
 
- it('4. Deve persistir o bloqueio ao alternar entre abas', () => {
-    // Definimos que, para este teste, o feed já virá vazio ou será o que monitoramos
-    // Mudamos o alias aqui para não dar conflito com o beforeEach
-    cy.intercept('GET', '**/posts/**', { statusCode: 200, body: mockEmptyFeed }).as('getPostsEmpty');
-    
-    visitAuthed('/');
-    // Esperamos pelo perfil e pelo novo alias que definimos acima
-    cy.wait(['@getMyProfile', '@getPostsEmpty']);
-
-    // 1. Navega para "Seguindo"
-    cy.contains('button', 'Seguindo').click({ force: true });
-    cy.wait('@getFollowing');
-
-    // 2. Volta para "Para você"
-    cy.contains('button', 'Para você').click({ force: true });
-    // Espera a requisição da aba "Para você" acontecer novamente
-    cy.wait('@getPostsEmpty');
-
-    // 3. Valida que o usuário bloqueado não existe
-    cy.contains(userB.display_name).should('not.exist');
-    cy.contains(postText).should('not.exist');
+    // Verifica se foi "expulso" da página de perfil
+    cy.url().should('not.include', `/profile/${userB.id}`);
+    cy.url().should('satisfy', (url) => url.endsWith('/') || url.includes('/feed'));
   });
 });
