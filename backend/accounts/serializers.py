@@ -14,7 +14,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
     upload_picture = serializers.ImageField(write_only=True, required=False)
     username = serializers.CharField(read_only=True)
-    # ADICIONE ISSO AQUI TAMBÉM
     display_name = serializers.ReadOnlyField(source='profile.display_name')
 
     class Meta:
@@ -23,7 +22,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "full_name",
-            "display_name", # <--- Adicione aqui
+            "display_name",
             "bio",
             "profile_picture",
             "upload_picture",
