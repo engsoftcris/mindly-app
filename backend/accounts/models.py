@@ -188,3 +188,26 @@ class Like(models.Model):
 
     def __str__(self):
         return f"{self.user.username} liked post {self.post.id}"
+    
+class Comment(models.Model):
+    post = models.ForeignKey(
+        'Post', 
+        on_delete=models.CASCADE, 
+        related_name='comments'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='comments'
+    )
+    content = models.TextField(blank=True, null=True)
+    media_url = models.TextField(blank=True, null=True)
+    is_gif = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    image = models.ImageField(upload_to='comment_images/', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at'] # Most recent comments on top
+
+    def __str__(self):
+        return f"Comment by {self.author.username} on post {self.post.id}"

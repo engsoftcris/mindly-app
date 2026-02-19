@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 import os
 from rest_framework import serializers
 from .models import Post, User, Profile
-from .models import Block, Follow
+from .models import Block, Follow, Comment
 
 
 
@@ -125,10 +125,12 @@ class PostSerializer(serializers.ModelSerializer):
     media_url = serializers.SerializerMethodField()  
     likes_count = serializers.IntegerField(source='likes.count', read_only=True)
     is_liked = serializers.SerializerMethodField()
+    comments_count = serializers.IntegerField(source='comments.count', read_only=True)
+    user_has_commented = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at','likes_count', 'is_liked']  # ✅ ADD AQUI
+        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at','likes_count', 'is_liked','comments_count', 'user_has_commented']  # ✅ ADD AQUI
         read_only_fields = ['id', 'author', 'created_at', 'media_url', 'is_deleted']
 
     def validate_content(self, value):
@@ -164,6 +166,11 @@ class PostSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user and request.user.is_authenticated:
             return obj.likes.filter(user=request.user).exists()
+        return False
+    def get_user_has_commented(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.comments.filter(author=request.user).exists()
         return False
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -244,3 +251,24 @@ class BlockSerializer(serializers.ModelSerializer):
         if self.context['request'].user == data['blocked']:
             raise serializers.ValidationError("Não podes bloquear-te a ti próprio.")
         return data
+class CommentSerializer(serializers.ModelSerializer):
+    # This shows the username instead of just the ID in the modal
+    author_name = serializers.ReadOnlyField(source='author.username')
+    # This brings the avatar for the comment list
+    author_avatar = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = [
+            'id', 'post', 'author', 'author_name', 'author_avatar', 
+            'content', 'media_url', 'is_gif', 'created_at', 'image',
+        ]
+        read_only_fields = ['author', 'created_at']
+
+    def get_author_avatar(self, obj):
+        request = self.context.get("request")
+        user = obj.author
+        if user.image_status == "APPROVED" and user.profile_picture:
+            return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
+        path = "/static/images/default-avatar.png"
+        return request.build_absolute_uri(path) if request else path

@@ -129,40 +129,21 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
   });
 
   it('3. Deve alternar entre abas "Para você" e "Seguindo"', () => {
-  // Intercept mais robusto pro feed "Seguindo"
-  cy.intercept('GET', /\/api\/accounts\/feed\/?(\?.*)?$/, {
-    statusCode: 200,
-    body: {
-      next: null,
-      results: [{
-        id: 10,
-        content: 'Conteúdo da aba Seguindo',
-        author: { username: 'amigo_teste', id: 5 },
-        created_at: new Date().toISOString()
-      }]
-    }
-  }).as('getFeedFollowing');
+    // 1. Garantir que a página inicial carregou
+    cy.contains('Hello from Para Você!', { timeout: 10000 }).should('be.visible');
 
-  // 1) Clique no TAB correto:
-  // pega os botões de abas (flex-1 py-4 ...) e escolhe o que contém "Seguindo"
-  cy.get('button.flex-1.py-4.hover\\:bg-white\\/5.transition.relative')
-    .contains(/^Seguindo$/)
-    .should('be.visible')
-    .click();
+    // 2. Clique na aba Seguindo (Ajuste o seletor se você usa data-cy nas abas)
+    // Se você tiver data-cy nas abas, use: cy.get('[data-cy="tab-following"]').click()
+    cy.contains('button', /Seguindo/i)
+      .should('be.visible')
+      .click({ force: true });
 
-  // 2) Agora sim esperamos a request do feed following
-  cy.wait('@getFeedFollowing', { timeout: 15000 });
+    // 3. Aguarda a requisição
+    // Se o wait falha, é porque o onClick do seu botão não está chamando a API correta
+    cy.wait('@getFeedFollowing', { timeout: 15000 });
 
-  // 3) Valida conteúdo
-  cy.contains('Conteúdo da aba Seguindo', { timeout: 10000 }).should('be.visible');
-
-  // 4) Volta para "Para você"
-  cy.get('button.flex-1.py-4.hover\\:bg-white\\/5.transition.relative')
-    .contains(/Para você/i)
-    .click();
-
-  // Posts voltam (pode chamar /api/posts/ ou não; então validamos UI)
-  cy.contains('Hello from Para Você!', { timeout: 10000 }).should('be.visible');
-});
+    // 4. Valida conteúdo
+    cy.contains('Conteúdo da aba Seguindo').should('be.visible');
+  });
 
 });

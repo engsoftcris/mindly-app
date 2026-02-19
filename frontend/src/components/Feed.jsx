@@ -2,8 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import UserActionMenu from './UserActionMenu';
 import LikeButton from './LikeButton';
+import CommentButton from './CommentButton';
+import CommentModal from './CommentModal';
 
 const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
+  const [activePostForComment, setActivePostForComment] = React.useState(null);
+
   const handleLikeUpdate = (postId, isLiked, likesCount) => {
     setPosts(prev => prev.map(p => 
       p.id === postId 
@@ -11,6 +15,7 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
         : p
     ));
   };
+
   return (
     <div className="divide-y divide-gray-800">
       {posts.map((post, index) => {
@@ -43,7 +48,6 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                   <span className="text-gray-500 text-sm truncate">@{post.author?.username}</span>
                 </div>
 
-                {/* MENU DE AÇÕES - Garantindo visibilidade */}
                 <UserActionMenu 
                   targetProfile={post.author} 
                   postId={post.id}
@@ -52,15 +56,13 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                     setPosts(prev => prev.filter(p => p.id !== id && p.author?.id !== id && p.author?.uuid !== id));
                   }}
                 />
-                
               </div>
-              
 
               <p className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]">
                 {post.content}
               </p>
 
-              {/* RENDERIZAÇÃO DE MÍDIA (LÓGICA COMPLETA) */}
+              {/* RENDERIZAÇÃO DE MÍDIA */}
               {(post.media_url || post.media) && (() => {
                 const mediaSrc = post.media_url || post.media;
                 const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(mediaSrc);
@@ -89,18 +91,50 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                 );
               })()}
               
-              
-              <div className="mt-3 text-[11px] text-gray-600">
+              {/* BARRA DE INTERAÇÕES */}
+              <div className="mt-3 flex items-center gap-8">
                 <LikeButton 
                   post={post} 
                   onLikeToggle={handleLikeUpdate} 
                 />
-                {new Date(post.created_at).toLocaleString()}
+                
+                <CommentButton 
+                  count={post.comments_count} 
+                  hasCommented={post.user_has_commented}
+                  onClick={() => setActivePostForComment(post)} 
+                />
+
+                <span className="text-[11px] text-gray-600 ml-auto">
+                  {new Date(post.created_at).toLocaleString('pt-PT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
               </div>
             </div>
           </div>
         );
       })}
+
+      {/* AQUI ESTÁ A CONEXÃO QUE FALTAVA! */}
+      {activePostForComment && (
+        <CommentModal 
+          isOpen={!!activePostForComment} 
+          onClose={() => setActivePostForComment(null)} 
+          post={activePostForComment}
+          onCommentAdded={() => {
+            // Atualiza o contador no feed localmente
+            setPosts(prev => prev.map(p => 
+              p.id === activePostForComment.id 
+                ? { ...p, comments_count: (p.comments_count || 0) + 1, user_has_commented: true } 
+                : p
+            ));
+          }}
+        />
+      )}
     </div>
   );
 };
