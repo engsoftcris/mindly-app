@@ -6,6 +6,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 from django.utils.timezone import now
 from datetime import timedelta
+from .models import Comment
+from .serializers import CommentSerializer
 
 # Ferramentas do Social Auth
 from social_django.utils import load_strategy, load_backend
@@ -311,3 +313,19 @@ class UserPostsListView(generics.ListAPIView):
             queryset = queryset.filter(q_objects)
 
         return queryset.order_by('-created_at')
+    
+class CommentViewSet(viewsets.ModelViewSet):
+    serializer_class = CommentSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def get_queryset(self):
+        # Filtra comentários por post se o ID do post vier na URL
+        # Exemplo: /api/comments/?post_id=1
+        post_id = self.request.query_params.get('post_id')
+        if post_id:
+            return Comment.objects.filter(post_id=post_id).order_by('-created_at')
+        return Comment.objects.all()
+
+    def perform_create(self, serializer):
+        # Associa automaticamente o autor ao usuário logado
+        serializer.save(author=self.request.user)    

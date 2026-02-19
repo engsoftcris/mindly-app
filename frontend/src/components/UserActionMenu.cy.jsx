@@ -1,123 +1,171 @@
-// src/components/UserActionMenu.cy.jsx
-import React from 'react';
-import UserActionMenu from './UserActionMenu';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import React from 'react'
+import { MemoryRouter } from 'react-router-dom'
+import UserActionMenu from './UserActionMenu'
+import api from '../api/axios'
+import { toast } from 'react-toastify'
 
 describe('<UserActionMenu />', () => {
-  const targetProfile = { id: 'uuid-123', username: 'johndoe' };
-
-  // Helper para não repetir código em todos os ITs
-  const mountComponent = (props) => {
-    return cy.mount(
-      <MemoryRouter>
-        <ToastContainer theme="dark" position="bottom-center" />
-        <UserActionMenu {...props} />
-      </MemoryRouter>
-    );
-  };
-
-  beforeEach(() => {
-    Cypress.on('uncaught:exception', () => false);
-  });
-
-  it('Deve renderizar o botão (3 pontinhos) e abrir/fechar o menu ao clicar', () => {
-    mountComponent({ targetProfile, isOwnPost: false });
-
-    cy.get('button[type="button"]').should('exist').click();
-    cy.contains(`Bloquear @${targetProfile.username}`).should('be.visible');
-
-    cy.get('button[type="button"]').click();
-    cy.contains(`Bloquear @${targetProfile.username}`).should('not.exist');
-  });
-
-  it('Deve fechar ao clicar fora (click outside)', () => {
+  const mountMenu = ({
+    targetProfile = { id: 10, username: 'alice' },
+    postId = 99,
+    isOwnPost = false,
+    onActionComplete = cy.stub().as('onActionComplete'),
+  } = {}) => {
     cy.mount(
-      <MemoryRouter>
-        <div style={{ padding: 40 }}>
-          <ToastContainer theme="dark" position="bottom-center" />
-          <UserActionMenu targetProfile={targetProfile} isOwnPost={false} />
-          <div data-cy="outside">fora</div>
+      <MemoryRouter initialEntries={['/']}>
+        <div data-cy="parent" onClick={cy.stub().as('parentClick')}>
+          <UserActionMenu
+            targetProfile={targetProfile}
+            postId={postId}
+            isOwnPost={isOwnPost}
+            onActionComplete={onActionComplete}
+          />
         </div>
       </MemoryRouter>
-    );
+    )
+  }
 
-    cy.get('button[type="button"]').click();
-    cy.get('[data-cy="outside"]').click('center');
-    cy.contains(`Bloquear @${targetProfile.username}`).should('not.exist');
-  });
+  const stubPostResolve = (payload) =>
+    cy.get('@apiPost').then((stub) => stub.resolves(payload))
 
-  it('Quando isOwnPost=true deve mostrar "Deletar Post" e não mostrar Bloquear', () => {
-    mountComponent({ targetProfile, isOwnPost: true });
-    cy.get('button[type="button"]').click();
-    cy.contains('Deletar Post').should('be.visible');
-    cy.contains(/Bloquear @/i).should('not.exist');
-  });
+  const stubPostReject = (err) =>
+    cy.get('@apiPost').then((stub) => stub.rejects(err))
 
-  it('Deve mostrar fluxo de confirmação ao clicar em Deletar e permitir cancelar', () => {
-    mountComponent({ targetProfile, isOwnPost: true });
-    cy.get('button[type="button"]').click();
-    cy.contains('Deletar Post').click();
-    cy.contains('CONFIRMAR DELETAR?').should('be.visible');
-    cy.contains('Cancelar').click();
-    cy.contains('Deletar Post').should('be.visible');
-  });
+  const stubDeleteResolve = (payload) =>
+    cy.get('@apiDelete').then((stub) => stub.resolves(payload))
 
-  it('Deve mostrar toast de erro se o POST falhar', () => {
-    cy.intercept('POST', `**/accounts/profiles/${targetProfile.id}/block/`, {
-      statusCode: 500,
-      body: { error: 'fail' },
-    }).as('blockFail');
+  const stubDeleteReject = (err) =>
+    cy.get('@apiDelete').then((stub) => stub.rejects(err))
 
-    mountComponent({ targetProfile, isOwnPost: false });
-    cy.get('button[type="button"]').click();
-    cy.contains(`Bloquear @${targetProfile.username}`).click();
-    cy.wait('@blockFail');
-    cy.contains('Erro ao bloquear.').should('be.visible');
-  });
+  beforeEach(() => {
+    cy.stub(api, 'post').as('apiPost')
+    cy.stub(api, 'delete').as('apiDelete')
+    cy.stub(toast, 'success').as('toastSuccess')
+    cy.stub(toast, 'error').as('toastError')
+  })
 
-  it('Não deve chamar API se não houver profileId', () => {
-    mountComponent({ targetProfile: { username: 'semid' }, isOwnPost: false });
-    cy.get('button[type="button"]').click();
-    cy.contains(/Bloquear @/i).click();
-    cy.contains(/bloqueado/i).should('not.exist');
-  });
+  it('abre e fecha o menu pelo trigger', () => {
+    mountMenu()
 
-  it('Deve executar a deleção real após confirmar no segundo clique', () => {
-    const postId = 55;
-    const onActionComplete = cy.spy().as('onActionComplete');
-    cy.intercept('DELETE', `**/accounts/posts/${postId}/`, { statusCode: 204 }).as('deleteReq');
+    cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
 
-    mountComponent({ targetProfile, postId, isOwnPost: true, onActionComplete });
-    cy.get('button[type="button"]').click();
-    cy.contains('Deletar Post').click();
-    cy.contains('CONFIRMAR DELETAR?').click();
-    cy.wait('@deleteReq');
-    cy.contains('Post eliminado.').should('be.visible');
-    cy.get('@onActionComplete').should('have.been.calledWith', postId);
-  });
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-menu-panel"]').should('exist')
 
-  it('Deve redirecionar para /feed após o bloqueio com sucesso (BUG-41)', () => {
-    cy.intercept('POST', `**/accounts/profiles/${targetProfile.id}/block/`, {
-      statusCode: 200,
-      body: { message: 'Blocked' },
-    }).as('blockRequest');
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
+  })
 
-    cy.mount(
-      <MemoryRouter initialEntries={['/profile/uuid-123']}>
-        <ToastContainer theme="dark" position="bottom-center" />
-        <Routes>
-          <Route path="/profile/:id" element={<UserActionMenu targetProfile={targetProfile} isOwnPost={false} />} />
-          <Route path="/feed" element={<div data-cy="feed-landing">Página do Feed</div>} />
-        </Routes>
-      </MemoryRouter>
-    );
+  it('fecha o menu ao clicar fora (mousedown no document)', () => {
+    mountMenu()
 
-    cy.get('button[type="button"]').click();
-    cy.contains(`Bloquear @${targetProfile.username}`).click();
-    cy.wait('@blockRequest');
-    cy.get('[data-cy="feed-landing"]').should('be.visible');
-    cy.contains(`@${targetProfile.username} bloqueado.`).should('be.visible');
-  });
-});
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-menu-panel"]').should('exist')
+
+    // dispara exatamente o evento que seu useEffect escuta
+    cy.document().trigger('mousedown', { clientX: 1, clientY: 1, force: true })
+
+    cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
+  })
+
+  it('não propaga clique para o pai (stopPropagation)', () => {
+    mountMenu()
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('@parentClick').should('not.have.been.called')
+  })
+
+  it('quando NÃO é dono do post: bloqueia com sucesso', () => {
+    const targetProfile = { id: 55, username: 'bob' }
+    const onActionComplete = cy.stub().as('onActionComplete')
+
+    stubPostResolve({ data: { ok: true } })
+
+    mountMenu({ targetProfile, isOwnPost: false, onActionComplete })
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-block"]').should('exist').click({ force: true })
+
+    cy.get('@apiPost').should(
+      'have.been.calledOnceWithExactly',
+      '/accounts/profiles/55/block/'
+    )
+
+    cy.get('@toastSuccess').should('have.been.calledOnce')
+    cy.get('@onActionComplete').should('have.been.calledOnceWithExactly', 55)
+    cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
+  })
+
+  it('quando NÃO é dono do post: erro no block mostra toast.error', () => {
+    const targetProfile = { id: 55, username: 'bob' }
+    stubPostReject(new Error('fail'))
+
+    mountMenu({ targetProfile, isOwnPost: false })
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-block"]').click({ force: true })
+
+    cy.get('@toastError').should('have.been.calledOnce')
+  })
+
+  it('quando é dono do post: primeiro clique pede confirmação (não deleta ainda)', () => {
+    stubDeleteResolve({ data: { ok: true } })
+
+    mountMenu({ isOwnPost: true, postId: 99 })
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+
+    cy.get('[data-cy="user-action-delete"]').click({ force: true })
+
+    cy.get('@apiDelete').should('not.have.been.called')
+    cy.get('[data-cy="user-action-confirm-delete"]').should('exist')
+    cy.get('[data-cy="user-action-cancel-delete"]').should('exist')
+  })
+
+  it('quando é dono do post: cancelar remove confirmação', () => {
+    mountMenu({ isOwnPost: true, postId: 99 })
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-delete"]').click({ force: true })
+
+    cy.get('[data-cy="user-action-cancel-delete"]').click({ force: true })
+
+    cy.get('[data-cy="user-action-delete"]').should('exist')
+    cy.get('[data-cy="user-action-confirm-delete"]').should('not.exist')
+  })
+
+  it('quando é dono do post: confirma delete no segundo clique e chama callback', () => {
+    const onActionComplete = cy.stub().as('onActionComplete')
+    stubDeleteResolve({ data: { ok: true } })
+
+    mountMenu({ isOwnPost: true, postId: 777, onActionComplete })
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+
+    cy.get('[data-cy="user-action-delete"]').click({ force: true })
+    cy.get('[data-cy="user-action-confirm-delete"]').should('exist')
+
+    cy.get('[data-cy="user-action-confirm-delete"]').click({ force: true })
+
+    cy.get('@apiDelete').should(
+      'have.been.calledOnceWithExactly',
+      '/accounts/posts/777/'
+    )
+
+    cy.get('@toastSuccess').should('have.been.calledOnce')
+    cy.get('@onActionComplete').should('have.been.calledOnceWithExactly', 777)
+    cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
+  })
+
+  it('quando é dono do post: erro no delete mostra toast.error', () => {
+    stubDeleteReject(new Error('fail'))
+
+    mountMenu({ isOwnPost: true, postId: 777 })
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+    cy.get('[data-cy="user-action-delete"]').click({ force: true })
+    cy.get('[data-cy="user-action-confirm-delete"]').click({ force: true })
+
+    cy.get('@toastError').should('have.been.calledOnce')
+  })
+})

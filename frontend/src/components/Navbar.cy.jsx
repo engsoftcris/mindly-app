@@ -1,74 +1,92 @@
-import React from 'react';
-import Navbar from './Navbar';
-import { BrowserRouter } from 'react-router-dom';
-// IMPORTANTE: Aqui importamos sem as chavetas, porque é o export default
-import AuthContext from '../context/AuthContext'; 
+// frontend/src/components/Navbar.cy.jsx
+import React from 'react'
+import Navbar from './Navbar'
+import { BrowserRouter } from 'react-router-dom'
+
+// IMPORTANTE: AuthContext é export default no seu arquivo
+import AuthContext from '../context/AuthContext'
 
 describe('<Navbar />', () => {
-  
   const mountNavbar = (userValue) => {
-    const logoutSpy = cy.spy().as('logoutSpy');
-    
+    const logoutSpy = cy.spy().as('logoutSpy')
+
     cy.mount(
       <BrowserRouter>
-        {/* Usamos o AuthContext que veio do teu export default */}
-        <AuthContext.Provider value={{ 
-          user: userValue, 
-          logout: logoutSpy,
-          loading: false 
-        }}>
+        <AuthContext.Provider
+          value={{
+            user: userValue,
+            logout: logoutSpy,
+            loading: false,
+          }}
+        >
           <Navbar />
         </AuthContext.Provider>
       </BrowserRouter>
-    );
-  };
+    )
+  }
 
- it('Deve mostrar apenas o primeiro nome (Cristiano) quando logado', () => {
-    mountNavbar({ 
-      display_name: 'Cristiano Tobias', 
-      username: 'cristiano40' 
-    });
+ it('deve mostrar apenas o primeiro nome quando logado', () => {
+  mountNavbar({
+    display_name: 'Cristiano Tobias',
+    username: 'cristiano40',
+    profile_picture: null,
+  })
 
-    // Removido o "Olá, " pois não existe mais no seu componente
-    cy.get('p.text-white').should('contain', 'Cristiano');
-    cy.contains('Tobias').should('not.exist');
-    
-    // Verifica se o @username também aparece embaixo
-    cy.contains('@cristiano40').should('be.visible');
-  });
+  cy.get('[data-cy="navbar-user-display-name"]')
+    .should('exist')
+    .invoke('text')
+    .then((txt) => {
+      expect(txt).to.contain('Cristiano')
+      expect(txt).to.not.contain('Tobias')
+    })
 
-  it('Deve mostrar o username quando o display_name está vazio', () => {
-    mountNavbar({ 
-      display_name: '', 
-      username: 'tobias_dev' 
-    });
+  cy.get('[data-cy="navbar-user-username"]')
+    .should('exist')
+    .and('contain', '@cristiano40')
+})
 
-    // O fallback agora é apenas o username direto
-    cy.get('p.text-white').should('contain', 'tobias_dev');
-  });
 
-  it('Deve mostrar o link "Entrar" quando o user é null', () => {
-    mountNavbar(null);
+  it('deve mostrar o username quando display_name está vazio', () => {
+    mountNavbar({
+      display_name: '',
+      username: 'tobias_dev',
+      profile_picture: null,
+    })
 
-    cy.contains('Entrar').should('be.visible');
-    
-    // CORREÇÃO: Em vez de cy.get('button'), verificamos se o texto "Sair" não existe na página
-    cy.contains('Sair').should('not.exist');
-  });
+    cy.get('[data-cy="navbar-user-display-name"]')
+  .should('exist')
+  .and('contain', 'tobias_dev')
 
-  it('Deve disparar o logout ao clicar no botão Sair', () => {
-    mountNavbar({ username: 'cristiano' });
+  })
 
-    // Aqui o botão existe, então o cy.get funciona
-    cy.get('button').contains(/Sair/i).click();
-    
-    cy.get('@logoutSpy').should('have.been.called');
-  });
+  it('deve mostrar o link "Entrar" quando user é null', () => {
+    mountNavbar(null)
 
-  it('Deve disparar o logout ao clicar no botão Sair', () => {
-    mountNavbar({ username: 'cristiano' });
+    cy.get('[data-cy="navbar-login-link"]').should('be.visible').and('contain', 'Entrar')
 
-    cy.get('button').contains(/Sair/i).click();
-    cy.get('@logoutSpy').should('have.been.called');
-  });
-});
+    cy.get('[data-cy="navbar-logout-button"]').should('not.exist')
+    cy.get('[data-cy="navbar-user-section"]').should('not.exist')
+  })
+
+  it('deve disparar logout ao clicar no botão Sair', () => {
+    mountNavbar({
+      username: 'cristiano',
+      display_name: 'Cristiano Tobias',
+      profile_picture: null,
+    })
+
+    cy.get('[data-cy="navbar-logout-button"]').click()
+    cy.get('@logoutSpy').should('have.been.calledOnce')
+  })
+
+  it('deve renderizar links Home e Perfil quando logado', () => {
+    mountNavbar({
+      username: 'cristiano',
+      display_name: 'Cristiano Tobias',
+      profile_picture: null,
+    })
+
+    cy.get('[data-cy="navbar-home-link"]').should('be.visible')
+    cy.get('[data-cy="navbar-profile-link"]').should('be.visible')
+  })
+})

@@ -1,70 +1,68 @@
-Cypress.on('uncaught:exception', () => false);
-
 describe('Fluxo de Bloqueio de Utilizador no Dashboard', () => {
-  const userB = { id: 'uuid-user-b', username: 'perfil_bloqueado', display_name: 'Perfil Destino' };
-  const postText = 'Este post vai sumir após o bloqueio';
-
-  const mockFeedWithUserB = {
-    count: 1,
-    next: null,
-    results: [{
-      id: 101,
-      content: postText,
-      created_at: new Date().toISOString(),
-      author: {
-        id: userB.id,
-        uuid: userB.id,
-        username: userB.username,
-        display_name: userB.display_name,
-        profile_picture: null,
-      },
-    }],
+  const userB = { 
+    id: 999, 
+    username: 'perfil_bloqueado', 
+    display_name: 'Perfil Destino' 
   };
 
-  const mockEmptyFeed = { count: 0, next: null, results: [] };
-
   beforeEach(() => {
-    // 1. Usa o comando customizado para injetar o estado de login
-    cy.login({ path: '/' });
+    Cypress.on('uncaught:exception', () => false);
+    cy.viewport(1280, 800);
 
-    // 2. Intercepts específicos para este cenário de teste
-    // Note: O perfil do User A já é tratado dentro do cy.login, mas podemos sobrescrever se necessário
-    cy.intercept('GET', '**/posts/**', { statusCode: 200, body: mockFeedWithUserB }).as('getFeed');
-    cy.intercept('POST', `**/accounts/profiles/${userB.id}/block/**`, {
+    cy.intercept('GET', '**/api/accounts/profile/**', {
       statusCode: 200,
-      body: { message: `@${userB.username} bloqueado.` },
+      body: { id: 1, username: 'testuser' }
+    }).as('getProfile');
+
+    cy.intercept('GET', '**/api/posts/**', {
+      statusCode: 200,
+      body: { 
+        count: 1, 
+        results: [{ 
+          id: 101, 
+          content: 'Post alvo do bloqueio', 
+          author: userB,
+          created_at: new Date().toISOString()
+        }] 
+      }
+    }).as('getFeed');
+
+    cy.intercept('POST', '**/api/accounts/profiles/*/block/', {
+      statusCode: 200,
+      body: { success: true }
     }).as('postBlock');
-    cy.intercept('GET', '**/accounts/feed/**', { statusCode: 200, body: mockEmptyFeed }).as('getFollowing');
+
+    cy.login({ path: '/' }); 
   });
 
-  it('1. Deve carregar o feed inicial e realizar o bloqueio com redirecionamento', () => {
-    cy.wait('@getFeed');
-    
-    // Abre o menu e bloqueia
-    cy.get('button[type="button"]').first().click({ force: true });
-    cy.contains('button', `Bloquear @${userB.username}`).click();
-    
-    cy.wait('@postBlock');
+  it('1. Deve realizar o bloqueio no feed e remover o post', () => {
+    cy.wait(['@getProfile', '@getFeed']);
 
-    // Validação do BUG-41 (Redirect para Home ou Feed)
-    cy.url().should('satisfy', (url) => url.endsWith('/') || url.includes('/feed'));
-    cy.contains(`@${userB.username} bloqueado.`).should('be.visible');
+    cy.get('[data-cy="user-action-menu-trigger"]').first().click({ force: true });
+
+    cy.get('[data-cy="user-action-block"]')
+      .should('be.visible')
+      .click({ force: true });
+
+    cy.contains('Post alvo do bloqueio', { timeout: 15000 }).should('not.exist');
+
+    cy.location('pathname').should('eq', '/');
   });
 
-  it('2. Deve redirecionar ao bloquear diretamente na página de perfil', () => {
-    cy.intercept('GET', `**/accounts/profiles/${userB.id}/`, { statusCode: 200, body: userB }).as('getSpecificProfile');
-    
-    // Navega para o perfil usando a sessão já ativa
-    cy.visit(`/profile/${userB.id}`);
-    cy.wait('@getSpecificProfile');
+  it('2. Deve redirecionar ao bloquear na página de perfil', () => {
+    cy.intercept('GET', '**/api/accounts/profiles/999/', { 
+      statusCode: 200, 
+      body: { ...userB, posts: [] } 
+    }).as('getPublicProfile');
 
-    cy.get('button[type="button"]').first().click({ force: true });
-    cy.contains('button', `Bloquear @${userB.username}`).click();
-    
+    cy.visit('/profile/999');
+    cy.wait(['@getProfile', '@getPublicProfile']);
+
+    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true });
+    cy.get('[data-cy="user-action-block"]').click({ force: true });
+
     cy.wait('@postBlock');
 
-    // Verifica se foi "expulso" da página de perfil
-    cy.url().should('not.include', `/profile/${userB.id}`);
-    cy.url().should('satisfy', (url) => url.endsWith('/') || url.includes('/feed'));
+    cy.location('pathname').should('eq', '/');
   });
 });

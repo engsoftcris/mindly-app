@@ -3,6 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from django.http import JsonResponse # <--- Adicione esta linha
 import os
 
 # Importações do REST Framework
@@ -13,14 +14,22 @@ from rest_framework_simplejwt.views import (
 )
 
 # Importações das tuas Views
-from accounts.views import api_root, PostViewSet
+from accounts.views import api_root, PostViewSet, CommentViewSet
+
+# Função de Health Check
+def health_check(request):
+    return JsonResponse({"status": "online", "message": "Mindly Backend is awake"}, status=200)
 
 # 1. Configuração do Router para Posts e outras ViewSets
 router = DefaultRouter()
 router.register(r'posts', PostViewSet, basename='post')
+router.register(r'comments', CommentViewSet, basename='comment')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    
+    # Rota de Health Check (para o Uptime Monitor)
+    path("api/health/", health_check, name='health_check'),
     
     # Rota principal para o Feed e Posts (/api/posts/)
     path("api/", include(router.urls)),
