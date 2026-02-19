@@ -3,8 +3,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from django.http import JsonResponse # <--- Adicione esta linha
+from django.http import JsonResponse 
 import os
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt # Garante que requisições externas não sejam barradas por falta de token CSRF
+def health_check(request):
+    return JsonResponse({"status": "online", "message": "Mindly Backend is awake"}, status=200)
 
 # Importações do REST Framework
 from rest_framework.routers import DefaultRouter
