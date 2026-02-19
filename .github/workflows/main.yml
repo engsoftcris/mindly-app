@@ -61,6 +61,8 @@ jobs:
         run: npm install
       - name: Cypress Component Run
         uses: cypress-io/github-action@v6
+        env:
+          VITE_GIPHY_API_KEY: "QYGuyFwFjGPQFKrAcwJLuQ8LINIF7RbP"
         with:
           working-directory: ./frontend
           component: true
