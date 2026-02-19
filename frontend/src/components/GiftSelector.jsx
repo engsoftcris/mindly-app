@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSearch, FaTimes } from 'react-icons/fa';
 
-const GIPHY_API_KEY = "QYGuyFwFjGPQFKrAcwJLuQ8LINIF7RbP";
+const GIPHY_API_KEY = import.meta.env.VITE_GIPHY_API_KEY;
 
 const GiftSelector = ({ onSelect, onClose, setCanUseGifs }) => {
     const [gifs, setGifs] = useState([]);
