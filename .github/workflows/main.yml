@@ -93,6 +93,7 @@ jobs:
           VITE_FIREBASE_AUTH_DOMAIN: "mindly-app-96bfb.firebaseapp.com"
           VITE_FIREBASE_PROJECT_ID: "mindly-app-96bfb"
           VITE_FIREBASE_APP_ID: "1:871089850123:web:ba40bc306e6ca228f7040e"
+          VITE_GIPHY_API_KEY: "QYGuyFwFjGPQFKrAcwJLuQ8LINIF7RbP"
         with:
           working-directory: ./frontend
           start: npm run dev
