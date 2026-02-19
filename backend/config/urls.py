@@ -17,6 +17,7 @@ from rest_framework_simplejwt.views import (
 from accounts.views import api_root, PostViewSet, CommentViewSet
 
 # Função de Health Check
+@csrf_exempt
 def health_check(request):
     return JsonResponse({"status": "online", "message": "Mindly Backend is awake"}, status=200)
 
