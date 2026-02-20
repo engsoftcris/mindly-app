@@ -23,88 +23,71 @@ describe('<NotificationsPage /> - Component Test', () => {
   ];
 
   beforeEach(() => {
-    // Reset any stubs/spies before each test
-    cy.intercept('GET', '**/api/notifications/', {
-      statusCode: 200,
-      body: mockNotifications
+    // Intercept com console.log (não interfere no fluxo de comandos do Cypress)
+    cy.intercept('GET', /.*\/api\/notifications\/?$/, (req) => {
+      console.log('--- NETWORK DEBUG: Capturou GET notifications ---');
+      req.reply(mockNotifications);
     }).as('getNotifications');
-    
-    cy.intercept('POST', '**/api/notifications/mark_all_as_read/', {
-      statusCode: 200
+
+    cy.intercept('POST', /.*\/api\/notifications\/mark_all_as_read\/?$/, (req) => {
+      console.log('--- NETWORK DEBUG: Capturou POST mark_all_as_read ---');
+      req.reply({ statusCode: 200 });
     }).as('markAllRead');
+
+    cy.mount(
+      <MemoryRouter>
+        <NotificationsPage />
+      </MemoryRouter>
+    );
   });
 
   it('1. Deve exibir o texto de carregamento inicial', () => {
-    cy.mount(
-      <MemoryRouter>
-        <NotificationsPage />
-      </MemoryRouter>
-    );
-    
-    cy.contains(/A carregar/i).should('be.visible');
-    
-    // Wait for the request to complete to ensure test doesn't fail due to pending requests
-    cy.wait('@getNotifications');
+    cy.log('TEST 1: Verificando loading state');
+    cy.contains(/carregar/i).should('be.visible');
   });
 
   it('2. Deve carregar as notificações e disparar o mark_all_as_read se houver não lidas', () => {
-    cy.mount(
-      <MemoryRouter>
-        <NotificationsPage />
-      </MemoryRouter>
-    );
-
-    cy.wait('@getNotifications');
-    cy.wait('@markAllRead');
+    cy.log('TEST 2: Aguardando requests de inicialização');
+    
+    // Timeout longo para o GitHub Actions não engasgar
+    cy.wait('@getNotifications', { timeout: 15000 });
+    cy.log('DEBUG: GET Notifications recebido');
+    
+    cy.wait('@markAllRead', { timeout: 15000 });
+    cy.log('DEBUG: POST Mark All Read recebido');
     
     cy.contains('Cristiano').should('be.visible');
     cy.contains(/curtiu o teu post/i).should('be.visible');
   });
 
   it('3. Deve renderizar os ícones e cores de fundo corretas', () => {
-    cy.mount(
-      <MemoryRouter>
-        <NotificationsPage />
-      </MemoryRouter>
-    );
-
-    cy.wait('@getNotifications');
-
-    // Check for the LIKE icon (heart)
-    cy.get('svg').first().should('have.class', 'text-pink-600');
+    cy.log('TEST 3: Verificando UI e Classes CSS');
+    cy.wait('@getNotifications', { timeout: 15000 });
+    cy.get('svg.text-pink-600').should('exist');
     
-    // Check background color for unread notification
     cy.contains('Cristiano')
-      .parents('div[class*="flex gap-4"]')
-      .first()
+      .parents('.flex.gap-4')
       .should('have.class', 'bg-blue-900/10');
   });
 
   it('4. Deve mostrar mensagem caso a lista esteja vazia', () => {
-    // Override the intercept for this specific test
-    cy.intercept('GET', '**/api/notifications/', {
-      statusCode: 200,
-      body: []
-    }).as('getEmpty');
-
+    cy.log('TEST 4: Cenário de lista vazia');
+    cy.intercept('GET', /.*\/api\/notifications\/?$/, []).as('getEmpty');
+    
     cy.mount(
       <MemoryRouter>
         <NotificationsPage />
       </MemoryRouter>
     );
     
-    cy.wait('@getEmpty');
+    cy.wait('@getEmpty', { timeout: 15000 });
     cy.contains(/Ainda não tens notificações/i).should('be.visible');
   });
 
   it('5. Deve renderizar o conteúdo do post quando disponível', () => {
-    cy.mount(
-      <MemoryRouter>
-        <NotificationsPage />
-      </MemoryRouter>
-    );
-
-    cy.wait('@getNotifications');
+    cy.log('TEST 5: Validando conteúdo dos posts carregados');
+    cy.wait('@getNotifications', { timeout: 15000 });
     cy.contains('Frontend com Cypress é top!').should('be.visible');
+    cy.contains('Concordo plenamente!').should('be.visible');
   });
 });

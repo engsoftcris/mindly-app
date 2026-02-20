@@ -7,12 +7,15 @@ const NotificationsPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log("DEBUG: Componente montou. Iniciando fetch...");
     fetchNotifications();
   }, []);
 
   const fetchNotifications = async () => {
     try {
+      console.log("DEBUG: Fazendo requisição para /notifications/");
       const response = await api.get('/notifications/');
+      console.log("DEBUG: Resposta recebida:", response.status, response.data);
       setNotifications(response.data);
       
       // Opcional: Marcar todas como lidas ao abrir a página
