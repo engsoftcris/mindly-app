@@ -5,10 +5,11 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import ProfilePage from "./components/ProfilePage"; 
+import SettingsPage from "./components/SettingsPage.jsx"; 
 import PublicProfile from "./components/PublicProfile"; 
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
+import NotificationsPage from "./components/Notifications.jsx"
 
 function App() {
   const { user } = useAuth();
@@ -40,8 +41,9 @@ function App() {
         <main className="w-[600px] border-x border-gray-800 bg-black min-h-screen flex-shrink-0 no-scrollbar overflow-y-auto">
           <Routes>
             <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/notifications" element={<PrivateRoute><NotificationsPage /></PrivateRoute>} />
             <Route path="/profile/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
-            <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+            <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

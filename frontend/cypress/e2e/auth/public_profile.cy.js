@@ -115,4 +115,54 @@ describe('Fluxo de Perfil Público e Privacidade (TAL-30)', () => {
 
     cy.contains(/User not found/i).should('be.visible');
   });
+ it('Cenário 5: Deve alternar entre Seguir e Seguindo ao clicar no botão', () => {
+    // Mock do POST (201 para seguir)
+    cy.intercept('POST', '**/api/accounts/profiles/123/follow/', { 
+      statusCode: 201,
+      body: { message: "Você está seguindo John Doe" }
+    }).as('followAction');
+
+    // Mock do GET inicial (is_following: false)
+    cy.intercept('GET', '**/api/accounts/profiles/123/', {
+      statusCode: 200,
+      body: { 
+        id: '123', 
+        username: 'johndoe', 
+        is_following: false, 
+        is_restricted: false, 
+        posts: [] 
+      }
+    }).as('fetchPublic');
+
+    visitAuthed(`/profile/123`);
+    cy.wait(['@getProfileAuthRoot', '@fetchPublic']);
+
+    // Verifica se o texto inicial está correto (Seguir)
+    cy.get('[data-cy="follow-button"]')
+      .should('be.visible')
+      .and('contain', 'Seguir')
+      .click();
+    
+    cy.wait('@followAction');
+    
+    // Verifica se mudou para "Seguindo"
+    cy.get('[data-cy="follow-button"]')
+      .should('contain', 'Seguindo');
+  });
+
+ 
+  it('Cenário 6: Deve mostrar "Edit Profile" em vez de "Follow" quando o perfil é meu', () => {
+    const myId = '999'; // Mesmo ID do authBody no beforeEach
+    
+    cy.intercept('GET', `**/accounts/profiles/${myId}/**`, {
+      statusCode: 200,
+      body: { id: myId, username: 'cristiano', is_self: true, posts: [] }
+    }).as('fetchMyProfile');
+
+    visitAuthed(`/profile/${myId}`);
+    cy.wait('@fetchMyProfile');
+
+    cy.contains('button', /Edit Profile/i).should('be.visible');
+    cy.contains('button', /Follow/i).should('not.exist');
+  });
 });

@@ -22,12 +22,13 @@ from datetime import datetime
 from django.db.models import Q
 
 # Seus modelos e serializers
-from .models import Profile, Block, Post, Follow, Like
+from .models import Profile, Block, Post, Follow, Like, Notification
 from .serializers import (
     GoogleAuthSerializer,
     PostSerializer,
     UserProfileSerializer,
-    ProfileSerializer
+    ProfileSerializer,
+    NotificationSerializer
 )
 
 # --- ROOT API ---
@@ -328,4 +329,30 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Associa automaticamente o autor ao usuário logado
-        serializer.save(author=self.request.user)    
+        serializer.save(author=self.request.user) 
+
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet apenas de leitura para notificações.
+    Ações: list, retrieve e o custom action mark_as_read.
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # SEGURANÇA: Só retorna notificações do próprio utilizador logado
+        return Notification.objects.filter(recipient=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def mark_all_as_read(self, request):
+        """Marca todas as notificações do utilizador como lidas."""
+        self.get_queryset().update(is_read=True)
+        return Response({'status': 'notifications marked as read'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def mark_as_read(self, request, pk=None):
+        """Marca uma notificação específica como lida."""
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        return Response({'status': 'notification marked as read'}, status=status.HTTP_200_OK)   

@@ -19,7 +19,7 @@ from rest_framework_simplejwt.views import (
 )
 
 # Importações das tuas Views
-from accounts.views import api_root, PostViewSet, CommentViewSet
+from accounts.views import api_root, PostViewSet, CommentViewSet, NotificationViewSet
 
 # Função de Health Check
 @csrf_exempt
@@ -30,6 +30,7 @@ def health_check(request):
 router = DefaultRouter()
 router.register(r'posts', PostViewSet, basename='post')
 router.register(r'comments', CommentViewSet, basename='comment')
+router.register(r'notifications', NotificationViewSet, basename='notification')
 
 urlpatterns = [
     path("admin/", admin.site.urls),

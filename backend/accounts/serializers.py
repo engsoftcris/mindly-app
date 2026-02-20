@@ -5,9 +5,7 @@ from PIL import Image
 from django.core.files.base import ContentFile
 import os
 from rest_framework import serializers
-from .models import Post, User, Profile
-from .models import Block, Follow, Comment
-
+from .models import Post, User, Profile, Block, Follow, Comment, Notification
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -272,3 +270,19 @@ class CommentSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
+    
+
+class NotificationSerializer(serializers.ModelSerializer):
+    sender_name = serializers.ReadOnlyField(source='sender.username')
+    sender_avatar = serializers.ImageField(source='sender.profile_picture', read_only=True)
+    # Garanta que esta linha esteja aqui para resolver o problema do UUID
+    sender_uuid = serializers.ReadOnlyField(source='sender.profile.id')
+    
+    class Meta:
+        model = Notification
+        fields = [
+            'id', 'sender', 'sender_uuid', 'sender_name', 'sender_avatar', 
+            'notification_type', 'post', 'is_read', 'created_at'
+        ]
+        # O erro estava aqui: as linhas abaixo devem estar separadas!
+        read_only_fields = ['id', 'sender', 'notification_type', 'post', 'created_at']

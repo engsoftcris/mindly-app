@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // Adicionado useNavigate
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import FollowButton from '../components/FollowButton';
@@ -7,11 +7,15 @@ import UserActionMenu from '../components/UserActionMenu';
 
 const PublicProfile = () => {
     const { id } = useParams();
+    const navigate = useNavigate(); // Inicializado para permitir a navegação
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('all'); 
     const { user: currentUser } = useAuth();
+
+    // Lógica para verificar se o usuário logado é o dono do perfil que está visualizando
+    const isOwner = profile && currentUser && String(currentUser.id) === String(profile.id);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -56,32 +60,43 @@ const PublicProfile = () => {
                     <div className="absolute -top-12 left-6">
                         <img src={profile.profile_picture} className="w-24 h-24 rounded-full border-4 border-black bg-black object-cover" alt="" />
                     </div>
-                  <div className="flex justify-end mb-2">
-   
-    <div className="flex justify-end items-center gap-2 mb-2">
-    {/* 1. Menu de Ações (Bloquear) agora fica à ESQUERDA */}
-    {profile && currentUser && String(currentUser.id) !== String(profile.id) && (
-        <UserActionMenu 
-            targetProfile={profile} 
-        />
-    )}
+                    
+                    <div className="flex justify-end mb-2">
+                        <div className="flex justify-end items-center gap-2 mb-2">
+                            {/* SE FOR O DONO: Mostra o botão de editar que leva para /settings */}
+                            {isOwner ? (
+                                <button 
+                                    onClick={() => navigate('/settings')}
+                                    className="px-4 py-1.5 rounded-full border border-gray-600 text-white font-bold text-[15px] hover:bg-white/10 transition"
+                                >
+                                    Edit Profile
+                                </button>
+                            ) : (
+                                /* SE NÃO FOR O DONO: Mostra os botões de interação */
+                                <>
+                                    {profile && currentUser && (
+                                        <UserActionMenu 
+                                            targetProfile={profile} 
+                                        />
+                                    )}
 
-    {/* 2. Botão de Seguir agora fica à DIREITA */}
-    {profile && currentUser && String(currentUser.id) !== String(profile.id) && (
-        <FollowButton 
-            profileId={profile.id} 
-            initialIsFollowing={profile.is_following} 
-        />
-    )}
-</div>
-</div>
+                                    {profile && currentUser && (
+                                        <FollowButton 
+                                            profileId={profile.id} 
+                                            initialIsFollowing={profile.is_following} 
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="mt-14">
                         <h1 className="text-xl font-extrabold">{profile.display_name || profile.username}</h1>
                         <p className="text-gray-500">@{profile.username}</p>
                     </div>
                     <p className="mt-4 text-gray-200 whitespace-pre-wrap">{profile.bio || "No bio yet."}</p>
 
-                    {/* SEÇÃO DE SEGUIDORES E SEGUINDO (UI Preparada para a próxima Task) */}
                     <div className="mt-4 flex gap-5 text-[15px]">
                         <div className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
                             <span className="font-bold text-white">
@@ -126,7 +141,9 @@ const PublicProfile = () => {
                                         const isPending = post.moderation_status === "PENDING";
 
                                         return (
-                                            <div key={post.id} className="p-4 hover:bg-white/[0.01]">
+                                            <div key={post.id} className="p-4 hover:bg-white/[0.01]"
+                                            data-cy="post-card"
+                                            >
                                                 <p className="text-[15px] text-gray-200 mb-3">{post.content}</p>
                                                 {post.media_url && (
                                                     <div className="relative overflow-hidden rounded-2xl border border-gray-800 bg-black">
@@ -149,7 +166,7 @@ const PublicProfile = () => {
                                 </div>
                             )}
 
-                            {/* ABA DE GALERIA (GRID 3 COLUNAS - TAL-20) */}
+                            {/* ABA DE GALERIA */}
                             {activeTab !== 'all' && (
                                 <div className="grid grid-cols-3 gap-1 p-1">
                                     {(activeTab === 'photos' ? photos : videos).length > 0 ? (activeTab === 'photos' ? photos : videos).map(post => {
@@ -158,21 +175,18 @@ const PublicProfile = () => {
 
                                         return (
                                             <div key={post.id} className="relative aspect-square bg-gray-900 overflow-hidden group cursor-pointer">
-                                                {/* Imagem ou Video Thumbnail */}
                                                 {isVideo ? (
                                                     <video src={post.media_url} className={`w-full h-full object-cover ${isPending ? "blur-2xl opacity-30" : ""}`} />
                                                 ) : (
                                                     <img src={post.media_url} className={`w-full h-full object-cover ${isPending ? "blur-2xl opacity-30" : ""}`} alt="" />
                                                 )}
                                                 
-                                                {/* INDICADOR VISUAL DE VÍDEO (DoD TAL-20) */}
                                                 {isVideo && !isPending && (
                                                     <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-md">
                                                         <svg viewBox="0 0 24 24" className="w-3 h-3 text-white fill-current"><path d="M8 5v14l11-7z"/></svg>
                                                     </div>
                                                 )}
 
-                                                {/* MODERAÇÃO NO GRID */}
                                                 {isPending && (
                                                     <div className="absolute inset-0 flex items-center justify-center">
                                                         <span className="text-[9px] bg-[#1D9BF0] text-white font-bold px-1 py-0.5 rounded opacity-90 uppercase">Review</span>
