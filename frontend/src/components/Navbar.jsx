@@ -1,15 +1,31 @@
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import api from '../api/axios';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      const fetchUnread = async () => {
+        try {
+          const res = await api.get('/notifications/');
+          setUnreadCount(res.data.filter(n => !n.is_read).length);
+        } catch (err) { 
+          console.log(err); 
+        }
+      };
+      fetchUnread();
+    }
+  }, [user]);
 
   return (
     <nav
       data-cy="navbar"
       className="bg-black border-r border-gray-800 h-screen w-[80px] xl:w-64 flex flex-col p-4 sticky top-0"
     >
-
       {/* Logo */}
       <div data-cy="navbar-logo-container" className="mb-8 px-2">
         <Link
@@ -23,10 +39,8 @@ const Navbar = () => {
         </Link>
       </div>
 
-
       {/* Links */}
       <div data-cy="navbar-links" className="flex flex-col gap-4 flex-1">
-
         {user ? (
           <>
             <Link
@@ -38,10 +52,30 @@ const Navbar = () => {
               <span data-cy="navbar-home-text" className="hidden xl:inline">Home</span>
             </Link>
 
+            {/* BOTÃO DE NOTIFICAÇÕES */}
+            <Link
+              data-cy="navbar-notifications-link"
+              to="/notifications"
+              className="flex items-center gap-4 text-gray-300 hover:text-blue-400 transition font-bold text-lg p-3 hover:bg-gray-900 rounded-full"
+            >
+              <span data-cy="navbar-notifications-icon" className="text-2xl">🔔</span>
+              <div className="flex items-center gap-2">
+                <span data-cy="navbar-notifications-text" className="hidden xl:inline">Notificações</span>
+                {unreadCount > 0 && (
+                  <span 
+                    data-cy="navbar-notifications-badge"
+                    className="bg-blue-500 text-white text-xs font-black px-2 py-0.5 rounded-full"
+                  >
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+            </Link>
 
+            {/* LINK DO PERFIL AJUSTADO: Agora envia para /profile/ID_DO_USUARIO */}
             <Link
               data-cy="navbar-profile-link"
-              to="/profile"
+              to={`/profile/${user.id}`} 
               className="flex items-center gap-4 text-gray-300 hover:text-blue-400 transition font-bold text-lg p-3 hover:bg-gray-900 rounded-full"
             >
               <span data-cy="navbar-profile-icon" className="text-2xl">👤</span>
@@ -57,43 +91,27 @@ const Navbar = () => {
             Entrar
           </Link>
         )}
-
       </div>
-
 
       {/* User section */}
       {user && (
-        <div
-          data-cy="navbar-user-section"
-          className="mt-auto border-t border-gray-800 pt-4 flex flex-col gap-4"
-        >
-
+        <div data-cy="navbar-user-section" className="mt-auto border-t border-gray-800 pt-4 flex flex-col gap-4">
           <div data-cy="navbar-user-info" className="flex items-center gap-3 px-2">
-
             <img
               data-cy="navbar-user-avatar"
               src={user.profile_picture || "/static/images/default-avatar.png"}
-              className="w-10 h-10 rounded-full object-cover border border-gray-700"
+              className="w-10 h-10 rounded-full object-cover border border-gray-800"
               alt="avatar"
             />
-
             <div data-cy="navbar-user-text" className="hidden xl:block overflow-hidden">
-
               <p data-cy="navbar-user-display-name" className="text-white text-sm font-bold truncate">
-                {user.display_name
-                  ? user.display_name.split(' ')[0]
-                  : user.username}
+                {user.display_name ? user.display_name.split(' ')[0] : user.username}
               </p>
-
               <p data-cy="navbar-user-username" className="text-gray-500 text-xs truncate">
                 @{user.username}
               </p>
-
             </div>
-
           </div>
-
-
           <button
             data-cy="navbar-logout-button"
             onClick={logout}
@@ -102,10 +120,8 @@ const Navbar = () => {
           >
             Sair
           </button>
-
         </div>
       )}
-
     </nav>
   );
 };

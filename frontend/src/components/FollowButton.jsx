@@ -44,6 +44,7 @@ const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
 
   return (
     <button
+      data-cy="follow-button"
       onClick={handleToggleFollow}
       disabled={loading}
       className={`

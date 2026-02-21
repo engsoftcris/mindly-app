@@ -29,12 +29,12 @@ describe('<Feed /> - Component Test', () => {
     cy.mount(
       <AuthContext.Provider value={mockAuthValue}>
         <MemoryRouter>
-          {/* 2. PASS THE PROPS HERE */}
           <Feed 
             posts={posts} 
             currentUser={mockAuthValue.user} 
             setPosts={cy.stub().as('setPostsStub')} 
-            lastPostElementRef={null}
+            // EM VEZ DE NULL, PASSE UM STUB OU FUNÇÃO VAZIA
+            lastPostElementRef={cy.stub().as('lastPostRefStub')} 
           />
         </MemoryRouter>
       </AuthContext.Provider>

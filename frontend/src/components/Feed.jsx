@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom'; // Importamos useLocation
 import UserActionMenu from './UserActionMenu';
 import LikeButton from './LikeButton';
 import CommentButton from './CommentButton';
@@ -7,6 +7,24 @@ import CommentModal from './CommentModal';
 
 const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
   const [activePostForComment, setActivePostForComment] = React.useState(null);
+  
+  // Lógica de Scroll
+  const location = useLocation();
+  const highlightRef = useRef(null);
+  const queryParams = new URLSearchParams(location.search);
+  const highlightId = queryParams.get('highlight');
+
+  useEffect(() => {
+    // Se houver um post para destacar e ele estiver na lista
+    if (highlightId && posts.length > 0 && highlightRef.current) {
+      setTimeout(() => {
+        highlightRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }, 300); // Um delay leve para garantir que o feed carregou
+    }
+  }, [posts, highlightId]);
 
   const handleLikeUpdate = (postId, isLiked, likesCount) => {
     setPosts(prev => prev.map(p => 
@@ -20,11 +38,19 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
     <div className="divide-y divide-gray-800">
       {posts.map((post, index) => {
         const isLastElement = posts.length === index + 1;
+        const isHighlighted = String(post.id) === String(highlightId);
+
         return (
           <div
             key={post.id}
-            ref={isLastElement ? lastPostElementRef : null}
-            className="p-4 hover:bg-white/[0.02] transition-colors flex gap-3"
+            // Ajuste na REF: Se for o último, usa o scroll infinito. Se for o destaque, usa o highlightRef.
+            ref={(el) => {
+              if (isLastElement) lastPostElementRef(el);
+              if (isHighlighted) highlightRef.current = el;
+            }}
+            className={`p-4 transition-colors flex gap-3 ${
+              isHighlighted ? 'bg-blue-500/10 border-l-2 border-blue-500' : 'hover:bg-white/[0.02]'
+            }`}
           >
             {/* AVATAR */}
             <Link to={`/profile/${post.author?.uuid || post.author?.id}`} className="flex-shrink-0">
@@ -62,7 +88,7 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                 {post.content}
               </p>
 
-              {/* RENDERIZAÇÃO DE MÍDIA */}
+              {/* RENDERIZAÇÃO DE MÍDIA (Mantida igual) */}
               {(post.media_url || post.media) && (() => {
                 const mediaSrc = post.media_url || post.media;
                 const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(mediaSrc);
@@ -119,14 +145,13 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
         );
       })}
 
-      {/* AQUI ESTÁ A CONEXÃO QUE FALTAVA! */}
+      {/* MODAL DE COMENTÁRIO */}
       {activePostForComment && (
         <CommentModal 
           isOpen={!!activePostForComment} 
           onClose={() => setActivePostForComment(null)} 
           post={activePostForComment}
           onCommentAdded={() => {
-            // Atualiza o contador no feed localmente
             setPosts(prev => prev.map(p => 
               p.id === activePostForComment.id 
                 ? { ...p, comments_count: (p.comments_count || 0) + 1, user_has_commented: true } 
