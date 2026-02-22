@@ -5,7 +5,7 @@ from PIL import Image
 from django.core.files.base import ContentFile
 import os
 from rest_framework import serializers
-from .models import Post, User, Profile, Block, Follow, Comment, Notification
+from .models import Post, User, Profile, Block, Follow, Comment, Notification, Report
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -286,3 +286,31 @@ class NotificationSerializer(serializers.ModelSerializer):
         ]
         # O erro estava aqui: as linhas abaixo devem estar separadas!
         read_only_fields = ['id', 'sender', 'notification_type', 'post', 'created_at']
+
+from rest_framework import serializers
+from .models import Report, User, Post
+
+# Para o usuário denunciar
+class ReportCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = ['post', 'reason', 'description']
+
+    def create(self, validated_data):
+        validated_data['reporter'] = self.context['request'].user
+        return super().create(validated_data)
+
+# Para o Admin ver as denúncias
+class ReportAdminSerializer(serializers.ModelSerializer):
+    reporter_username = serializers.ReadOnlyField(source='reporter.username')
+    post_content = serializers.ReadOnlyField(source='post.content')
+
+    class Meta:
+        model = Report
+        fields = '__all__'
+
+# Para o Admin ver o que precisa de aprovação
+class ModerationUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'profile_picture', 'image_status']

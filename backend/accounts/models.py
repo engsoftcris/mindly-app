@@ -236,3 +236,33 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.sender.username} -> {self.recipient.username} ({self.notification_type})"
+    
+class Report(models.Model):
+    REASON_CHOICES = [
+        ('spam', 'Spam/Publicidade Indesejada'),
+        ('inappropriate', 'Conteúdo Impróprio/Nudez'),
+        ('hate_speech', 'Discurso de Ódio/Assédio'),
+        ('violence', 'Violência/Conteúdo Sensível'),
+        ('other', 'Outro'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pendente'),
+        ('resolved', 'Resolvido'),
+        ('ignored', 'Ignorado'),
+    ]
+
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reports_made')
+    # Usando FK direta para Post para simplificar o MVP
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='reports_received')
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES)
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Report {self.id} - {self.reason} by {self.reporter.username}"

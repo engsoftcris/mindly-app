@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from .models import Post
 from PIL import Image
 
-from .models import User, Profile, Block, Follow
+from .models import User, Profile, Block, Follow, Report
 
 
 class UserAdminForm(forms.ModelForm):
@@ -186,3 +186,37 @@ class BlockAdmin(admin.ModelAdmin):
 @admin.register(Follow)
 class FollowAdmin(admin.ModelAdmin):
     list_display = ('follower', 'following', 'created_at', 'unfollowed_at')
+
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ('id', 'reporter', 'post_owner', 'reason', 'status', 'created_at')
+    list_filter = ('status', 'reason', 'created_at')
+    search_fields = ('reporter__username', 'post__user__username', 'description')
+    readonly_fields = ('created_at', 'updated_at', 'post_preview')
+    
+    actions = ['mark_as_resolved', 'mark_as_ignored']
+
+    def post_owner(self, obj):
+        return obj.post.user.username
+    post_owner.short_description = 'Autor do Post'
+
+    def post_preview(self, obj):
+        if obj.post:
+            return format_html(
+                '<strong>Conteúdo do Post:</strong><br>{}<br><br>'
+                '<strong>Media:</strong><br>{}',
+                obj.post.content,
+                format_html('<img src="{}" style="max-height:200px;"/>', obj.post.media.url) if obj.post.media else "Sem media"
+            )
+        return "Post não disponível"
+    post_preview.short_description = 'Detalhes do Conteúdo Denunciado'
+
+    @admin.action(description="Marcar como Resolvido")
+    def mark_as_resolved(self, request, queryset):
+        queryset.update(status='resolved')
+        self.message_user(request, "Denúncias marcadas como resolvidas.")
+
+    @admin.action(description="Ignorar denúncias")
+    def mark_as_ignored(self, request, queryset):
+        queryset.update(status='ignored')
+        self.message_user(request, "Denúncias ignoradas.")
