@@ -22,13 +22,14 @@ from datetime import datetime
 from django.db.models import Q
 
 # Seus modelos e serializers
-from .models import Profile, Block, Post, Follow, Like, Notification
+from .models import Profile, User, Block, Post, Follow, Like, Notification, Report
 from .serializers import (
     GoogleAuthSerializer,
     PostSerializer,
     UserProfileSerializer,
     ProfileSerializer,
-    NotificationSerializer
+    NotificationSerializer,
+    ReportCreateSerializer, ReportAdminSerializer, ModerationUserSerializer
 )
 
 # --- ROOT API ---
@@ -356,3 +357,71 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         notification.is_read = True
         notification.save()
         return Response({'status': 'notification marked as read'}, status=status.HTTP_200_OK)   
+
+# VIEW PARA DENÚNCIAS
+class ReportViewSet(viewsets.ModelViewSet):
+    queryset = Report.objects.all()
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ReportCreateSerializer
+        return ReportAdminSerializer
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.IsAuthenticated()]
+        # Adicionei os parênteses aqui para retornar a INSTÂNCIA
+        return [permissions.IsAdminUser()] 
+    # --- NOVO MÉTODO PARA EVITAR ERRO NO CONSOLE ---
+    def create(self, request, *args, **kwargs):
+        post_id = request.data.get('post')
+        user = request.user
+
+        # 1. Verificar se JÁ EXISTE uma denúncia
+        if Report.objects.filter(reporter=user, post_id=post_id).exists():
+            # Mudamos para 400 para o teste (e o frontend) saberem que foi um erro de validação
+            return Response(
+                {
+                    "detail": "Já denunciaste esta publicação.", 
+                    "already_reported": True
+                }, 
+                status=status.HTTP_400_BAD_REQUEST # <--- CORRIGIDO PARA 400
+            )
+
+        # 2. Se não existir, segue o fluxo normal
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(reporter=user)
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+# VIEW PARA MODERAÇÃO DE AVATARES (TAL-22)
+class ModerationViewSet(viewsets.ViewSet):
+    # Aqui, como é um atributo da classe, usamos apenas a CLASSE (sem parênteses)
+    permission_classes = [permissions.IsAdminUser]
+
+    @action(detail=False, methods=['get'])
+    def pending_users(self, request):
+        users = User.objects.filter(image_status='PENDING')
+        serializer = ModerationUserSerializer(users, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def approve_user(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            user.image_status = 'APPROVED'
+            user.save()
+            return Response({'status': 'user image approved'})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def reject_user(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            user.image_status = 'REJECTED'
+            user.save()
+            return Response({'status': 'user image rejected'})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)

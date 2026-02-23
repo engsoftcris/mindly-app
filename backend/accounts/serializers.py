@@ -1,11 +1,11 @@
 import uuid
 from io import BytesIO
 from PIL import Image
-
+from rest_framework.validators import UniqueTogetherValidator
 from django.core.files.base import ContentFile
 import os
 from rest_framework import serializers
-from .models import Post, User, Profile, Block, Follow, Comment, Notification
+from .models import Post, User, Profile, Block, Follow, Comment, Notification, Report
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -277,12 +277,37 @@ class NotificationSerializer(serializers.ModelSerializer):
     sender_avatar = serializers.ImageField(source='sender.profile_picture', read_only=True)
     # Garanta que esta linha esteja aqui para resolver o problema do UUID
     sender_uuid = serializers.ReadOnlyField(source='sender.profile.id')
+    post_content = serializers.ReadOnlyField(source='post.content')
     
     class Meta:
         model = Notification
         fields = [
             'id', 'sender', 'sender_uuid', 'sender_name', 'sender_avatar', 
-            'notification_type', 'post', 'is_read', 'created_at'
+            'notification_type', 'stored_post_content', 'text', 'post', 'post_content', 'is_read', 'created_at', 'stored_post_content'
         ]
         # O erro estava aqui: as linhas abaixo devem estar separadas!
         read_only_fields = ['id', 'sender', 'notification_type', 'post', 'created_at']
+
+class ReportCreateSerializer(serializers.ModelSerializer):
+    # O HiddenField captura o usuário logado automaticamente e 
+    # permite que o UniqueTogetherValidator do Model funcione!
+    reporter = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
+    class Meta:
+        model = Report
+        fields = ['post', 'reason', 'description', 'reporter']
+
+# Para o Admin ver as denúncias
+class ReportAdminSerializer(serializers.ModelSerializer):
+    reporter_username = serializers.ReadOnlyField(source='reporter.username')
+    post_content = serializers.ReadOnlyField(source='post.content')
+
+    class Meta:
+        model = Report
+        fields = '__all__'
+
+# Para o Admin ver o que precisa de aprovação
+class ModerationUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'profile_picture', 'image_status']

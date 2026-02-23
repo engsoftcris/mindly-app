@@ -28,8 +28,7 @@ def auth_client(api_client, user):
     api_client.force_authenticate(user=user)
     return api_client
 
-from accounts.models import Post # Garanta que o import do Post está no topo
-
+from accounts.models import Post, User
 @pytest.fixture
 def post(db, user):
     """Cria um post de teste vinculado ao usuário da fixture user"""
@@ -37,3 +36,15 @@ def post(db, user):
         user=user, 
         content="Conteúdo de teste para a TAL-16 🚀"
     )
+@pytest.fixture
+def user(db):
+    return User.objects.create_user(username="testuser", email="test@test.com", password="password123")
+
+@pytest.fixture
+def other_user(db):
+    return User.objects.create_user(username="other", email="other@test.com", password="password123")
+
+@pytest.fixture
+def post_to_report(user):
+    return Post.objects.create(user=user, content="Post de teste")
+
