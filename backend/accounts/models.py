@@ -218,24 +218,28 @@ class Notification(models.Model):
         ('FOLLOW', 'Novo Seguidor'),
         ('LIKE', 'Novo Gosto'),
         ('COMMENT', 'Novo Comentário'),
+        ('REPORT_UPDATE', 'Atualização de Denúncia'),
     )
 
     # Usa 'self' se o User estiver no mesmo arquivo ou a classe User diretamente
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_notifications')
-    notification_type = models.CharField(max_length=10, choices=NOTIFICATION_TYPES)
-    
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_notifications', null=True, 
+        blank=True)
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    text = models.TextField(null=True, blank=True)
     # Aponta para a classe Post que está logo acima no teu arquivo
     post = models.ForeignKey(Post, on_delete=models.CASCADE, null=True, blank=True)
     
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    stored_post_content = models.TextField(null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.sender.username} -> {self.recipient.username} ({self.notification_type})"
+        sender = self.sender.username if self.sender else "SYSTEM"
+        return f"{sender} -> {self.recipient.username} ({self.notification_type})"
     
 class Report(models.Model):
     REASON_CHOICES = [
@@ -262,6 +266,7 @@ class Report(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        unique_together = ('reporter', 'post')
         ordering = ['-created_at']
 
     def __str__(self):

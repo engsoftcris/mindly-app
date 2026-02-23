@@ -1,7 +1,7 @@
 import os
 from django.db.models.signals import pre_save, post_delete, post_save
 from django.dispatch import receiver
-from .models import User, Profile, Follow, Like, Comment, Notification
+from .models import User, Profile, Follow, Like, Comment, Notification, Report
 
 # --- Sinais de Imagem ---
 
@@ -70,3 +70,52 @@ def create_comment_notification(sender, instance, created, **kwargs):
                 notification_type='COMMENT',
                 post=instance.post
             )
+# --- Sinal de Notificação de Report (TAL-23) ---
+
+@receiver(post_save, sender=Report)
+def create_report_notifications(sender, instance, created, **kwargs):
+    # Só notifica em atualização (não na criação)
+    if created:
+        return
+
+    if instance.status not in ("resolved", "ignored"):
+        return
+
+    post = instance.post
+    if not post:
+        return
+
+    snapshot = post.content  # conteúdo no momento da atualização
+
+    # Mensagens (separadas por público)
+    if instance.status == "resolved":
+        msg_reporter = "Denúncia aceite: O conteúdo foi removido por violar as nossas diretrizes."
+        msg_owner = "Após análise da moderação, seu conteúdo foi removido por violar as diretrizes."
+    else:  # ignored
+        msg_reporter = "Denúncia rejeitada: Analisámos o conteúdo e concluímos que NÃO viola as nossas diretrizes."
+        msg_owner = "Uma denúncia sobre seu conteúdo foi rejeitada após análise da moderação."
+
+    # Helper: cria/atualiza 1 notificação por (recipient, post, status)
+    def upsert_report_update(recipient, text):
+        Notification.objects.filter(
+            recipient=recipient,
+            notification_type="REPORT_UPDATE",
+            post=post,
+            text=text,
+        ).delete()
+
+        Notification.objects.create(
+            recipient=recipient,
+            sender=None,  # SYSTEM
+            notification_type="REPORT_UPDATE",
+            text=text,
+            post=post,
+            stored_post_content=snapshot,
+        )
+
+    # 1) Notifica o denunciante
+    upsert_report_update(instance.reporter, msg_reporter)
+
+    # 2) Notifica o autor do post (se for outra pessoa)
+    if post.user_id != instance.reporter_id:
+        upsert_report_update(post.user, msg_owner)

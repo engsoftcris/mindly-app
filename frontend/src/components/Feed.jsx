@@ -4,6 +4,7 @@ import UserActionMenu from './UserActionMenu';
 import LikeButton from './LikeButton';
 import CommentButton from './CommentButton';
 import CommentModal from './CommentModal';
+import ReportButton from './ReportModal';
 
 const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
   const [activePostForComment, setActivePostForComment] = React.useState(null);
@@ -43,6 +44,7 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
         return (
           <div
             key={post.id}
+            data-cy="post-card"
             // Ajuste na REF: Se for o último, usa o scroll infinito. Se for o destaque, usa o highlightRef.
             ref={(el) => {
               if (isLastElement) lastPostElementRef(el);
@@ -84,7 +86,7 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                 />
               </div>
 
-              <p className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]">
+              <p data-cy="post-content" className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]">
                 {post.content}
               </p>
 
@@ -129,6 +131,10 @@ const Feed = ({ posts, currentUser, setPosts, lastPostElementRef }) => {
                   hasCommented={post.user_has_commented}
                   onClick={() => setActivePostForComment(post)} 
                 />
+                {/* 2. Adicionar o ReportButton (Não aparece nos próprios posts do usuário) */}
+                {currentUser && post.author && String(currentUser.id) !== String(post.author.id) && (
+                   <ReportButton postId={post.id} />
+                )}
 
                 <span className="text-[11px] text-gray-600 ml-auto">
                   {new Date(post.created_at).toLocaleString('pt-PT', {

@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from .models import Post
 from PIL import Image
 
-from .models import User, Profile, Block, Follow, Report
+from .models import User, Profile, Block, Follow, Report, Notification
 
 
 class UserAdminForm(forms.ModelForm):
@@ -213,10 +213,23 @@ class ReportAdmin(admin.ModelAdmin):
 
     @admin.action(description="Marcar como Resolvido")
     def mark_as_resolved(self, request, queryset):
-        queryset.update(status='resolved')
-        self.message_user(request, "Denúncias marcadas como resolvidas.")
+        count = 0
+        for obj in queryset:
+            if obj.status != 'resolved':
+                # A) Soft delete do post
+                obj.post.is_deleted = True
+                obj.post.save()
+
+                # B) Atualiza status (isso dispara o signal)
+                obj.status = 'resolved'
+                obj.save()
+                count += 1
+
+        self.message_user(request, f"{count} denúncias resolvidas, posts ocultados e usuários notificados.")
 
     @admin.action(description="Ignorar denúncias")
     def mark_as_ignored(self, request, queryset):
-        queryset.update(status='ignored')
-        self.message_user(request, "Denúncias ignoradas.")
+        for obj in queryset:
+            obj.status = 'ignored'
+            obj.save()
+        self.message_user(request, f"{queryset.count()} denúncias ignoradas.")

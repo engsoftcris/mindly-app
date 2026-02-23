@@ -1,7 +1,7 @@
 import uuid
 from io import BytesIO
 from PIL import Image
-
+from rest_framework.validators import UniqueTogetherValidator
 from django.core.files.base import ContentFile
 import os
 from rest_framework import serializers
@@ -277,28 +277,25 @@ class NotificationSerializer(serializers.ModelSerializer):
     sender_avatar = serializers.ImageField(source='sender.profile_picture', read_only=True)
     # Garanta que esta linha esteja aqui para resolver o problema do UUID
     sender_uuid = serializers.ReadOnlyField(source='sender.profile.id')
+    post_content = serializers.ReadOnlyField(source='post.content')
     
     class Meta:
         model = Notification
         fields = [
             'id', 'sender', 'sender_uuid', 'sender_name', 'sender_avatar', 
-            'notification_type', 'post', 'is_read', 'created_at'
+            'notification_type', 'stored_post_content', 'text', 'post', 'post_content', 'is_read', 'created_at', 'stored_post_content'
         ]
         # O erro estava aqui: as linhas abaixo devem estar separadas!
         read_only_fields = ['id', 'sender', 'notification_type', 'post', 'created_at']
 
-from rest_framework import serializers
-from .models import Report, User, Post
-
-# Para o usuário denunciar
 class ReportCreateSerializer(serializers.ModelSerializer):
+    # O HiddenField captura o usuário logado automaticamente e 
+    # permite que o UniqueTogetherValidator do Model funcione!
+    reporter = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
     class Meta:
         model = Report
-        fields = ['post', 'reason', 'description']
-
-    def create(self, validated_data):
-        validated_data['reporter'] = self.context['request'].user
-        return super().create(validated_data)
+        fields = ['post', 'reason', 'description', 'reporter']
 
 # Para o Admin ver as denúncias
 class ReportAdminSerializer(serializers.ModelSerializer):

@@ -372,7 +372,29 @@ class ReportViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         # Adicionei os parênteses aqui para retornar a INSTÂNCIA
         return [permissions.IsAdminUser()] 
+    # --- NOVO MÉTODO PARA EVITAR ERRO NO CONSOLE ---
+    def create(self, request, *args, **kwargs):
+        post_id = request.data.get('post')
+        user = request.user
 
+        # 1. Verificar se JÁ EXISTE uma denúncia
+        if Report.objects.filter(reporter=user, post_id=post_id).exists():
+            # Mudamos para 400 para o teste (e o frontend) saberem que foi um erro de validação
+            return Response(
+                {
+                    "detail": "Já denunciaste esta publicação.", 
+                    "already_reported": True
+                }, 
+                status=status.HTTP_400_BAD_REQUEST # <--- CORRIGIDO PARA 400
+            )
+
+        # 2. Se não existir, segue o fluxo normal
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(reporter=user)
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
 # VIEW PARA MODERAÇÃO DE AVATARES (TAL-22)
 class ModerationViewSet(viewsets.ViewSet):
     # Aqui, como é um atributo da classe, usamos apenas a CLASSE (sem parênteses)
