@@ -44,8 +44,3 @@ This project represents a total effort of **104 Story Points (Fibonacci)**, cove
 * **Decoupled Architecture:** Clean separation of concerns with a RESTful API and a state-driven SPA.
 * **Automated QA:** Backend integration tests with **Pytest** ensuring 100% reliability on core business rules.
 * **Scalable Storage:** Architecture prepared for S3/Cloudinary integration with "Under Analysis" UI states.
-
-
-```bash
-# Execute the full backend test suite (including new Ban Logic)
-docker-compose exec backend pytest
