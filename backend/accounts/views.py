@@ -15,7 +15,8 @@ from social_core.exceptions import MissingBackend, AuthTokenError
 
 # JWT
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer 
 from rest_framework.pagination import PageNumberPagination
 from django.http import JsonResponse
 from datetime import datetime
@@ -100,14 +101,16 @@ class ProfileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Se for uma listagem geral (pesquisa/sugestões)
-        # Filtramos quem eu bloqueei E quem me bloqueou
         blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
         blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
-        all_blocks = list(blocked_ids) + list(blocked_by_ids)
-
-        return Profile.objects.exclude(user__id__in=all_blocks).order_by('user__username')
-
+        
+        # TAL-24: Adicionamos o filtro para remover usuários banidos da lista
+        return Profile.objects.exclude(
+            Q(user__id__in=blocked_ids) | 
+            Q(user__id__in=blocked_by_ids) |
+            Q(user__is_banned=True) # <--- Filtro de Banimento
+        ).order_by('user__username')
+    
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
@@ -198,15 +201,18 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # TAL-14: Filtrar para não ver posts de quem me bloqueou ou de quem eu bloqueei
         blocked_users = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
         blocked_by = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
         all_blocks = list(blocked_users) + list(blocked_by)
 
         return Post.objects.filter(
+            # Só posts de quem NÃO está banido e o post NÃO está deletado
+            user__is_banned=False, 
+            is_deleted=False
+        ).filter(
             Q(user__profile__is_private=False) | Q(user=user)
         ).exclude(user__id__in=all_blocks).distinct().order_by('-created_at')
-
+    
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
@@ -258,12 +264,12 @@ class HybridFeedView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         following_users = user.following.all()
-        
-        # Também aplicamos o filtro de bloqueio aqui por segurança
         blocked_by = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
         
         return Post.objects.filter(
-            user__in=following_users
+            user__in=following_users,
+            user__is_banned=False, # <--- Garante que banidos sumam do feed
+            is_deleted=False
         ).exclude(user__id__in=blocked_by).distinct().order_by('-created_at')
 
 class UserPostsListView(generics.ListAPIView):
@@ -275,13 +281,12 @@ class UserPostsListView(generics.ListAPIView):
         profile_id = self.kwargs.get('pk')
         user = self.request.user
 
-        # 1. Verificar Bloqueio antes de mais nada
         try:
             profile = Profile.objects.get(id=profile_id)
+            # Se o dono do perfil estiver banido, ninguém vê nada (exceto talvez ele mesmo, mas ele não consegue logar)
+            if profile.user.is_banned:
+                return Post.objects.none()
         except Profile.DoesNotExist:
-            return Post.objects.none()
-
-        if Block.objects.filter(Q(blocker=user, blocked=profile.user) | Q(blocker=profile.user, blocked=user)).exists():
             return Post.objects.none()
 
         # 2. Filtrar Posts
@@ -425,3 +430,9 @@ class ModerationViewSet(viewsets.ViewSet):
             return Response({'status': 'user image rejected'})
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=404)
+        
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer # Vamos criar este agora
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer

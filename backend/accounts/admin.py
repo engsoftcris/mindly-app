@@ -50,9 +50,11 @@ class CustomUserAdmin(BaseUserAdmin):
         "image_status",
         "photo_list_preview",
         "is_staff",
+        "is_banned",
+        "ban_reason",
     )
 
-    list_filter = ("image_status", "is_active", "is_staff")
+    list_filter = ("image_status", "is_active", "is_staff", "is_banned")
 
     readonly_fields = ("photo_preview",)
 
@@ -69,6 +71,15 @@ class CustomUserAdmin(BaseUserAdmin):
                     "image_status",
                     "phone",
                     )
+            },
+        ),
+        (
+            "Moderação e Banimento",
+            {
+                "fields": (
+                    "is_banned",
+                    "ban_reason",
+                )
             },
         ),
         (
@@ -126,7 +137,7 @@ class CustomUserAdmin(BaseUserAdmin):
 
     photo_preview.short_description = "Visualização da Foto"
 
-    actions = ["approve_images", "reject_images"]
+    actions = ["approve_images", "reject_images", "ban_selected_users", "unban_selected_users"]
 
     @admin.action(description="Aprovar fotos selecionadas")
     def approve_images(self, request, queryset):
@@ -137,6 +148,20 @@ class CustomUserAdmin(BaseUserAdmin):
     def reject_images(self, request, queryset):
         count = queryset.update(image_status="REJECTED")
         self.message_user(request, f"{count} usuários rejeitados.")
+    @admin.action(description="Banir usuários selecionados")
+    def ban_selected_users(self, request, queryset):
+        # Exclui você mesmo da ação para não perder o acesso ao Admin
+        queryset = queryset.exclude(id=request.user.id)
+        count = queryset.update(
+            is_banned=True, 
+            ban_reason="Banimento em massa realizado pelo administrador."
+        )
+        self.message_user(request, f"{count} usuários foram banidos.")
+
+    @admin.action(description="Remover banimento dos selecionados")
+    def unban_selected_users(self, request, queryset):
+        count = queryset.update(is_banned=False)
+        self.message_user(request, f"{count} banimentos foram removidos.")
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):

@@ -1,9 +1,10 @@
 import uuid
 from io import BytesIO
 from PIL import Image
-from rest_framework.validators import UniqueTogetherValidator
 from django.core.files.base import ContentFile
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 import os
+from rest_framework import exceptions
 from rest_framework import serializers
 from .models import Post, User, Profile, Block, Follow, Comment, Notification, Report
 
@@ -311,3 +312,20 @@ class ModerationUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'profile_picture', 'image_status']
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # O super().validate(attrs) já autentica o usuário e o coloca em self.user
+        data = super().validate(attrs)
+        
+        if self.user.is_banned:
+            # Pegamos o motivo ou usamos um padrão caso esteja vazio
+            reason = self.user.ban_reason or "Violação dos termos de uso."
+            
+            # Usamos PermissionDenied para manter o status 403
+            raise exceptions.PermissionDenied({
+                "detail": "Sua conta foi suspensa.",
+                "ban_reason": reason  # <--- O motivo agora vai para o Frontend!
+            })
+        
+        return data
