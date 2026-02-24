@@ -6,6 +6,7 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.http import JsonResponse 
 import os
 from django.views.decorators.csrf import csrf_exempt
+from accounts.views import MyTokenObtainPairView
 
 @csrf_exempt # Garante que requisições externas não sejam barradas por falta de token CSRF
 def health_check(request):
@@ -45,11 +46,13 @@ urlpatterns = [
     
     # Concentra tudo o que é conta (Login Google, Perfil, Register) aqui
     path("api/accounts/", include("accounts.urls")),
+
+    path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     
     path('', api_root, name='index'),
     
     # Rotas de suporte JWT
-    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    #path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     
     # Social Auth

@@ -48,3 +48,12 @@ def other_user(db):
 def post_to_report(user):
     return Post.objects.create(user=user, content="Post de teste")
 
+@pytest.fixture
+def banned_user(db):
+    """Cria um usuário que já nasce banido"""
+    return User.objects.create_user(
+        username="banneduser", 
+        email="banned@test.com", 
+        password="password123",
+        is_banned=True
+    )

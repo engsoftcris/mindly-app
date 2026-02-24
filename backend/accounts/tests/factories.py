@@ -11,3 +11,5 @@ class UserFactory(factory.django.DjangoModelFactory):
     username = factory.Faker("user_name")
     email = factory.Faker("email")
     image_status = "PENDING"  # Valor padrão para os testes
+    is_banned = False  
+    ban_reason = ""    

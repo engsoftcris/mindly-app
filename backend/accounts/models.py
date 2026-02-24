@@ -55,6 +55,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         through="Follow" 
     )
+    # No seu models.py dentro da classe User(AbstractUser)
+
+    # ... outros campos ...
+    is_banned = models.BooleanField(default=False)
+    ban_reason = models.TextField(blank=True, null=True)
+    # ....................
     
     date_joined = models.DateTimeField(auto_now_add=True)
 
