@@ -141,7 +141,8 @@ class TestBlockSystem:
         
         # Agora sim, esperamos o erro 400
         assert response.status_code == 400
-        assert "Aguarde" in response.data['error']
+        err = response.data.get("error", "")
+        assert err.startswith("Please wait")
 
     def test_cannot_follow_blocked_user(self, auth_client, user, user_b_profile):
         """TAL-14: Impede follow se houver bloqueio de qualquer lado"""

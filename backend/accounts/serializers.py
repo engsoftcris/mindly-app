@@ -180,11 +180,13 @@ class ProfileSerializer(serializers.ModelSerializer):
     # 1. Adicione o campo aqui para ele ser calculado
     is_following = serializers.SerializerMethodField()
     posts = PostSerializer(many=True, read_only=True, source='user.posts')
+    followers_count = serializers.IntegerField(source='user.followers.count', read_only=True)
+    following_count = serializers.IntegerField(source='user.following.count', read_only=True)
 
     class Meta:
         model = Profile
         # 2. Garanta que is_private e is_following estejam aqui
-        fields = ['id','user', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'posts', 'is_private', 'is_following', 'created_at']
+        fields = ['id','user', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'followers_count', 'following_count', 'posts', 'is_private', 'is_following', 'created_at']
         read_only_fields = ['id', 'created_at']
 
     def get_profile_picture(self, obj):
@@ -269,6 +271,39 @@ class CommentSerializer(serializers.ModelSerializer):
         user = obj.author
         if user.image_status == "APPROVED" and user.profile_picture:
             return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
+        path = "/static/images/default-avatar.png"
+        return request.build_absolute_uri(path) if request else path
+    
+
+class FollowUserSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(read_only=True)
+    display_name = serializers.ReadOnlyField(source='profile.display_name')
+    profile_picture = serializers.SerializerMethodField()
+    profile_id = serializers.ReadOnlyField(source='profile.id')
+    is_following = serializers.SerializerMethodField() 
+
+    class Meta:
+        model = User
+        fields = ['profile_id', 'username', 'is_following', 'display_name', 'profile_picture']
+
+
+    def get_is_following(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        # obj é User (da lista)
+        return Follow.objects.filter(
+            follower=request.user,
+            following=obj,
+            unfollowed_at__isnull=True
+        ).exists()
+    
+    def get_profile_picture(self, obj):
+        # Aqui obj JÁ É o User, então não precisa de obj.user
+        request = self.context.get("request")
+        if obj.image_status == "APPROVED" and obj.profile_picture:
+            return request.build_absolute_uri(obj.profile_picture.url) if request else obj.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
     

@@ -1,27 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom'; // Adicionado useNavigate
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import FollowButton from '../components/FollowButton';
 import UserActionMenu from '../components/UserActionMenu';
+import LoadingScreen from "./LoadingScreen";
+import ConnectionsModal from '../components/ConnectionsModal';
 
 const PublicProfile = () => {
     const { id } = useParams();
-    const navigate = useNavigate(); // Inicializado para permitir a navegação
+    const navigate = useNavigate();
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('all'); 
     const { user: currentUser } = useAuth();
-
-    // Lógica para verificar se o usuário logado é o dono do perfil que está visualizando
-    const isOwner = profile && currentUser && String(currentUser.id) === String(profile.id);
+    const [connModal, setConnModal] = useState({ open: false, tab: 'followers' });
 
     useEffect(() => {
         const fetchProfile = async () => {
+            // Adicionado o tempo mínimo de 800ms
+            const minWait = new Promise(resolve => setTimeout(resolve, 800));
+
             try {
                 setLoading(true);
-                const response = await api.get(`/accounts/profiles/${id}/`);
+                // Espera a API e o timer ao mesmo tempo
+                const [response] = await Promise.all([
+                    api.get(`/accounts/profiles/${id}/`),
+                    minWait
+                ]);
                 setProfile(response.data);
                 setLoading(false);
             } catch (err) {
@@ -33,6 +40,7 @@ const PublicProfile = () => {
         if (id) fetchProfile();
     }, [id]);
 
+    // Lógica original de filtros preservada
     const photos = profile?.posts?.filter(p => 
         p.media_url && !/\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) && p.moderation_status !== "REJECTED"
     ) || [];
@@ -41,15 +49,15 @@ const PublicProfile = () => {
         p.media_url && /\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) && p.moderation_status !== "REJECTED"
     ) || [];
 
-    if (loading) return (
-        <div className="min-h-screen bg-[#0F1419] flex items-center justify-center">
-            <div className="animate-spin h-8 w-8 border-4 border-[#1D9BF0] border-t-transparent rounded-full"></div>
-        </div>
-    );
+    // Trocado o spinner antigo pela LoadingScreen
+    if (loading) return <LoadingScreen />;
 
     if (error) return (
         <div className="min-h-screen bg-[#0F1419] text-white flex items-center justify-center font-bold">{error}</div>
     );
+
+    // Lógica do isOwner
+    const isOwner = profile && currentUser && String(currentUser.id) === String(profile.id);
 
     return (
         <div className="min-h-screen bg-[#0F1419] text-white flex justify-center p-4">
@@ -63,7 +71,6 @@ const PublicProfile = () => {
                     
                     <div className="flex justify-end mb-2">
                         <div className="flex justify-end items-center gap-2 mb-2">
-                            {/* SE FOR O DONO: Mostra o botão de editar que leva para /settings */}
                             {isOwner ? (
                                 <button 
                                     onClick={() => navigate('/settings')}
@@ -72,7 +79,6 @@ const PublicProfile = () => {
                                     Edit Profile
                                 </button>
                             ) : (
-                                /* SE NÃO FOR O DONO: Mostra os botões de interação */
                                 <>
                                     {profile && currentUser && (
                                         <UserActionMenu 
@@ -98,13 +104,13 @@ const PublicProfile = () => {
                     <p className="mt-4 text-gray-200 whitespace-pre-wrap">{profile.bio || "No bio yet."}</p>
 
                     <div className="mt-4 flex gap-5 text-[15px]">
-                        <div className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
+                        <div onClick={() => setConnModal({ open: true, tab: 'following' })} className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
                             <span className="font-bold text-white">
                                 {profile.following_count || 0}
                             </span>
                             <span className="text-gray-500">Following</span>
                         </div>
-                        <div className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
+                        <div onClick={() => setConnModal({ open: true, tab: 'followers' })} className="flex gap-1 hover:underline cursor-pointer decoration-gray-500">
                             <span className="font-bold text-white">
                                 {profile.followers_count || 0}
                             </span>
@@ -113,7 +119,7 @@ const PublicProfile = () => {
                     </div>
                 </div>
 
-                {/* TABS DE NAVEGAÇÃO */}
+                {/* TABS E RESTO DO CÓDIGO EXATAMENTE IGUAL AO SEU */}
                 <div className="flex border-b border-gray-800 sticky top-0 bg-black/80 backdrop-blur-md z-10">
                     {['all', 'photos', 'videos'].map((tab) => (
                         <button key={tab} onClick={() => setActiveTab(tab)} className="flex-1 py-4 hover:bg-white/5 transition relative capitalize">
@@ -132,7 +138,6 @@ const PublicProfile = () => {
                         </div>
                     ) : (
                         <div className="min-h-[300px]">
-                            {/* ABA DE POSTS (FEED) */}
                             {activeTab === 'all' && (
                                 <div className="divide-y divide-gray-800">
                                     {profile.posts?.length > 0 ? profile.posts.map(post => {
@@ -141,9 +146,7 @@ const PublicProfile = () => {
                                         const isPending = post.moderation_status === "PENDING";
 
                                         return (
-                                            <div key={post.id} className="p-4 hover:bg-white/[0.01]"
-                                            data-cy="post-card"
-                                            >
+                                            <div key={post.id} className="p-4 hover:bg-white/[0.01]" data-cy="post-card">
                                                 <p className="text-[15px] text-gray-200 mb-3">{post.content}</p>
                                                 {post.media_url && (
                                                     <div className="relative overflow-hidden rounded-2xl border border-gray-800 bg-black">
@@ -166,7 +169,6 @@ const PublicProfile = () => {
                                 </div>
                             )}
 
-                            {/* ABA DE GALERIA */}
                             {activeTab !== 'all' && (
                                 <div className="grid grid-cols-3 gap-1 p-1">
                                     {(activeTab === 'photos' ? photos : videos).length > 0 ? (activeTab === 'photos' ? photos : videos).map(post => {
@@ -180,13 +182,11 @@ const PublicProfile = () => {
                                                 ) : (
                                                     <img src={post.media_url} className={`w-full h-full object-cover ${isPending ? "blur-2xl opacity-30" : ""}`} alt="" />
                                                 )}
-                                                
                                                 {isVideo && !isPending && (
                                                     <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-md">
                                                         <svg viewBox="0 0 24 24" className="w-3 h-3 text-white fill-current"><path d="M8 5v14l11-7z"/></svg>
                                                     </div>
                                                 )}
-
                                                 {isPending && (
                                                     <div className="absolute inset-0 flex items-center justify-center">
                                                         <span className="text-[9px] bg-[#1D9BF0] text-white font-bold px-1 py-0.5 rounded opacity-90 uppercase">Review</span>
@@ -201,6 +201,12 @@ const PublicProfile = () => {
                     )}
                 </div>
             </div>
+            <ConnectionsModal 
+                isOpen={connModal.open} 
+                onClose={() => setConnModal({ ...connModal, open: false })} 
+                profileId={profile.id} 
+                initialTab={connModal.tab} 
+            />
         </div>
     );
 };

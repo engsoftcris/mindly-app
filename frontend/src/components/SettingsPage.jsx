@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const SettingsPage = () => {
-    const { updateUser, user: currentUser } = useAuth(); 
+    const { updateUser} = useAuth(); 
     const navigate = useNavigate();
 
     const [settings, setSettings] = useState({
@@ -13,7 +13,7 @@ const SettingsPage = () => {
         username: '',
         email: '',
         is_private: false,
-        followers: [] 
+         
     });
 
     const [loading, setLoading] = useState(true);
@@ -30,11 +30,10 @@ const SettingsPage = () => {
                     username: response.data.username || '',
                     email: response.data.email || '',
                     is_private: response.data.is_private || false,
-                    followers: response.data.followers || [] 
+                     
                 });
                 setLoading(false);
             } catch (error) {
-                console.error("Error fetching settings:", error);
                 setLoading(false);
             }
         };
@@ -62,22 +61,6 @@ const SettingsPage = () => {
             setTimeout(() => setStatusMessage(''), 3000);
         } catch (error) {
             setStatusMessage('Failed to update settings. ❌');
-        }
-    };
-
-    const handleRemoveFollower = async (followerId) => {
-        if (!window.confirm("Are you sure you want to remove this follower?")) return;
-
-        try {
-            await api.delete(`/accounts/followers/${followerId}/remove/`);
-            
-            setSettings({
-                ...settings,
-                followers: settings.followers.filter(f => f.id !== followerId)
-            });
-        } catch (error) {
-            console.error("Failed to remove follower:", error);
-            alert("Error removing follower.");
         }
     };
 
@@ -183,36 +166,7 @@ return (
                     </form>
                 </div>
 
-                <div className="bg-black border border-gray-800 rounded-2xl p-8">
-                    <h2 className="text-xl font-bold mb-4">Manage Followers</h2>
-                    <div className="space-y-4" data-cy="settings-followers-list">
-                        {settings.followers.length > 0 ? (
-                            settings.followers.map((follower) => (
-                                <div key={follower.id} data-cy={`follower-item-${follower.id}`} className="flex items-center justify-between p-3 bg-[#16181C] rounded-xl border border-gray-800">
-                                    <div className="flex items-center gap-3">
-                                        <img src={follower.profile_picture || '/default-avatar.png'} alt="" className="w-10 h-10 rounded-full object-cover" />
-                                        <div>
-                                            <p className="text-sm font-bold">{follower.display_name || follower.username}</p>
-                                            <p className="text-xs text-gray-500">@{follower.username}</p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        data-cy="remove-follower-button"
-                                        onClick={() => handleRemoveFollower(follower.id)}
-                                        className="text-xs font-bold text-red-500 hover:bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20"
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-                            ))
-                        ) : (
-                            <div data-cy="no-followers-message" className="text-center py-10 border border-dashed border-gray-800 rounded-xl">
-                                <p className="text-gray-500 text-sm">No followers yet.</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
+              
             </div>
         </div>
     );
