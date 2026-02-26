@@ -40,6 +40,9 @@ def test_active_session_is_blocked_after_ban(api_client, user):
     # 3. Tenta aceder a qualquer rota protegida
     url = reverse('post-list')
     response = api_client.get(url)
+    print("STATUS:", response.status_code)
+    print("DATA:", response.data)
+    print("RAW:", getattr(response, "content", b"")[:500])
     
     assert response.status_code == status.HTTP_403_FORBIDDEN
     # NOVO: Validar se o Middleware/AuthSafe também envia o motivo
@@ -77,8 +80,9 @@ def test_banned_user_posts_disappear_from_feed(api_client, user):
 
     feed_url = reverse('post-list')
     response = api_client.get(feed_url)
-    
+        
     results = response.data if isinstance(response.data, list) else response.data.get('results', [])
+   
     assert len(results) >= 1
 
     user.is_banned = True

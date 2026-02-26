@@ -30,7 +30,10 @@ from .serializers import (
     UserProfileSerializer,
     ProfileSerializer,
     NotificationSerializer,
-    ReportCreateSerializer, ReportAdminSerializer, ModerationUserSerializer
+    ReportCreateSerializer,
+    ReportAdminSerializer,
+    ModerationUserSerializer,
+    FollowUserSerializer
 )
 
 # --- ROOT API ---
@@ -140,6 +143,22 @@ class ProfileViewSet(viewsets.ModelViewSet):
         
         return Response({"message": "Utilizador bloqueado com sucesso."}, status=201)
 
+    @action(detail=True, methods=['get'], url_path='connections')
+    def connections(self, request, pk=None):
+        profile = self.get_object()
+        connection_type = request.query_params.get('type', 'followers')
+
+        if connection_type == 'following':
+            # Quem o dono deste perfil segue
+            users = profile.user.following.all()
+        else:
+            # Quem segue o dono deste perfil
+            users = profile.user.followers.all()
+
+        # Importante: Importar FollowUserSerializer no topo do arquivo
+        serializer = FollowUserSerializer(users, many=True, context={'request': request})
+        return Response(serializer.data)
+    
     @action(detail=True, methods=['post'], url_path='follow')
     def follow_toggle(self, request, pk=None):
         target_profile = self.get_object()
@@ -147,40 +166,78 @@ class ProfileViewSet(viewsets.ModelViewSet):
         me = request.user
 
         if me == target_user:
-            return Response({"error": "Não podes seguir-te a ti mesmo."}, status=400)
+            return Response(
+                {"error": "You cannot follow yourself."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # 1. Verificar Bloqueio
-        if Block.objects.filter(Q(blocker=target_user, blocked=me) | Q(blocker=me, blocked=target_user)).exists():
-            return Response({"error": "Ação indisponível devido a restrições de conta."}, status=403)
+        # Verificar bloqueio
+        if Block.objects.filter(
+            Q(blocker=target_user, blocked=me) |
+            Q(blocker=me, blocked=target_user)
+        ).exists():
+            return Response(
+                {"error": "Action unavailable due to account restrictions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        # 2. Tentar encontrar um registo existente (qualquer um)
-        follow_obj = Follow.objects.filter(follower=me, following=target_user).first()
+        follow_obj = Follow.objects.filter(
+            follower=me,
+            following=target_user
+        ).first()
 
-        # CASO A: Ele já segue (unfollowed_at é nulo) -> DAR UNFOLLOW
+        # CASO A: Já segue → UNFOLLOW
         if follow_obj and follow_obj.unfollowed_at is None:
             follow_obj.unfollowed_at = now()
-            follow_obj.save()
-            # Opcional: me.following.remove(target_user) se usares M2M
-            return Response({"message": "Deixaste de seguir. Aguarda 5 min para voltar."}, status=200)
+            follow_obj.save(update_fields=["unfollowed_at"])
 
-        # CASO B: Ele tentou voltar a seguir -> VERIFICAR CASTIGO
+            return Response(
+                {
+                    "is_following": False,
+                    "message": "You have unfollowed this user. Please wait 5 minutes before following again."
+                },
+                status=status.HTTP_200_OK
+            )
+
+        # CASO B: Já existia mas estava unfollowed → verificar cooldown
         if follow_obj and follow_obj.unfollowed_at is not None:
             wait_time = timedelta(minutes=5)
+
             if now() < follow_obj.unfollowed_at + wait_time:
                 diff = (follow_obj.unfollowed_at + wait_time) - now()
                 m, s = divmod(int(diff.total_seconds()), 60)
-                return Response({
-                    "error": f"Aguarde! Tente novamente em {m}m {s}s."
-                }, status=400)
-            
-            # Castigo passou: Reativar o registo
-            follow_obj.unfollowed_at = None
-            follow_obj.save()
-            return Response({"message": "Voltaste a seguir!"}, status=201)
+                return Response(
+                    {
+                        "error": f"Please wait {m}m {s}s before following again."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # CASO C: Nunca existiu registo -> CRIAR NOVO
-        Follow.objects.create(follower=me, following=target_user)
-        return Response({"message": "Agora estás a seguir."}, status=201)
+            # Cooldown passou → reativar
+            follow_obj.unfollowed_at = None
+            follow_obj.save(update_fields=["unfollowed_at"])
+
+            return Response(
+                {
+                    "is_following": True,
+                    "message": "You are now following this user."
+                },
+                status=status.HTTP_200_OK
+            )
+
+        # CASO C: Nunca existiu → criar novo follow
+        Follow.objects.create(
+            follower=me,
+            following=target_user
+        )
+
+        return Response(
+            {
+                "is_following": True,
+                "message": "You are now following this user."
+            },
+            status=status.HTTP_201_CREATED
+        )
 
 # Esta view continua útil para o "Meu Perfil" do usuário logado
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -255,7 +312,7 @@ class PostViewSet(viewsets.ModelViewSet):
             'is_liked': is_liked,
             'likes_count': post.likes.count()
         }, status=status.HTTP_200_OK)
-
+        
 class HybridFeedView(generics.ListAPIView):
     serializer_class = PostSerializer
     permission_classes = [permissions.IsAuthenticated]

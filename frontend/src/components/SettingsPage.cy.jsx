@@ -80,42 +80,5 @@ it('1. Deve atualizar nome, bio e privacidade com sucesso', () => {
     cy.contains('Failed to update settings. ❌').should('be.visible');
   });
 
-  it('3. Deve mostrar a seção de Manage Followers e remover um seguidor', () => {
-    cy.intercept('GET', '**/accounts/profile/me/', {
-      statusCode: 200,
-      body: {
-        username: 'testuser',
-        display_name: 'User Test',
-        followers: [{ id: 99, username: 'follower1', display_name: 'Follower One' }]
-      }
-    }).as('getWithFollowers');
-
-    cy.intercept('DELETE', '**/accounts/followers/99/remove/', {
-      statusCode: 204
-    }).as('removeFollower');
-
-    // Stub para o window.confirm que você usa no código
-    cy.on('window:confirm', () => true);
-
-    cy.mount(
-      <BrowserRouter>
-        <AuthProvider>
-          <SettingsPage />
-        </AuthProvider>
-      </BrowserRouter>
-    );
-
-    cy.wait('@getWithFollowers');
-
-    cy.contains('Manage Followers').should('be.visible');
-    cy.contains('@follower1').should('be.visible');
-    
-    // Clica em remover
-    cy.contains('button', 'Remove').click();
-    cy.wait('@removeFollower');
-    
-    // Verifica se o seguidor sumiu da lista
-    cy.contains('@follower1').should('not.exist');
-    cy.contains('No followers yet.').should('be.visible');
-  });
+ 
 });

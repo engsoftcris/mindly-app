@@ -3,7 +3,7 @@
 Cypress.Commands.add('login', (options = {}) => {
   const {
     username = 'testuser',
-    userId = 1,
+    userId = '00000000-0000-0000-0000-000000000001',
     path = '/dashboard',
     // se você quiser garantir que sempre tem um post renderizado para testes
     seedFeed = true,

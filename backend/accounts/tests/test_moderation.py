@@ -186,4 +186,5 @@ class TestModeration:
         response = api_client.post(url)
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Aguarde" in response.data['error']
+        err = response.data.get("error", "")
+        assert err.startswith("Please wait")

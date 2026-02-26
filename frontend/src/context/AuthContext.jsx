@@ -24,9 +24,12 @@ export const AuthProvider = ({ children }) => {
 }, []);
 
   const fetchUserProfile = useCallback(async () => {
+    const minWait = new Promise(resolve => setTimeout(resolve, 1500));
     try {
-      const response = await api.get('/accounts/profile/');
-      console.log("DADOS DO DJANGO:", response.data);
+      const [response] = await Promise.all([
+      api.get('/accounts/profile/'),
+      minWait
+    ]);
       setUser(response.data);
     } catch {
       logout();
@@ -54,7 +57,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ user, login, logout, updateUser, loading }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

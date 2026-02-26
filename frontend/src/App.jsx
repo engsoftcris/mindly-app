@@ -10,10 +10,15 @@ import PublicProfile from "./components/PublicProfile";
 import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
 import NotificationsPage from "./components/Notifications.jsx"
+import LoadingScreen from "./components/LoadingScreen";
 
 function App() {
-  const { user } = useAuth();
+  const { user, loading} = useAuth();
   const location = useLocation();
+  // 1. Enquanto o AuthContext checa o token no localStorage, mostramos o loading
+  if (loading) {
+    return <LoadingScreen />;
+  }
 
   const isAuthRoute = location.pathname === "/login";
 

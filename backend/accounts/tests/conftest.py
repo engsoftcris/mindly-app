@@ -57,3 +57,18 @@ def banned_user(db):
         password="password123",
         is_banned=True
     )
+@pytest.fixture
+def user_b(db):
+    u = User.objects.create_user(
+        username="target_user",
+        email="target@test.com",
+        password="password123",
+        full_name="Target User"
+    )
+    Profile.objects.get_or_create(user=u)
+    return u
+
+
+@pytest.fixture
+def user_b_profile(user_b):
+    return user_b.profile
