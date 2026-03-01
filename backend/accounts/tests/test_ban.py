@@ -119,4 +119,4 @@ def test_admin_action_ban_multiple_users():
     assert u2.is_banned is True
     assert admin_user.is_banned is False
     # Valida se a action em massa está a definir o motivo corretamente
-    assert u1.ban_reason == "Banimento em massa realizado pelo administrador."
+    assert u1.ban_reason == "Banimento via Admin."
