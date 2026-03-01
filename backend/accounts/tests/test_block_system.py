@@ -142,7 +142,7 @@ class TestBlockSystem:
         # Agora sim, esperamos o erro 400
         assert response.status_code == 400
         err = response.data.get("error", "")
-        assert err.startswith("Please wait")
+        assert "Wait" in err
 
     def test_cannot_follow_blocked_user(self, auth_client, user, user_b_profile):
         """TAL-14: Impede follow se houver bloqueio de qualquer lado"""
@@ -216,3 +216,54 @@ class TestBlockSystem:
         # O post de quem nos bloqueou NÃO pode estar no feed
         filenames = [p.get('content') for p in results]
         assert "Post Secreto de B" not in filenames
+    
+    def test_block_toggle_and_follow_removal(self, auth_client, user, user_b_profile):
+        """Testa o ciclo completo: Seguir -> Bloquear (Remove Follow) -> Desbloquear (Toggle)"""
+        target_user = user_b_profile.user
+        url = self.get_url('block-user', pk=user_b_profile.id)
+
+        # 1. Simular Follow ativo
+        Follow.objects.create(follower=user, following=target_user)
+        
+        # 2. Primeiro POST: BLOQUEIA
+        response = auth_client.post(url)
+        assert response.status_code == 201
+        assert Block.objects.filter(blocker=user, blocked=target_user).exists()
+        # TAL-14: Follow deve sumir
+        assert not Follow.objects.filter(follower=user, following=target_user).exists()
+
+        # 3. Segundo POST: DESBLOQUEIA (Toggle)
+        response = auth_client.post(url)
+        assert response.status_code == 200
+        assert not Block.objects.filter(blocker=user, blocked=target_user).exists()
+        assert "desbloqueado" in response.data['message']
+    
+    def test_list_blocked_users(self, auth_client, user, user_b, post_factory):
+        """TAL-14: Garante que o utilizador consegue listar quem ele bloqueou"""
+        # 1. User A (autenticado) bloqueia User B
+        Block.objects.create(blocker=user, blocked=user_b)
+        
+        # 2. Criamos um User C que NÃO está bloqueado
+        user_c = User.objects.create_user(username="clean_user", email="c@test.com")
+        Profile.objects.get_or_create(user=user_c)
+
+        # 3. Chama a action 'blocked-users'
+        # Nota: detail=False significa que a URL é /api/accounts/profiles/blocked-users/
+        url = self.get_url('blocked-users') 
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        
+        # 4. Validações
+        # Se a resposta for uma lista (ReturnList), usamos diretamente.
+        # Caso contrário (se for um dict de paginação), pegamos 'results'.
+        if isinstance(response.data, list):
+            results = response.data
+        else:
+            results = response.data.get('results', [])
+        
+        # Agora sim, validamos os usernames
+        usernames = [p['username'] for p in results]
+        assert "target_user" in usernames
+        assert "clean_user" not in usernames
+        assert len(results) == 1

@@ -111,7 +111,9 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
       cy.wait(['@getProfile', '@getRejected']);
 
       cy.get('video').should('not.exist');
-      cy.contains('Conteúdo removido por violação das diretrizes.').should('be.visible');
+      
+      // ALTERADO: Agora busca a mensagem em inglês que está no seu PostCard
+      cy.contains('Content removed for violating guidelines.').should('be.visible');
     });
 
     it('5. Deve exibir mídia normalmente em APPROVED', () => {

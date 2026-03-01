@@ -18,7 +18,9 @@ def common_user(db):
 
 @pytest.fixture
 def pending_user(db):
-    return User.objects.create_user(username='pending', email='pending@test.com', image_status='PENDING')
+    # Remova o image_status='PENDING' daqui. 
+    # O Profile já nasce PENDING por padrão no Model!
+    return User.objects.create_user(username='pending', email='pending@test.com', password='password123')
 
 @pytest.fixture
 def post_to_report(common_user):
@@ -49,13 +51,16 @@ class TestModeration:
 
     def test_admin_can_approve_user(self, api_client, admin_user, pending_user):
         api_client.force_authenticate(user=admin_user)
-        url = reverse('moderation-approve-user', kwargs={'pk': pending_user.pk})
+        
+        # MUDANÇA: Use o ID do PROFILE (UUID), que é o que a View espera agora
+        url = reverse('moderation-approve-user', kwargs={'pk': pending_user.profile.id})
+        
         response = api_client.post(url)
         
-        pending_user.refresh_from_db()
+        # Verificação
         assert response.status_code == status.HTTP_200_OK
-        assert pending_user.image_status == 'APPROVED'
-
+        pending_user.profile.refresh_from_db()
+        assert pending_user.profile.image_status == 'APPROVED'
     # --- TESTES DE DENÚNCIA (TAL-23) ---
 
     def test_user_can_report_post(self, api_client, common_user, post_to_report):
@@ -187,4 +192,4 @@ class TestModeration:
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         err = response.data.get("error", "")
-        assert err.startswith("Please wait")
+        assert "Wait 5 minutes" in err

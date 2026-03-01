@@ -34,20 +34,23 @@ class UserManager(BaseUserManager):
         return self.create_user(username, email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
-    IMAGE_STATUS_CHOICES = [("PENDING", "Pendente"), ("APPROVED", "Aprovado"), ("REJECTED", "Rejeitado")]
     PROVIDER_CHOICES = [("google", "Google"), ("facebook", "Facebook"), ("phone", "Phone")]
 
     username = models.CharField(max_length=30, unique=True)
     email = models.EmailField(unique=True, null=True, blank=True)
     phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
     full_name = models.CharField(max_length=255, null=True, blank=True)
-    bio = models.TextField(blank=True, null=True)
-    profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
+    
+    # Removidos: profile_picture e image_status daqui (agora estão no Profile)
+    
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, null=True, blank=True)
     social_id = models.CharField(max_length=255, null=True, blank=True)
-    image_status = models.CharField(max_length=10, choices=IMAGE_STATUS_CHOICES, default="PENDING")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_banned = models.BooleanField(default=False)
+    ban_reason = models.TextField(blank=True, null=True)
+    date_joined = models.DateTimeField(auto_now_add=True)
+
     following = models.ManyToManyField(
         "self",
         symmetrical=False,
@@ -55,18 +58,56 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         through="Follow" 
     )
-    # No seu models.py dentro da classe User(AbstractUser)
-
-    # ... outros campos ...
-    is_banned = models.BooleanField(default=False)
-    ban_reason = models.TextField(blank=True, null=True)
-    # ....................
-    
-    date_joined = models.DateTimeField(auto_now_add=True)
 
     objects = UserManager()
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
+
+    # --- ADICIONE/AJUSTE ESTA PROPERTY ---
+    @property
+    def profile(self):
+        from .models import Profile
+        # Se o usuário ainda não foi salvo (não tem PK), retorna None ou cria em memória
+        if not self.pk:
+            return None 
+        p, _ = Profile.objects.get_or_create(user=self)
+        return p
+    
+    # --- AJUSTE ESTAS PROPERTIES PARA USAR O ATALHO ACIMA ---
+    @property
+    def profile_picture(self):
+        return self.profile.profile_picture
+
+    @property
+    def bio(self):
+        return self.profile.bio
+
+    @property
+    def image_status(self):
+        return self.profile.image_status
+
+    # --- SETTERS (Importante para o Admin e Testes salvarem dados) ---
+    @profile_picture.setter
+    def profile_picture(self, value):
+        if self.pk: # <--- PROTEÇÃO: Só executa se o User já tiver ID
+            p = self.profile
+            p.profile_picture = value
+            p.save()
+
+    @image_status.setter
+    def image_status(self, value):
+        if self.pk: # <--- PROTEÇÃO
+            p = self.profile
+            p.image_status = value
+            p.save()
+
+    @bio.setter
+    def bio(self, value):
+        if self.pk: # <--- PROTEÇÃO
+            p = self.profile
+            p.bio = value
+            p.save()
+    
     def __str__(self): return self.username
 
 # --- POST MODELS ---
@@ -79,23 +120,33 @@ def get_post_media_path(instance, filename):
     return f"posts/{media_type}/{now().strftime('%Y/%m')}/{filename}"
 
 class Profile(models.Model):
-    # UUID as Primary Key for security/obfuscation
+    # Opções de moderação movidas para cá
+    IMAGE_STATUS_CHOICES = [
+        ("PENDING", "Pendente"), 
+        ("APPROVED", "Aprovado"), 
+        ("REJECTED", "Rejeitado")
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    
-    # Linking to your existing User model
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     
-    # Fields for AC
     display_name = models.CharField(max_length=50, blank=True)
     bio = models.TextField(max_length=160, blank=True)
     
-    # Timestamps (always good practice)
+    # Campo de imagem agora no lugar certo para autonomia total
+    profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
+    image_status = models.CharField(
+        max_length=10, 
+        choices=IMAGE_STATUS_CHOICES, 
+        default="PENDING"
+    )
+    
+    is_private = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    is_private = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"Profile: {self.user.email} ({self.id})"
+        return f"Profile: {self.user.username} ({self.image_status})"
 
 
 class Post(models.Model):

@@ -10,10 +10,13 @@ from .models import Post, User, Profile, Block, Follow, Comment, Notification, R
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(source='profile.id', read_only=True)
     profile_picture = serializers.SerializerMethodField()
     upload_picture = serializers.ImageField(write_only=True, required=False)
     username = serializers.CharField(read_only=True)
-    display_name = serializers.ReadOnlyField(source='profile.display_name')
+        # Buscando campos que agora pertencem ao Profile
+    display_name = serializers.CharField(source='profile.display_name', required=False)
+    bio = serializers.CharField(source='profile.bio', required=False, allow_blank=True)
 
     class Meta:
         model = User
@@ -32,15 +35,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_profile_picture(self, obj):
         request = self.context.get("request")
+        profile = obj.profile
 
-        # LÓGICA TAL-12: Só exibe a URL original se estiver APROVADA
-        if obj.image_status == "APPROVED" and obj.profile_picture:
+        # LÓGICA TAL-12: Agora checa o status no PROFILE
+        if profile.image_status == "APPROVED" and profile.profile_picture:
             if request:
-                return request.build_absolute_uri(obj.profile_picture.url)
-            return obj.profile_picture.url
+                return request.build_absolute_uri(profile.profile_picture.url)
+            return profile.profile_picture.url
 
-        # Caso contrário (PENDING ou REJECTED), retorna o fallback
-        # Certifique-se de ter essa imagem em static/images/
         if request:
             return request.build_absolute_uri("/static/images/default-avatar.png")
         return "/static/images/default-avatar.png"
@@ -51,44 +53,38 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return image
 
     def update(self, instance, validated_data):
-        upload = validated_data.pop("upload_picture", None)
+        # 1. Extrai os dados do Profile (o DRF coloca eles num dicionário chamado 'profile' 
+        # por causa do source='profile.xxx')
+        profile_data = validated_data.pop('profile', {})
+        
+        # 2. Atualiza os campos do User (username, email, full_name)
+        instance.full_name = validated_data.get('full_name', instance.full_name)
+        instance.email = validated_data.get('email', instance.email)
+        instance.save()
 
-        if upload:
-            # LÓGICA TAL-12: Se subiu imagem nova, o status volta a ser PENDING
-            instance.image_status = "PENDING"
-
-            img = Image.open(upload)
-            img = img.convert("RGB")
-            img.thumbnail((512, 512))
-
-            buffer = BytesIO()
-            img.save(buffer, format="JPEG", quality=85)
-            buffer.seek(0)
-
-            filename = f"{uuid.uuid4().hex}.jpg"
-
-            if instance.profile_picture:
-                instance.profile_picture.delete(save=False)
-
-            instance.profile_picture.save(
-                filename,
-                ContentFile(buffer.read()),
-                save=False,
-            )
-
-        return super().update(instance, validated_data)
+        # 3. Atualiza o Profile
+        profile = instance.profile
+        for attr, value in profile_data.items():
+            setattr(profile, attr, value)
+        
+        # 4. Lógica da Foto: Se veio upload_picture via serializer
+        upload_picture = validated_data.pop('upload_picture', None)
+        if upload_picture:
+            profile.profile_picture = upload_picture
+            profile.image_status = 'PENDING'
+        
+        profile.save()
+        return instance
 
 class RegisterSerializer(serializers.ModelSerializer):
-    # Adicionamos a password aqui para o serializer saber ler do payload do teste
     password = serializers.CharField(write_only=True, required=True)
     full_name = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'full_name', 'password') # Adicionado password aqui
+        fields = ('username', 'email', 'full_name', 'password')
 
     def create(self, validated_data):
-        # Agora o validated_data terá a 'password' enviada pelo teste!
         return User.objects.create_user(**validated_data)
 
     def validate_email(self, value):
@@ -99,23 +95,27 @@ class RegisterSerializer(serializers.ModelSerializer):
 class GoogleAuthSerializer(serializers.Serializer):
     access_token = serializers.CharField()
 
-# 1. Create a lightweight version for the feed (only ID, name, and photo)
 class FeedAuthorSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
-    # BUSCA O DISPLAY_NAME DO PERFIL ASSOCIADO AO USER
     display_name = serializers.ReadOnlyField(source='profile.display_name')
-    id = serializers.ReadOnlyField(source='profile.id')
+    profile_id = serializers.ReadOnlyField(source='profile.id')
+    is_blocked = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        # ADICIONE 'display_name' NA LISTA ABAIXO
-        fields = ['id', 'username', 'full_name', 'display_name', 'profile_picture']
+        fields = ['id', 'profile_id', 'username', 'full_name', 'display_name', 'profile_picture', 'is_blocked']
 
+    def get_is_blocked(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Block.objects.filter(blocker=request.user, blocked=obj).exists()
+        return False
+    
     def get_profile_picture(self, obj):
-        # ... (sua lógica atual da foto continua igual)
         request = self.context.get("request")
-        if obj.image_status == "APPROVED" and obj.profile_picture:
-            return request.build_absolute_uri(obj.profile_picture.url) if request else obj.profile_picture.url
+        profile = obj.profile
+        if profile.image_status == "APPROVED" and profile.profile_picture:
+            return request.build_absolute_uri(profile.profile_picture.url) if request else profile.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
     
@@ -129,33 +129,38 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at','likes_count', 'is_liked','comments_count', 'user_has_commented']  # ✅ ADD AQUI
+        fields = ['id', 'author', 'content', 'media', 'is_deleted', 'media_url', 'moderation_status', 'created_at','likes_count', 'is_liked','comments_count', 'user_has_commented']
         read_only_fields = ['id', 'author', 'created_at', 'media_url', 'is_deleted']
 
     def validate_content(self, value):
         if len(value) > 280:
             raise serializers.ValidationError("Your thought is too long! Keep it under 280 characters.")
         return value
+    
+    def update(self, instance, validated_data):
+        # Atualizado para salvar a imagem no Profile associado ao User do Post
+        upload = validated_data.pop('upload_picture', None)
+        if upload:
+            profile = instance.user.profile
+            profile.profile_picture = upload
+            profile.image_status = 'PENDING'
+            profile.save()
+        return super().update(instance, validated_data)
+    
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        content = attrs.get("content", instance.content if instance else "")
+        media = attrs.get("media", instance.media if instance else None)
+        content = (content or "").strip()
+        if not (bool(content) or bool(media)):
+            raise serializers.ValidationError({"detail": "Post não pode ser vazio."})
+        return attrs
 
     def validate_media(self, file):
-        if not file:
-            return file
-
+        if not file: return file
         max_mb = 15
         if file.size > max_mb * 1024 * 1024:
-            raise serializers.ValidationError(f"Media file is too large (max {max_mb}MB).")
-
-        name = (file.name or "").lower()
-        ext = os.path.splitext(name)[1]
-
-        allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".webm", ".mkv", ".avi"}
-        if ext not in allowed:
-            raise serializers.ValidationError("Unsupported file type.")
-
-        content_type = getattr(file, "content_type", None)
-        if content_type and not (content_type.startswith("image/") or content_type.startswith("video/")):
-            raise serializers.ValidationError("Invalid media content type.")
-
+            raise serializers.ValidationError(f"Media file is too large.")
         return file
 
     def get_media_url(self, obj):
@@ -173,39 +178,42 @@ class PostSerializer(serializers.ModelSerializer):
         return False
 
 class ProfileSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.id')
+    user = serializers.ReadOnlyField(source='user.uuid')
+    user_id = serializers.ReadOnlyField(source='user.uuid')
     username = serializers.ReadOnlyField(source='user.username')
     email = serializers.ReadOnlyField(source='user.email')
     profile_picture = serializers.SerializerMethodField()
-    # 1. Adicione o campo aqui para ele ser calculado
     is_following = serializers.SerializerMethodField()
     posts = PostSerializer(many=True, read_only=True, source='user.posts')
     followers_count = serializers.IntegerField(source='user.followers.count', read_only=True)
     following_count = serializers.IntegerField(source='user.following.count', read_only=True)
+    is_blocked = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        # 2. Garanta que is_private e is_following estejam aqui
-        fields = ['id','user', 'username', 'email', 'display_name', 'bio', 'profile_picture', 'followers_count', 'following_count', 'posts', 'is_private', 'is_following', 'created_at']
+        fields = ['id','user', 'username','profile_picture', 'is_blocked', 'email', 'user_id', 'display_name', 'bio', 'followers_count', 'following_count', 'posts', 'is_private', 'is_following', 'created_at']
         read_only_fields = ['id', 'created_at']
+    
+    def get_is_blocked(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Block.objects.filter(blocker=request.user, blocked=obj.user).exists()
+        return False
 
     def get_profile_picture(self, obj):
-        # ... sua lógica atual (mantenha como está)
-        user = obj.user
+        # obj já é o Profile aqui
         request = self.context.get("request")
-        if user.image_status == "APPROVED" and user.profile_picture:
-            return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
+        if obj.image_status == "APPROVED" and obj.profile_picture:
+            return request.build_absolute_uri(obj.profile_picture.url) if request else obj.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
     
     def get_is_following(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            # O Segredo: obj é um Profile, então usamos obj.user 
-            # para comparar com o campo 'following' do model Follow
             return Follow.objects.filter(
                 follower=request.user, 
-                following=obj.user,  # Aqui deve ser obj.user
+                following=obj.user,
                 unfollowed_at__isnull=True
             ).exists()
         return False
@@ -213,13 +221,9 @@ class ProfileSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
-        
         if not request or not request.user.is_authenticated:
             return data
-
         is_owner = request.user == instance.user
-        
-        # AJUSTE: Usando a tabela Follow explicitamente para checar privacidade
         is_follower = Follow.objects.filter(
             follower=request.user, 
             following=instance.user, 
@@ -238,7 +242,6 @@ class ProfileSerializer(serializers.ModelSerializer):
                 'bio': "Este perfil é privado. Segue para ver o conteúdo.",
                 'posts': []
             }
-        
         data['is_restricted'] = False
         return data
 
@@ -252,28 +255,38 @@ class BlockSerializer(serializers.ModelSerializer):
         if self.context['request'].user == data['blocked']:
             raise serializers.ValidationError("Não podes bloquear-te a ti próprio.")
         return data
+
 class CommentSerializer(serializers.ModelSerializer):
-    # This shows the username instead of just the ID in the modal
     author_name = serializers.ReadOnlyField(source='author.username')
-    # This brings the avatar for the comment list
     author_avatar = serializers.SerializerMethodField()
+    author_id = serializers.IntegerField(source='author.id', read_only=True)
 
     class Meta:
         model = Comment
         fields = [
-            'id', 'post', 'author', 'author_name', 'author_avatar', 
+            'id', 'post', 'author', 'author_id',  'author_name', 'author_avatar', 
             'content', 'media_url', 'is_gif', 'created_at', 'image',
         ]
         read_only_fields = ['author', 'created_at']
 
     def get_author_avatar(self, obj):
         request = self.context.get("request")
-        user = obj.author
-        if user.image_status == "APPROVED" and user.profile_picture:
-            return request.build_absolute_uri(user.profile_picture.url) if request else user.profile_picture.url
+        profile = obj.author.profile
+        if profile.image_status == "APPROVED" and profile.profile_picture:
+            return request.build_absolute_uri(profile.profile_picture.url) if request else profile.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
     
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        content = (attrs.get("content", instance.content if instance else "") or "").strip()
+        media_url = attrs.get("media_url", instance.media_url if instance else None)
+        is_gif = attrs.get("is_gif", instance.is_gif if instance else False)
+        image = attrs.get("image", instance.image if instance else None)
+
+        if not (bool(content) or bool(image) or (bool(is_gif) and bool(media_url))):
+            raise serializers.ValidationError({"content": "Comentário não pode ficar vazio."})
+        return attrs
 
 class FollowUserSerializer(serializers.ModelSerializer):
     username = serializers.CharField(read_only=True)
@@ -286,32 +299,22 @@ class FollowUserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['profile_id', 'username', 'is_following', 'display_name', 'profile_picture']
 
-
     def get_is_following(self, obj):
         request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-
-        # obj é User (da lista)
-        return Follow.objects.filter(
-            follower=request.user,
-            following=obj,
-            unfollowed_at__isnull=True
-        ).exists()
+        if not request or not request.user.is_authenticated: return False
+        return Follow.objects.filter(follower=request.user, following=obj, unfollowed_at__isnull=True).exists()
     
     def get_profile_picture(self, obj):
-        # Aqui obj JÁ É o User, então não precisa de obj.user
         request = self.context.get("request")
-        if obj.image_status == "APPROVED" and obj.profile_picture:
-            return request.build_absolute_uri(obj.profile_picture.url) if request else obj.profile_picture.url
+        profile = obj.profile
+        if profile.image_status == "APPROVED" and profile.profile_picture:
+            return request.build_absolute_uri(profile.profile_picture.url) if request else profile.profile_picture.url
         path = "/static/images/default-avatar.png"
         return request.build_absolute_uri(path) if request else path
-    
 
 class NotificationSerializer(serializers.ModelSerializer):
     sender_name = serializers.ReadOnlyField(source='sender.username')
-    sender_avatar = serializers.ImageField(source='sender.profile_picture', read_only=True)
-    # Garanta que esta linha esteja aqui para resolver o problema do UUID
+    sender_avatar = serializers.SerializerMethodField() # Ajustado para ler do Profile
     sender_uuid = serializers.ReadOnlyField(source='sender.profile.id')
     post_content = serializers.ReadOnlyField(source='post.content')
     
@@ -319,48 +322,46 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = [
             'id', 'sender', 'sender_uuid', 'sender_name', 'sender_avatar', 
-            'notification_type', 'stored_post_content', 'text', 'post', 'post_content', 'is_read', 'created_at', 'stored_post_content'
+            'notification_type', 'stored_post_content', 'text', 'post', 'post_content', 'is_read', 'created_at'
         ]
-        # O erro estava aqui: as linhas abaixo devem estar separadas!
         read_only_fields = ['id', 'sender', 'notification_type', 'post', 'created_at']
 
-class ReportCreateSerializer(serializers.ModelSerializer):
-    # O HiddenField captura o usuário logado automaticamente e 
-    # permite que o UniqueTogetherValidator do Model funcione!
-    reporter = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    def get_sender_avatar(self, obj):
+        if not obj.sender: return None
+        request = self.context.get("request")
+        profile = obj.sender.profile
+        if profile.image_status == "APPROVED" and profile.profile_picture:
+            return request.build_absolute_uri(profile.profile_picture.url) if request else profile.profile_picture.url
+        return None
 
+class ReportCreateSerializer(serializers.ModelSerializer):
+    reporter = serializers.HiddenField(default=serializers.CurrentUserDefault())
     class Meta:
         model = Report
         fields = ['post', 'reason', 'description', 'reporter']
 
-# Para o Admin ver as denúncias
 class ReportAdminSerializer(serializers.ModelSerializer):
     reporter_username = serializers.ReadOnlyField(source='reporter.username')
     post_content = serializers.ReadOnlyField(source='post.content')
-
     class Meta:
         model = Report
         fields = '__all__'
 
-# Para o Admin ver o que precisa de aprovação
 class ModerationUserSerializer(serializers.ModelSerializer):
+    # Ajustado para ler do Profile
+    profile_picture = serializers.ImageField(source='profile.profile_picture', read_only=True)
+    image_status = serializers.CharField(source='profile.image_status', read_only=True)
     class Meta:
         model = User
         fields = ['id', 'username', 'profile_picture', 'image_status']
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # O super().validate(attrs) já autentica o usuário e o coloca em self.user
         data = super().validate(attrs)
-        
         if self.user.is_banned:
-            # Pegamos o motivo ou usamos um padrão caso esteja vazio
             reason = self.user.ban_reason or "Violação dos termos de uso."
-            
-            # Usamos PermissionDenied para manter o status 403
             raise exceptions.PermissionDenied({
                 "detail": "Sua conta foi suspensa.",
-                "ban_reason": reason  # <--- O motivo agora vai para o Frontend!
+                "ban_reason": reason
             })
-        
         return data

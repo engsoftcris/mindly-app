@@ -1,45 +1,83 @@
 // frontend/src/components/CommentModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FaTimes, FaRegImage, FaRegSmile } from 'react-icons/fa';
+import { toast } from 'react-toastify';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
+import CommentItem from './CommentItem';
 import GiftSelector from './GiftSelector';
 
 const MAX_CHARS = 280;
 
+const getId = (v) => {
+  if (v == null) return null;
+  if (typeof v === 'number' || typeof v === 'string') return String(v);
+
+  if (typeof v === 'object') {
+    if (v.id != null) return String(v.id);
+    if (v.user != null) return getId(v.user);
+    if (v.pk != null) return String(v.pk);
+  }
+  return null;
+};
+
 const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
+  const { user: currentUser } = useAuth();
+
   const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState("");
+  const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+
   const [canUseGifts, setCanUseGifts] = useState(true);
   const [showGiftSelector, setShowGiftSelector] = useState(false);
   const [selectedGift, setSelectedGift] = useState(null);
-  const [selectedImage, setSelectedImage] = useState(null); // O arquivo real
-  const [imagePreview, setImagePreview] = useState(null);   // A URL para o preview
-  const fileInputRef = React.useRef(null); // Para controlar o input de arquivo
+
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileInputRef = useRef(null);
 
   const charsLeft = MAX_CHARS - newComment.length;
 
+  // Logged-in user id (Django User.id)
+  const currentUserId = currentUser?.user_id != null ? String(currentUser.user_id) : null;
+
+  // Post owner id (Django User.id)
+  const postOwnerId = useMemo(() => {
+    return getId(
+      post?.author?.id ??
+      post?.author?.user?.id ??
+      post?.author?.user ??
+      post?.user?.id ??
+      post?.user
+    );
+  }, [post]);
+
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert("Apenas imagens são permitidas.");
-        return;
-      }
-      setSelectedImage(file);
-      setImagePreview(URL.createObjectURL(file));
-      // Se selecionou imagem, remove o GIF para não confundir
-      setSelectedGift(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Only image files are allowed.');
+      return;
     }
+
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+    setSelectedGift(null);
   };
 
   useEffect(() => {
     if (isOpen && post?.id) {
       fetchComments();
       setSelectedGift(null);
-      setNewComment("");
+      setSelectedImage(null);
+      setImagePreview(null);
+      setNewComment('');
       setShowGiftSelector(false);
+
+      // reset file input so selecting the same file again triggers onChange
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, post?.id]);
@@ -48,10 +86,10 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
     setFetching(true);
     try {
       const response = await api.get(`/comments/?post_id=${post.id}`);
-      console.log("LISTA DE COMENTÁRIOS DO BACKEND:", response.data);
       setComments(response.data);
     } catch (error) {
-      console.error("Error loading comments:", error);
+      console.error('Error loading comments:', error);
+      toast.error('Failed to load replies.');
     } finally {
       setFetching(false);
     }
@@ -59,47 +97,45 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Verifica se há texto, ou GIF, ou Imagem selecionada
     if (!newComment.trim() && !selectedGift && !selectedImage) return;
 
     setLoading(true);
-    
-    // 1. Criamos o FormData (necessário para enviar arquivos)
+
     const formData = new FormData();
     formData.append('post', post.id);
     formData.append('content', newComment);
 
-    // 2. Lógica da Mídia
     if (selectedGift) {
-      // Se for GIF, enviamos a URL na chave 'media_url'
       formData.append('media_url', selectedGift);
       formData.append('is_gif', 'true');
     } else if (selectedImage) {
-      // Se for Imagem do PC, enviamos o arquivo na chave 'image'
       formData.append('image', selectedImage);
       formData.append('is_gif', 'false');
     }
 
     try {
-      // 3. Enviamos o formData com o header correto
       const response = await api.post('/comments/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Limpar tudo após o sucesso
-      setNewComment("");
+      setNewComment('');
       setSelectedGift(null);
       setSelectedImage(null);
       setImagePreview(null);
       setShowGiftSelector(false);
-      
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
       setComments((prev) => [response.data, ...prev]);
       if (onCommentAdded) onCommentAdded();
+
+      toast.success('Reply posted.');
     } catch (error) {
-      console.error("Erro no envio:", error);
-      alert("Could not post comment.");
+      console.error('Error posting comment:', error?.response?.status, error?.response?.data);
+      const msg =
+        error?.response?.data?.detail ||
+        (typeof error?.response?.data === 'string' ? error.response.data : null) ||
+        'Could not post reply.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -185,7 +221,7 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
                 autoFocus
               />
 
-              {/* Preview do GIF selecionado */}
+              {/* GIF preview */}
               {selectedGift && (
                 <div data-cy="gif-preview" className="relative mb-4 inline-block">
                   <img
@@ -204,25 +240,30 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
                   </button>
                 </div>
               )}
-              {/* Preview da Imagem selecionada do PC */}
-{imagePreview && (
-  <div data-cy="image-preview" className="relative mb-4 inline-block">
-    <img
-      data-cy="image-preview-display"
-      src={imagePreview}
-      className="mt-2 rounded-xl w-[300px] h-[180px] border border-gray-800 object-cover" 
-      alt="Selected"
-    />
-    <button
-      data-cy="remove-image"
-      type="button"
-      onClick={() => { setSelectedImage(null); setImagePreview(null); }}
-      className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-full text-white hover:bg-black"
-    >
-      <FaTimes size={12} />
-    </button>
-  </div>
-)}
+
+              {/* Image preview */}
+              {imagePreview && (
+                <div data-cy="image-preview" className="relative mb-4 inline-block">
+                  <img
+                    data-cy="image-preview-display"
+                    src={imagePreview}
+                    className="mt-2 rounded-xl w-[300px] h-[180px] border border-gray-800 object-cover"
+                    alt="Selected"
+                  />
+                  <button
+                    data-cy="remove-image"
+                    type="button"
+                    onClick={() => {
+                      setSelectedImage(null);
+                      setImagePreview(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-full text-white hover:bg-black"
+                  >
+                    <FaTimes size={12} />
+                  </button>
+                </div>
+              )}
 
               {/* Toolbar */}
               <div className="flex items-center justify-between border-t border-gray-800 pt-3 mt-2">
@@ -244,29 +285,33 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
                           onSelect={(url) => {
                             setSelectedGift(url);
                             setShowGiftSelector(false);
+                            setSelectedImage(null);
+                            setImagePreview(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
                           }}
                           setCanUseGifs={setCanUseGifts}
                         />
                       )}
                     </div>
                   )}
-                  <input 
-  type="file" 
-  ref={fileInputRef} 
-  data-cy="file-input"
-  onChange={handleImageChange} 
-  accept="image/*" 
-  className="hidden" 
-/>
 
-                 <button
-  data-cy="open-image"
-  type="button"
-  onClick={() => fileInputRef.current.click()} // <--- Isso aqui faz a mágica
-  className="hover:bg-blue-400/10 p-2 rounded-full transition text-blue-400"
->
-  <FaRegImage size={20} />
-</button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    data-cy="file-input"
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+
+                  <button
+                    data-cy="open-image"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="hover:bg-blue-400/10 p-2 rounded-full transition text-blue-400"
+                  >
+                    <FaRegImage size={20} />
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -275,14 +320,13 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
                   </span>
 
                   <button
-  data-cy="reply-submit"
-  type="submit"
-  // Agora ele verifica se tem Texto OU Gift OU Imagem
-  disabled={(!newComment.trim() && !selectedGift && !selectedImage) || loading}
-  className="bg-blue-500 text-white px-6 py-1.5 rounded-full font-bold disabled:opacity-50 hover:bg-blue-600 transition"
->
-  {loading ? "..." : "Reply"}
-</button>
+                    data-cy="reply-submit"
+                    type="submit"
+                    disabled={(!newComment.trim() && !selectedGift && !selectedImage) || loading}
+                    className="bg-blue-500 text-white px-6 py-1.5 rounded-full font-bold disabled:opacity-50 hover:bg-blue-600 transition"
+                  >
+                    {loading ? '...' : 'Reply'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -290,50 +334,22 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
 
           <div className="h-px bg-gray-800 mb-6"></div>
 
-          {/* Lista de Comentários */}
+          {/* Comments list */}
           <div data-cy="comments-list" className="space-y-6 mb-4">
             {fetching ? (
-              <div data-cy="comments-loading" className="text-center text-gray-500 py-4 text-sm">
-                Loading replies...
-              </div>
+              <div className="text-center text-gray-500 py-4 text-sm">Loading replies...</div>
             ) : (
               comments.map((comment) => (
-                <div data-cy="comment-item" key={comment.id} className="flex space-x-3">
-                  <img
-                    data-cy="comment-avatar"
-                    src={
-                      comment.author_avatar ||
-                      `https://ui-avatars.com/api/?name=${comment.author_name}`
-                    }
-                    className="w-10 h-10 rounded-full object-cover border border-gray-800"
-                    alt="avatar"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-1">
-                      <span data-cy="comment-author" className="font-bold text-sm text-white">
-                        {comment.author_name}
-                      </span>
-                      <span data-cy="comment-date" className="text-gray-500 text-xs">
-                        · {new Date(comment.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <p data-cy="comment-content" className="text-gray-300 text-[15px] mt-0.5">
-                      {comment.content}
-                    </p>
-                    {(comment.media_url || comment.image) && (
-                      <img
-                        data-cy="comment-media"
-                        src={comment.media_url || comment.image}
-                        className="rounded-2xl w-[200px] h-[150px] border border-gray-800 object-center object-cover"
-                        alt="comment gift"
-                      />
-                    )}
-                  </div>
-                </div>
+                <CommentItem
+                  key={comment.id}
+                  comment={comment}
+                  currentUserId={currentUserId}
+                  postOwnerId={postOwnerId}
+                  onDeleteSuccess={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
+                />
               ))
             )}
           </div>
-
         </div>
       </div>
     </div>

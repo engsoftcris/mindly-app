@@ -83,22 +83,25 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
   });
 
   it('1. Deve exibir posts iniciais e carregar mais via Infinite Scroll', () => {
-    // 1. Garante que a P1 renderizou primeiro
+    // 1. Garante que o conteúdo da página 1 apareceu
     cy.contains('Hello from Para Você!', { timeout: 15000 }).should('be.visible');
     
-    // 2. Rolar até o fim. 
-    // Como o layout é lateral, tentamos no window com 'ensureScrollable: false'
-    // ou rolamos diretamente o post para garantir que o observer seja triggado.
+    // 2. Em vez de buscar por '.divide-y > div', buscamos por qualquer elemento 
+    // que contenha o texto do post, garantindo que a lista renderizou.
+    cy.contains('Hello from Para Você!').should('exist');
+
+    // 3. Rolar até o fim para disparar o Observer
+    // Tentamos rolar o container principal ou o window
     cy.scrollTo('bottom', { ensureScrollable: false });
     
-    // Caso o scroll no window não funcione devido ao layout CSS, 
-    // forçamos a visibilidade do último elemento da lista:
-    cy.get('.divide-y > div').last().scrollIntoView();
+    // Forçamos o scroll para o último elemento de post encontrado
+    // Ajustei o seletor para pegar os itens da lista de forma mais flexível
+    cy.get('article, [data-cy="post-item"], .py-4').last().scrollIntoView();
     
-    // 3. Aguarda a requisição da página 2
+    // 4. Aguarda a requisição da página 2 (Página 2 enviada pelo Mock)
     cy.wait('@getPostsAll', { timeout: 15000 });
     
-    // 4. Valida que o conteúdo novo apareceu na tela
+    // 5. Valida que o conteúdo da Página 2 apareceu na tela
     cy.contains('Conteúdo da Página 2!', { timeout: 10000 }).should('be.visible');
   });
 

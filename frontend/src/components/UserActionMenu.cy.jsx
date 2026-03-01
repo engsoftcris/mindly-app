@@ -6,24 +6,26 @@ import { toast } from 'react-toastify'
 
 describe('<UserActionMenu />', () => {
   const mountMenu = ({
-    targetProfile = { id: 10, username: 'alice' },
-    postId = 99,
-    isOwnPost = false,
-    onActionComplete = cy.stub().as('onActionComplete'),
-  } = {}) => {
-    cy.mount(
-      <MemoryRouter initialEntries={['/']}>
-        <div data-cy="parent" onClick={cy.stub().as('parentClick')}>
-          <UserActionMenu
-            targetProfile={targetProfile}
-            postId={postId}
-            isOwnPost={isOwnPost}
-            onActionComplete={onActionComplete}
-          />
-        </div>
-      </MemoryRouter>
-    )
-  }
+  targetProfile = { id: 10, user_id: 999, username: 'alice' },
+  currentUserId = 'meu-id-123',
+  postId = 99,
+  isOwnPost = false,
+  onActionComplete = cy.stub().as('onActionComplete'),
+} = {}) => {
+  cy.mount(
+    <MemoryRouter initialEntries={['/']}>
+      <div data-cy="parent" onClick={cy.stub().as('parentClick')}>
+        <UserActionMenu
+          targetProfile={targetProfile}
+          currentUserId={String(currentUserId)}
+          postId={postId}
+          isOwnPost={isOwnPost}
+          onActionComplete={onActionComplete}
+        />
+      </div>
+    </MemoryRouter>
+  )
+}
 
   const stubPostResolve = (payload) =>
     cy.get('@apiPost').then((stub) => stub.resolves(payload))
@@ -76,37 +78,32 @@ describe('<UserActionMenu />', () => {
   })
 
   it('quando NÃO é dono do post: bloqueia com sucesso', () => {
-    const targetProfile = { id: 55, username: 'bob' }
-    const onActionComplete = cy.stub().as('onActionComplete')
+  const targetProfile = { id: 55, user_id: 55, username: 'bob', is_blocked: false }
+  const onActionComplete = cy.stub().as('onActionComplete')
 
-    stubPostResolve({ data: { ok: true } })
+  stubPostResolve({ data: { ok: true } })
+  mountMenu({ targetProfile, currentUserId: 'meu-id-123', isOwnPost: false, onActionComplete })
 
-    mountMenu({ targetProfile, isOwnPost: false, onActionComplete })
+  cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+  cy.get('[data-cy="user-action-block"]').should('exist').click({ force: true })
 
-    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
-    cy.get('[data-cy="user-action-block"]').should('exist').click({ force: true })
-
-    cy.get('@apiPost').should(
-      'have.been.calledOnceWithExactly',
-      '/accounts/profiles/55/block/'
-    )
-
-    cy.get('@toastSuccess').should('have.been.calledOnce')
-    cy.get('@onActionComplete').should('have.been.calledOnceWithExactly', 55)
-    cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
-  })
+  cy.get('@apiPost').should('have.been.calledOnceWithExactly', '/accounts/profiles/55/block/')
+  cy.get('@toastSuccess').should('have.been.calledOnce')
+  cy.get('@onActionComplete').should('have.been.calledOnceWithExactly', 55) // seu componente passa profileId
+  cy.get('[data-cy="user-action-menu-panel"]').should('not.exist')
+})
 
   it('quando NÃO é dono do post: erro no block mostra toast.error', () => {
-    const targetProfile = { id: 55, username: 'bob' }
-    stubPostReject(new Error('fail'))
+  const targetProfile = { id: 55, user_id: 55, username: 'bob', is_blocked: false }
+  stubPostReject(new Error('fail'))
 
-    mountMenu({ targetProfile, isOwnPost: false })
+  mountMenu({ targetProfile, currentUserId: 'meu-id-123', isOwnPost: false })
 
-    cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
-    cy.get('[data-cy="user-action-block"]').click({ force: true })
+  cy.get('[data-cy="user-action-menu-trigger"]').click({ force: true })
+  cy.get('[data-cy="user-action-block"]').click({ force: true })
 
-    cy.get('@toastError').should('have.been.calledOnce')
-  })
+  cy.get('@toastError').should('have.been.calledOnce')
+})
 
   it('quando é dono do post: primeiro clique pede confirmação (não deleta ainda)', () => {
     stubDeleteResolve({ data: { ok: true } })

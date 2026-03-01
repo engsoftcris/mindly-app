@@ -77,3 +77,11 @@ Cypress.Commands.add('login', (options = {}) => {
   registerDefaultIntercepts();
   cy.visit(path, { onBeforeLoad: setAuthStorage });
 });
+
+Cypress.Commands.add('visitAuthed', (path = '/', token = 'fake-token-123') => {
+  cy.visit(path, {
+    onBeforeLoad(win) {
+      win.localStorage.setItem('access', token)
+    },
+  })
+})

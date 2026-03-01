@@ -22,9 +22,12 @@ describe('Fluxo de Perfil Público e Privacidade (TAL-30)', () => {
     cy.viewport(1280, 800);
     cy.clearLocalStorage();
     cy.clearCookies();
-
-    const authBody = { id: '999', username: 'cristiano', display_name: 'Cristiano' };
-
+// AJUSTE AQUI: O seu componente PublicProfile.jsx usa .user_id
+    const authBody = { 
+      user_id: '999', 
+      username: 'cristiano', 
+      display_name: 'Cristiano' 
+    };
     // ✅ Seu app chama ESTE endpoint (log comprovou)
     cy.intercept('GET', profileRootUrl, { statusCode: 200, body: authBody }).as('getProfileAuthRoot');
   });
@@ -151,18 +154,44 @@ describe('Fluxo de Perfil Público e Privacidade (TAL-30)', () => {
   });
 
  
-  it('Cenário 6: Deve mostrar "Edit Profile" em vez de "Follow" quando o perfil é meu', () => {
-    const myId = '999'; // Mesmo ID do authBody no beforeEach
+ it('Cenário 6: Deve mostrar "Edit Profile" em vez de "Follow" quando o perfil é meu', () => {
+  const myId = '999'; 
+  
+  // 1. Mock do Auth (Quem sou eu)
+  // Injetamos 'id' e 'user_id' para cobrir qualquer lógica do AuthContext
+  cy.intercept('GET', profileRootUrl, { 
+    statusCode: 200, 
+    body: { 
+      id: myId, 
+      user_id: myId, 
+      username: 'cristiano' 
+    } 
+  }).as('getProfileAuthRoot');
+
+  // 2. Mock do Perfil que estou visitando
+  cy.intercept('GET', `**/accounts/profiles/${myId}/`, {
+    statusCode: 200,
+    body: { 
+      id: myId,        // UUID do perfil
+      user_id: myId,   // ID do user dono
+      username: 'cristiano', 
+      is_self: true,   // Algumas lógicas usam flag direta do backend
+      posts: [] 
+    }
+  }).as('fetchMyProfile');
+
+ visitAuthed(`/profile/${myId}`);
+    cy.wait(['@getProfileAuthRoot', '@fetchMyProfile']);
+
+    // 1. Verifica se o botão de editar está lá
+    cy.get('button').contains(/Edit Profile/i).should('be.visible');
+
+    // 2. FORMA CORRETA de verificar que o BOTÃO de seguir não existe
+    // Usamos o seletor do componente FollowButton ou garantimos que não há botão com esse texto
+    cy.get('[data-cy="follow-button"]').should('not.exist');
     
-    cy.intercept('GET', `**/accounts/profiles/${myId}/**`, {
-      statusCode: 200,
-      body: { id: myId, username: 'cristiano', is_self: true, posts: [] }
-    }).as('fetchMyProfile');
-
-    visitAuthed(`/profile/${myId}`);
-    cy.wait('@fetchMyProfile');
-
-    cy.contains('button', /Edit Profile/i).should('be.visible');
-    cy.contains('button', /Follow/i).should('not.exist');
-  });
+    // OU, se quiser usar contains, especifique que é um BOTÃO 
+    // e use regex de início/fim de linha (^ $) para não pegar "Followers"
+    cy.contains('button', /^Follow$|^Seguir$/i).should('not.exist');
+});
 });

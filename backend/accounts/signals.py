@@ -3,40 +3,51 @@ from django.db.models.signals import pre_save, post_delete, post_save
 from django.dispatch import receiver
 from .models import User, Profile, Follow, Like, Comment, Notification, Report
 
-# --- Sinais de Imagem ---
+# --- Sinais de Imagem (Ajustados para evitar o erro NotImplementedError) ---
 
-@receiver(pre_save, sender=User)
+@receiver(pre_save, sender=Profile)
 def delete_old_profile_picture(sender, instance, **kwargs):
     if not instance.pk:
         return
+        
     try:
-        old = sender.objects.get(pk=instance.pk).profile_picture
-    except sender.DoesNotExist:
+        # Busca a versão atual do perfil no banco antes de salvar a nova
+        old_profile = Profile.objects.get(pk=instance.pk)
+        old_photo = old_profile.profile_picture
+    except Profile.DoesNotExist:
         return
-    new = instance.profile_picture
-    if old and old != new:
-        if old.path and os.path.isfile(old.path):
-            os.remove(old.path)
+        
+    new_photo = instance.profile_picture
+    
+    # Se a foto mudou e não é a foto padrão, deletamos a antiga
+    if old_photo and old_photo != new_photo:
+        # Verificamos se não é o avatar padrão para não deletá-lo por engano
+        if 'default-avatar.png' not in old_photo.name:
+            try:
+                # O método .delete(save=False) deleta o arquivo físico 
+                # sem disparar um novo sinal de save, evitando loops.
+                old_photo.delete(save=False)
+            except Exception as e:
+                print(f"Erro ao deletar foto antiga: {e}")
+
+@receiver(post_delete, sender=Profile)
+def delete_profile_picture_on_delete(sender, instance, **kwargs):
+    """Deleta o arquivo físico quando o Profile é excluído do banco"""
+    if instance.profile_picture and 'default-avatar.png' not in instance.profile_picture.name:
+        try:
+            instance.profile_picture.delete(save=False)
+        except Exception as e:
+            print(f"Erro ao deletar foto no delete: {e}")
+
+# --- Sinais de Perfil e Notificações (Mantidos como estavam) ---
+
 @receiver(post_save, sender=User)
 def handle_user_profile(sender, instance, created, **kwargs):
-    """
-    Combined signal to handle Profile creation and updates.
-    """
     if created:
-        # Create the profile if the user is new
         Profile.objects.get_or_create(user=instance)
     else:
-        # Save the profile only if it already exists
         if hasattr(instance, 'profile'):
             instance.profile.save()
-
-@receiver(post_delete, sender=User)
-def delete_profile_picture_on_delete(sender, instance, **kwargs):
-    if instance.profile_picture:
-        if instance.profile_picture.path and os.path.isfile(instance.profile_picture.path):
-            os.remove(instance.profile_picture.path)
-
-# --- Sinais de Notificações (TAL-15) ---
 
 @receiver(post_save, sender=Follow)
 def create_follow_notification(sender, instance, created, **kwargs):
@@ -50,7 +61,6 @@ def create_follow_notification(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Like)
 def create_like_notification(sender, instance, created, **kwargs):
     if created:
-        # Só cria notificação se o dono do post não for quem deu o like
         if instance.post.user != instance.user:
             Notification.objects.create(
                 recipient=instance.post.user,
@@ -62,7 +72,6 @@ def create_like_notification(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Comment)
 def create_comment_notification(sender, instance, created, **kwargs):
     if created:
-        # Só cria notificação se o autor do comentário não for o dono do post
         if instance.post.user != instance.author:
             Notification.objects.create(
                 recipient=instance.post.user,
@@ -70,11 +79,9 @@ def create_comment_notification(sender, instance, created, **kwargs):
                 notification_type='COMMENT',
                 post=instance.post
             )
-# --- Sinal de Notificação de Report (TAL-23) ---
 
 @receiver(post_save, sender=Report)
 def create_report_notifications(sender, instance, created, **kwargs):
-    # Só notifica em atualização (não na criação)
     if created:
         return
 
@@ -85,17 +92,15 @@ def create_report_notifications(sender, instance, created, **kwargs):
     if not post:
         return
 
-    snapshot = post.content  # conteúdo no momento da atualização
+    snapshot = post.content
 
-    # Mensagens (separadas por público)
     if instance.status == "resolved":
         msg_reporter = "Denúncia aceite: O conteúdo foi removido por violar as nossas diretrizes."
         msg_owner = "Após análise da moderação, seu conteúdo foi removido por violar as diretrizes."
-    else:  # ignored
+    else:
         msg_reporter = "Denúncia rejeitada: Analisámos o conteúdo e concluímos que NÃO viola as nossas diretrizes."
         msg_owner = "Uma denúncia sobre seu conteúdo foi rejeitada após análise da moderação."
 
-    # Helper: cria/atualiza 1 notificação por (recipient, post, status)
     def upsert_report_update(recipient, text):
         Notification.objects.filter(
             recipient=recipient,
@@ -106,16 +111,14 @@ def create_report_notifications(sender, instance, created, **kwargs):
 
         Notification.objects.create(
             recipient=recipient,
-            sender=None,  # SYSTEM
+            sender=None,
             notification_type="REPORT_UPDATE",
             text=text,
             post=post,
             stored_post_content=snapshot,
         )
 
-    # 1) Notifica o denunciante
     upsert_report_update(instance.reporter, msg_reporter)
 
-    # 2) Notifica o autor do post (se for outra pessoa)
     if post.user_id != instance.reporter_id:
         upsert_report_update(post.user, msg_owner)

@@ -58,3 +58,32 @@ class TestUserProfile:
         
         assert response.data['username'] == "user_a"
         assert response.data['username'] != "user_b"
+    
+    def test_update_profile_picture_resets_moderation(self, auth_client, user):
+        """Verify that a new upload forces the status back to PENDING"""
+        
+        profile = user.profile
+        profile.image_status = 'APPROVED'
+        profile.save()
+        
+        
+        url = reverse('user-profile-picture')
+
+        import io
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file = io.BytesIO()
+        image = Image.new('RGB', (100, 100))
+        image.save(file, 'jpeg')
+        file.seek(0)
+        new_photo = SimpleUploadedFile("new.jpg", file.read(), content_type="image/jpeg")
+
+        response = auth_client.put(url, {"profile_picture": new_photo}, format='multipart')
+        
+          
+        assert response.status_code == 200
+        
+        profile.refresh_from_db()
+        
+        assert profile.image_status == 'PENDING'

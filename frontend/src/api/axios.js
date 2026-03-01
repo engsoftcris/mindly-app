@@ -35,13 +35,21 @@ api.interceptors.response.use(
 );
 
 export const profileAPI = {
-  getMe: () => api.get('/accounts/profile/me/'),
-  updateMe: (data) => api.patch('/accounts/profile/me/', data),
+  getMe: () => api.get('/accounts/profile/'),
+  updateMe: (data) => api.patch('/accounts/profile/', data),
 };
 
 export const postsAPI = {
   create: (data) => api.post('/posts/', data),
   list: () => api.get('/posts/'),
+  // Ajuste aqui: forçamos o Content-Type para JSON
+  update: (id, formData) => api.patch(`/posts/${id}/`, formData, {
+    headers: {
+      // Deixamos o navegador definir o boundary do Multipart automaticamente
+      'Content-Type': 'multipart/form-data',
+    }
+  }),
+  delete: (id) => api.delete(`/posts/${id}/`),
   getFeed: (urlOrPage = '/accounts/feed/') => {
     const endpoint = typeof urlOrPage === 'number' 
       ? `/accounts/feed/?page=${urlOrPage}` 
