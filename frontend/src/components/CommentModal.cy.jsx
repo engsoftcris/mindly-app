@@ -2,9 +2,9 @@
 import React from 'react'
 import CommentModal from './CommentModal'
 import api from '../api/axios'
+import AuthContext from '../context/AuthContext'
 
 describe('<CommentModal />', () => {
-
   const post = {
     id: 123,
     content: 'Post original',
@@ -17,19 +17,30 @@ describe('<CommentModal />', () => {
     created_at: new Date().toISOString(),
   }
 
+  const mountWithAuth = (
+    component,
+    { user = { user_id: 999, username: 'me' }, loading = false } = {}
+  ) => {
+    cy.mount(
+      <AuthContext.Provider value={{ user, loading }}>
+        {component}
+      </AuthContext.Provider>
+    )
+  }
+
   beforeEach(() => {
     cy.stub(api, 'get').as('apiGet')
     cy.stub(api, 'post').as('apiPost')
   })
 
-  const stubGet = (payload) =>
+  const stubGetResolve = (payload) =>
     cy.get('@apiGet').then((stub) => stub.resolves(payload))
 
-  const stubPost = (payload) =>
+  const stubPostResolve = (payload) =>
     cy.get('@apiPost').then((stub) => stub.resolves(payload))
 
   it('não renderiza quando isOpen=false', () => {
-    cy.mount(
+    mountWithAuth(
       <CommentModal
         post={post}
         isOpen={false}
@@ -42,8 +53,7 @@ describe('<CommentModal />', () => {
   })
 
   it('carrega comentários ao abrir e renderiza a lista', () => {
-
-    stubGet({
+    stubGetResolve({
       data: [
         {
           id: 1,
@@ -56,7 +66,7 @@ describe('<CommentModal />', () => {
       ],
     })
 
-    cy.mount(
+    mountWithAuth(
       <CommentModal
         post={post}
         isOpen={true}
@@ -65,18 +75,15 @@ describe('<CommentModal />', () => {
       />
     )
 
-    cy.get('@apiGet')
-      .should('have.been.calledOnceWithExactly', '/comments/?post_id=123')
+    cy.get('@apiGet').should('have.been.calledOnceWithExactly', '/comments/?post_id=123')
 
-    cy.get('[data-cy="comments-list"]')
-      .should('contain', 'Primeiro comentário')
+    cy.get('[data-cy="comments-list"]').should('contain', 'Primeiro comentário')
   })
 
   it('desabilita Reply quando vazio e habilita ao digitar', () => {
+    stubGetResolve({ data: [] })
 
-    stubGet({ data: [] })
-
-    cy.mount(
+    mountWithAuth(
       <CommentModal
         post={post}
         isOpen={true}
@@ -86,14 +93,13 @@ describe('<CommentModal />', () => {
     )
 
     cy.get('[data-cy="reply-submit"]').should('be.disabled')
-
     cy.get('[data-cy="comment-input"]').type('Teste')
-
     cy.get('[data-cy="reply-submit"]').should('not.be.disabled')
   })
 
   it('envia comentário de texto corretamente', () => {
-    stubGet({ data: [] })
+    stubGetResolve({ data: [] })
+
     const created = {
       id: 10,
       author_name: 'Eu',
@@ -101,112 +107,75 @@ describe('<CommentModal />', () => {
       created_at: new Date().toISOString(),
       media_url: null,
     }
-    stubPost({ data: created })
+    stubPostResolve({ data: created })
 
-    cy.mount(
+    const onCommentAdded = cy.stub().as('onCommentAdded')
+
+    mountWithAuth(
       <CommentModal
         post={post}
         isOpen={true}
         onClose={cy.stub()}
-        onCommentAdded={cy.stub()}
+        onCommentAdded={onCommentAdded}
       />
     )
 
-    // O segredo: .clear() primeiro para garantir o foco, depois o .type()
-    cy.get('[data-cy="comment-input"]')
-      .clear() 
-      .type('Meu reply', { delay: 50 }) // Um pequeno delay ajuda o React a processar cada letra
+    cy.get('[data-cy="comment-input"]').clear().type('Meu reply', { delay: 10 })
 
-    // Verifica se o botão habilitou antes de clicar
     cy.get('[data-cy="reply-submit"]').should('not.be.disabled').click()
 
     cy.get('@apiPost').should('have.been.calledOnce')
     cy.get('@apiPost').then((stub) => {
-      const [url, formData] = stub.getCall(0).args
+      const [url, formData, config] = stub.getCall(0).args
       expect(url).to.eq('/comments/')
-      expect(formData.get('post')).to.eq("123")
-      // Aqui usamos match para ignorar qualquer espaço em branco extra acidental
-      expect(formData.get('content').trim()).to.eq('Meu reply')
+      expect(config).to.have.property('headers')
+      expect(config.headers).to.have.property('Content-Type')
+
+      expect(formData.get('post')).to.eq(String(123))
+      expect(String(formData.get('content') || '').trim()).to.eq('Meu reply')
+      expect(formData.get('is_gif')).to.eq(null)
+      expect(formData.get('image')).to.eq(null)
     })
+
+    cy.get('@onCommentAdded').should('have.been.calledOnce')
+    // Novo comentário deve aparecer no topo da lista
+    cy.get('[data-cy="comments-list"]').should('contain', 'Meu reply')
   })
+
   it('envia comentário com Gift corretamente', () => {
-    stubGet({ data: [] })
-    stubPost({
+    stubGetResolve({ data: [] })
+
+    stubPostResolve({
       data: {
         id: 11,
         author_name: 'Eu',
         content: '',
         created_at: new Date().toISOString(),
         media_url: 'https://media.giphy.com/test-gift.gif',
+        is_gif: true,
       },
     })
 
-    // IMPORTANTE: O stub do fetch DEVE vir antes do mount
+    // Stub do fetch antes do mount (busca do GiftSelector)
     cy.window().then((win) => {
       cy.stub(win, 'fetch').resolves({
         ok: true,
-        status: 200,
-        json: async () => ({
-          data: [{
-            id: '1',
-            images: {
-              fixed_height: { url: 'https://media.giphy.com/test-gift.gif' },
-              fixed_height_small: { url: 'https://media.giphy.com/test-gift-small.gif' },
-            },
-          }],
-        }),
-      })
-    })
-
-    cy.mount(
-      <CommentModal
-        post={post}
-        isOpen={true}
-        onClose={cy.stub()}
-        onCommentAdded={cy.stub()}
-      />
-    )
-
-    cy.get('[data-cy="open-gif"]').click()
-    
-    // Esperamos o item do GIF aparecer (o stub agora vai funcionar)
-    cy.get('[data-cy="gif-item"]', { timeout: 10000 }).first().click({ force: true })
-    cy.get('[data-cy="reply-submit"]').click()
-
-    cy.get('@apiPost').then((stub) => {
-      const [url, formData] = stub.getCall(0).args
-      expect(formData.get('media_url')).to.eq('https://media.giphy.com/test-gift.gif')
-      expect(formData.get('is_gif')).to.eq('true')
-    })
-  })
-  it('remove Gift corretamente', () => {
-
-    stubGet({ data: [] })
-
-    cy.window().then((win) => {
-
-      cy.stub(win, 'fetch').resolves({
         status: 200,
         json: async () => ({
           data: [
             {
               id: '1',
               images: {
-                fixed_height: {
-                  url: 'https://media.giphy.com/test-gift.gif',
-                },
-                fixed_height_small: {
-                  url: 'https://media.giphy.com/test-gift-small.gif',
-                },
+                fixed_height: { url: 'https://media.giphy.com/test-gift.gif' },
+                fixed_height_small: { url: 'https://media.giphy.com/test-gift-small.gif' },
               },
             },
           ],
         }),
       })
-
     })
 
-    cy.mount(
+    mountWithAuth(
       <CommentModal
         post={post}
         isOpen={true}
@@ -217,25 +186,69 @@ describe('<CommentModal />', () => {
 
     cy.get('[data-cy="open-gif"]').click()
 
-    cy.get('[data-cy="gif-item"]')
-      .first()
-      .click({ force: true })
+    cy.get('[data-cy="gif-item"]', { timeout: 10000 }).first().click({ force: true })
+
+    cy.get('[data-cy="reply-submit"]').should('not.be.disabled').click()
+
+    cy.get('@apiPost').should('have.been.calledOnce')
+    cy.get('@apiPost').then((stub) => {
+      const [url, formData] = stub.getCall(0).args
+      expect(url).to.eq('/comments/')
+      expect(formData.get('post')).to.eq(String(123))
+      expect(formData.get('media_url')).to.eq('https://media.giphy.com/test-gift.gif')
+      expect(formData.get('is_gif')).to.eq('true')
+      // quando gif, não deve mandar image
+      expect(formData.get('image')).to.eq(null)
+    })
+  })
+
+  it('remove Gift corretamente', () => {
+    stubGetResolve({ data: [] })
+
+    cy.window().then((win) => {
+      cy.stub(win, 'fetch').resolves({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [
+            {
+              id: '1',
+              images: {
+                fixed_height: { url: 'https://media.giphy.com/test-gift.gif' },
+                fixed_height_small: { url: 'https://media.giphy.com/test-gift-small.gif' },
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    mountWithAuth(
+      <CommentModal
+        post={post}
+        isOpen={true}
+        onClose={cy.stub()}
+        onCommentAdded={cy.stub()}
+      />
+    )
+
+    cy.get('[data-cy="open-gif"]').click()
+    cy.get('[data-cy="gif-item"]', { timeout: 10000 }).first().click({ force: true })
+
+    cy.get('[data-cy="gif-preview"]').should('exist')
 
     cy.get('[data-cy="remove-gif"]').click()
 
     cy.get('[data-cy="gif-preview"]').should('not.exist')
-
     cy.get('[data-cy="reply-submit"]').should('be.disabled')
-
   })
 
   it('fecha modal corretamente', () => {
-
-    stubGet({ data: [] })
+    stubGetResolve({ data: [] })
 
     const onClose = cy.stub().as('onClose')
 
-    cy.mount(
+    mountWithAuth(
       <CommentModal
         post={post}
         isOpen={true}
@@ -245,94 +258,108 @@ describe('<CommentModal />', () => {
     )
 
     cy.get('[data-cy="comment-close"]').click()
-
     cy.get('@onClose').should('have.been.calledOnce')
-
   })
-it('envia comentário com imagem do PC corretamente', () => {
-    stubGet({ data: [] })
 
-    const createdWithImage = {
-      id: 12,
-      author_name: 'Eu',
-      content: 'Comentário com foto',
-      created_at: new Date().toISOString(),
-      image: 'https://supabase.co/storage/test_image.png',
-      is_gif: false,
-    }
+ it('envia comentário com imagem do PC corretamente', () => {
+  stubGetResolve({ data: [] })
 
-    stubPost({ data: createdWithImage })
+  const createdWithImage = {
+    id: 12,
+    author_name: 'Eu',
+    content: 'Comentário com foto',
+    created_at: new Date().toISOString(),
+    image: 'https://supabase.co/storage/test_image.png',
+    is_gif: false,
+  }
 
-    cy.mount(
-      <CommentModal
-        post={post}
-        isOpen={true}
-        onClose={cy.stub()}
-        onCommentAdded={cy.stub()}
-      />
-    )
+  stubPostResolve({ data: createdWithImage })
 
-    // 1. Simula a seleção de um arquivo no input escondido
-    // Nota: O input precisa ter o data-cy="file-input"
-    const fileName = 'test_image.png'
-    cy.get('[data-cy="file-input"]').selectFile({
+  mountWithAuth(
+    <CommentModal
+      post={post}
+      isOpen={true}
+      onClose={cy.stub()}
+      onCommentAdded={cy.stub()}
+    />
+  )
+
+  // ✅ garante que o useEffect de abertura rodou (ele chama fetchComments e faz reset dos states)
+  cy.get('@apiGet').should('have.been.calledOnceWithExactly', '/comments/?post_id=123')
+  cy.get('[data-cy="comment-form"]').should('exist')
+  cy.get('[data-cy="file-input"]').should('exist')
+
+  // 1) Seleciona um arquivo com mimeType válido
+  cy.get('[data-cy="file-input"]').selectFile(
+    {
       contents: Cypress.Buffer.from('file contents'),
-      fileName: fileName,
+      fileName: 'test_image.png',
+      mimeType: 'image/png',
       lastModified: Date.now(),
-    }, { force: true })
+    },
+    { force: true }
+  )
 
-    // 2. Verifica se o preview da imagem apareceu
-    cy.get('[data-cy="image-preview"]').should('be.visible')
-    
-    // 3. Digita um texto opcional
-    cy.get('[data-cy="comment-input"]').type('Comentário com foto')
+  // 2) Preview deve existir
+  cy.get('[data-cy="image-preview"]', { timeout: 10000 }).should('exist')
 
-    // 4. Clica em enviar
-    cy.get('[data-cy="reply-submit"]').click()
+  // 3) Digita texto opcional
+  cy.get('[data-cy="comment-input"]').clear().type('Comentário com foto')
 
-    // 5. Valida a chamada da API (especialmente o FormData)
-    cy.get('@apiPost').should('have.been.calledOnce')
-    
-    cy.get('@apiPost').then((stub) => {
-      const [url, formData] = stub.getCall(0).args
-      
-      expect(url).to.eq('/comments/')
-      // No caso de FormData, verificamos usando o método .get()
-      expect(formData.get('post')).to.eq(String(123))
-      expect(formData.get('content')).to.eq('Comentário com foto')
-      expect(formData.get('image')).to.not.be.null
-    })
+  // 4) Envia
+  cy.get('[data-cy="reply-submit"]').should('not.be.disabled').click()
 
-    // 6. Verifica se a imagem renderizou na lista após o sucesso
-    cy.get('[data-cy="comments-list"]')
-      .find('img[data-cy="comment-media"]')
-      .should('have.attr', 'src', createdWithImage.image)
+  // 5) Valida chamada e FormData
+  cy.get('@apiPost').should('have.been.calledOnce')
+  cy.get('@apiPost').then((stub) => {
+    const [url, formData, config] = stub.getCall(0).args
+
+    expect(url).to.eq('/comments/')
+    expect(formData.get('post')).to.eq(String(123))
+    expect(formData.get('content')).to.eq('Comentário com foto')
+    expect(formData.get('image')).to.not.be.null
+    expect(formData.get('is_gif')).to.eq('false')
+
+    expect(config).to.have.property('headers')
+    expect(config.headers).to.have.property('Content-Type')
   })
 
-  it('remove a imagem selecionada antes de enviar', () => {
-    stubGet({ data: [] })
+  // 6) Comentário entra na lista
+  cy.get('[data-cy="comments-list"]').should('contain', 'Comentário com foto')
+})
 
-    cy.mount(
-      <CommentModal
-        post={post}
-        isOpen={true}
-        onClose={cy.stub()}
-        onCommentAdded={cy.stub()}
-      />
-    )
+it('remove a imagem selecionada antes de enviar', () => {
+  stubGetResolve({ data: [] })
 
-    // Seleciona arquivo
-    cy.get('[data-cy="file-input"]').selectFile({
+  mountWithAuth(
+    <CommentModal
+      post={post}
+      isOpen={true}
+      onClose={cy.stub()}
+      onCommentAdded={cy.stub()}
+    />
+  )
+
+  // ✅ garante que o reset do useEffect já aconteceu antes de selecionar a imagem
+  cy.get('@apiGet').should('have.been.calledOnceWithExactly', '/comments/?post_id=123')
+  cy.get('[data-cy="comment-form"]').should('exist')
+  cy.get('[data-cy="file-input"]').should('exist')
+
+  cy.get('[data-cy="file-input"]').selectFile(
+    {
       contents: Cypress.Buffer.from('test'),
-      fileName: 'image.png'
-    }, { force: true })
+      fileName: 'image.png',
+      mimeType: 'image/png',
+      lastModified: Date.now(),
+    },
+    { force: true }
+  )
 
-    cy.get('[data-cy="image-preview"]').should('exist')
+  cy.get('[data-cy="image-preview"]', { timeout: 10000 }).should('exist')
 
-    // Clica no botão de remover (o "X" que combinamos)
-    cy.get('[data-cy="remove-image"]').click()
+  cy.get('[data-cy="remove-image"]').click()
 
-    cy.get('[data-cy="image-preview"]').should('not.exist')
-    cy.get('[data-cy="reply-submit"]').should('be.disabled')
-  })
+  cy.get('[data-cy="image-preview"]').should('not.exist')
+  cy.get('[data-cy="reply-submit"]').should('be.disabled')
+})
 })

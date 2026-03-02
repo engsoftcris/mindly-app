@@ -3,258 +3,151 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
-from .models import Post
 from PIL import Image
+from .models import User, Profile, Post, Block, Follow, Report, Notification
 
-from .models import User, Profile, Block, Follow, Report, Notification
-
-
-class UserAdminForm(forms.ModelForm):
+# --- FORMULÁRIO DE VALIDAÇÃO PARA O PERFIL ---
+class ProfileAdminForm(forms.ModelForm):
     class Meta:
-        model = User
+        model = Profile
         fields = "__all__"
 
     def clean_profile_picture(self):
         image = self.cleaned_data.get("profile_picture")
-
         if not image:
             return image
-
-        # Fix TAL-26: Verifica se é um novo upload (hasattr content_type)
         if hasattr(image, "content_type"):
-            max_size = 2 * 1024 * 1024
-            if image.size > max_size:
+            if image.size > 2 * 1024 * 1024:
                 raise ValidationError("A imagem deve ter no máximo 2MB.")
-
-            if image.content_type not in ("image/jpeg", "image/png"):
-                raise ValidationError("Formato inválido. Use JPEG ou PNG.")
-
-            try:
-                img = Image.open(image)
-                img.verify()
-            except Exception:
-                raise ValidationError("Arquivo inválido ou corrompido.")
-
+            if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
+                raise ValidationError("Formato inválido. Use JPEG, PNG ou WebP.")
         return image
 
+# --- INLINE PARA EXIBIR PERFIL DENTRO DO USUÁRIO ---
+class ProfileInline(admin.StackedInline):
+    model = Profile
+    form = ProfileAdminForm
+    can_delete = False
+    verbose_name_plural = 'Dados de Perfil (Visual/Bio)'
+    fk_name = 'user'
+    extra = 0
 
+# --- ADMIN DE USUÁRIO (FOCO EM CONTA E ACESSO) ---
 @admin.register(User)
 class CustomUserAdmin(BaseUserAdmin):
     model = User
-    form = UserAdminForm
+    inlines = (ProfileInline, )
 
-    list_display = (
-        "username",
-        "email",
-        "full_name",
-        "image_status",
-        "photo_list_preview",
-        "is_staff",
-        "is_banned",
-        "ban_reason",
-    )
-
-    list_filter = ("image_status", "is_active", "is_staff", "is_banned")
-
-    readonly_fields = ("photo_preview",)
-
-    fieldsets = (
-        (None, {"fields": ("username", "password")}),
-        (
-            "Perfil",
-            {
-                "fields": (
-                    "full_name",
-                    "bio",
-                    "profile_picture",
-                    "photo_preview",
-                    "image_status",
-                    "phone",
-                    )
-            },
-        ),
-        (
-            "Moderação e Banimento",
-            {
-                "fields": (
-                    "is_banned",
-                    "ban_reason",
-                )
-            },
-        ),
-        (
-            "Permissões",
-            {
-                "fields": (
-                    "is_active",
-                    "is_staff",
-                    "is_superuser",
-                    "groups",
-                    "user_permissions",
-                )
-            },
-        ),
-    )
-
-    add_fieldsets = (
-        (
-            None,
-            {
-                "classes": ("wide",),
-                "fields": (
-                    "username",
-                    "email",
-                    "full_name",
-                    "password1",
-                    "password2",
-                ),
-            },
-        ),
-    )
-
+    # Listagem limpa: apenas dados de identificação e segurança
+    list_display = ("username", "email", "full_name", "is_staff", "is_banned")
+    list_filter = ("is_active", "is_staff", "is_banned")
     search_fields = ("username", "email", "full_name")
     ordering = ("username",)
 
-    def photo_list_preview(self, obj):
-        if obj.profile_picture:
-            return format_html(
-                '<img src="{}" style="width:35px;height:35px;border-radius:50%;object-fit:cover;" />',
-                obj.profile_picture.url,
-            )
-        return "-"
+    fieldsets = (
+        (None, {"fields": ("username", "password")}),
+        ("Dados da Conta", {"fields": ("full_name", "email", "phone", "provider", "social_id")}),
+        ("Status de Acesso", {"fields": ("is_banned", "ban_reason", "is_active", "is_staff", "is_superuser")}),
+    )
 
-    photo_list_preview.short_description = "Avatar"
+    actions = ["ban_selected_users", "unban_selected_users"]
+
+    @admin.action(description="Banir usuários selecionados")
+    def ban_selected_users(self, request, queryset):
+        queryset = queryset.exclude(id=request.user.id)
+        count = queryset.update(is_banned=True, ban_reason="Banimento via Admin.")
+        self.message_user(request, f"{count} usuários banidos.")
+
+    @admin.action(description="Remover banimento")
+    def unban_selected_users(self, request, queryset):
+        count = queryset.update(is_banned=False)
+        self.message_user(request, f"Banimento removido de {count} usuários.")
+
+# --- ADMIN DE PERFIL (CENTRAL DE MODERAÇÃO DE FOTOS) ---
+@admin.register(Profile)
+class ProfileAdmin(admin.ModelAdmin):
+    form = ProfileAdminForm
+    # Aqui é onde você aprova as fotos e vê o visual do usuário
+    list_display = ['user', 'photo_preview', 'image_status', 'display_name', 'is_private']
+    list_filter = ['image_status', 'is_private', 'created_at']
+    search_fields = ['user__username', 'display_name', 'user__email']
+    readonly_fields = ('created_at', 'updated_at')
+    
+    actions = ['approve_photos', 'reject_photos']
 
     def photo_preview(self, obj):
         if obj.profile_picture:
             return format_html(
-                '<a href="{0}" target="_blank">'
-                '<img src="{0}" style="max-height:150px;border-radius:8px;border: 2px solid #ddd;" />'
-                "</a>",
-                obj.profile_picture.url,
+                '<img src="{}" style="width:45px;height:45px;border-radius:50%;object-fit:cover;border:1px solid #ddd;" />',
+                obj.profile_picture.url
             )
-        return "Sem imagem"
+        return "Sem foto"
+    photo_preview.short_description = "Preview da Foto"
 
-    photo_preview.short_description = "Visualização da Foto"
-
-    actions = ["approve_images", "reject_images", "ban_selected_users", "unban_selected_users"]
-
-    @admin.action(description="Aprovar fotos selecionadas")
-    def approve_images(self, request, queryset):
+    @admin.action(description="APROVAR fotos selecionadas")
+    def approve_photos(self, request, queryset):
         count = queryset.update(image_status="APPROVED")
-        self.message_user(request, f"{count} usuários aprovados.")
+        self.message_user(request, f"{count} fotos aprovadas.")
 
-    @admin.action(description="Rejeitar fotos selecionadas")
-    def reject_images(self, request, queryset):
+    @admin.action(description="REJEITAR fotos selecionadas")
+    def reject_photos(self, request, queryset):
         count = queryset.update(image_status="REJECTED")
-        self.message_user(request, f"{count} usuários rejeitados.")
-    @admin.action(description="Banir usuários selecionados")
-    def ban_selected_users(self, request, queryset):
-        # Exclui você mesmo da ação para não perder o acesso ao Admin
-        queryset = queryset.exclude(id=request.user.id)
-        count = queryset.update(
-            is_banned=True, 
-            ban_reason="Banimento em massa realizado pelo administrador."
-        )
-        self.message_user(request, f"{count} usuários foram banidos.")
+        self.message_user(request, f"{count} fotos rejeitadas.")
 
-    @admin.action(description="Remover banimento dos selecionados")
-    def unban_selected_users(self, request, queryset):
-        count = queryset.update(is_banned=False)
-        self.message_user(request, f"{count} banimentos foram removidos.")
-
+# --- ADMIN DE POSTS (MODERAÇÃO DE CONTEÚDO) ---
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    # Added 'media_preview' to the list
-    list_display = ('user', 'content_preview', 'media_preview', 'is_deleted', 'created_at')
-    list_filter = ('created_at', 'user','is_deleted')
+    list_display = ('user', 'content_preview', 'media_preview', 'moderation_status', 'is_deleted', 'created_at')
+    list_filter = ('moderation_status', 'is_deleted', 'created_at')
     search_fields = ('content', 'user__username')
 
-    # FAZ O ADMIN VER TUDO (Mesmo os is_deleted=True)
     def get_queryset(self, request):
-        return Post.all_objects.all()
+        return Post.all_objects.all() # Para ver posts deletados (soft delete)
 
-    # Se o Admin usar a ação de deletar do painel, ele apaga de verdade (Hard Delete)
     def delete_model(self, request, obj):
-        obj.delete(force=True)
+        obj.delete(force=True) # Hard delete no Admin
 
-    def delete_queryset(self, request, queryset):
-        # Para a ação em massa no Admin (Delete selected items)
-        for obj in queryset:
-            obj.delete(force=True)
     def content_preview(self, obj):
         return obj.content[:50] + "..." if len(obj.content) > 50 else obj.content
     
-    # New: See if there is a file attached without leaving the list
     def media_preview(self, obj):
         if obj.media:
-            # Check if it's an image or video by extension
-            ext = obj.media.name.lower()
-            if ext.endswith(('.mp4', '.mov', '.avi', '.mkv')):
-                return "🎥 Video File"
-            return "🖼️ Image File"
-        return "No Media"
-    
-    media_preview.short_description = 'Media Type'
+            return format_html('<img src="{}" style="width:30px;height:30px;object-fit:cover;"/>', obj.media.url)
+        return "Texto"
+    media_preview.short_description = 'Mídia'
 
-@admin.register(Profile)
-class ProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'display_name', 'is_private'] # Aqui sim!
-    list_filter = ['is_private']
-
-@admin.register(Block)
-class BlockAdmin(admin.ModelAdmin):
-    list_display = ('blocker', 'blocked', 'created_at')
-    search_fields = ('blocker__username', 'blocked__username')
-    list_filter = ('created_at',)
-
-@admin.register(Follow)
-class FollowAdmin(admin.ModelAdmin):
-    list_display = ('follower', 'following', 'created_at', 'unfollowed_at')
-
+# --- ADMIN DE DENÚNCIAS (REPORTS) ---
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
-    list_display = ('id', 'reporter', 'post_owner', 'reason', 'status', 'created_at')
+    list_display = ('id', 'reporter', 'status', 'reason', 'created_at')
     list_filter = ('status', 'reason', 'created_at')
-    search_fields = ('reporter__username', 'post__user__username', 'description')
-    readonly_fields = ('created_at', 'updated_at', 'post_preview')
-    
-    actions = ['mark_as_resolved', 'mark_as_ignored']
-
-    def post_owner(self, obj):
-        return obj.post.user.username
-    post_owner.short_description = 'Autor do Post'
+    readonly_fields = ('post_preview',)
+    actions = ['resolve_report']
 
     def post_preview(self, obj):
         if obj.post:
-            return format_html(
-                '<strong>Conteúdo do Post:</strong><br>{}<br><br>'
-                '<strong>Media:</strong><br>{}',
-                obj.post.content,
-                format_html('<img src="{}" style="max-height:200px;"/>', obj.post.media.url) if obj.post.media else "Sem media"
-            )
-        return "Post não disponível"
-    post_preview.short_description = 'Detalhes do Conteúdo Denunciado'
+            return format_html('<strong>Post:</strong> {}', obj.post.content)
+        return "Post removido"
 
-    @admin.action(description="Marcar como Resolvido")
-    def mark_as_resolved(self, request, queryset):
-        count = 0
+    @admin.action(description="Resolver: Ocultar Post Denunciado")
+    def resolve_report(self, request, queryset):
         for obj in queryset:
-            if obj.status != 'resolved':
-                # A) Soft delete do post
+            if obj.post:
                 obj.post.is_deleted = True
                 obj.post.save()
-
-                # B) Atualiza status (isso dispara o signal)
-                obj.status = 'resolved'
-                obj.save()
-                count += 1
-
-        self.message_user(request, f"{count} denúncias resolvidas, posts ocultados e usuários notificados.")
-
-    @admin.action(description="Ignorar denúncias")
-    def mark_as_ignored(self, request, queryset):
-        for obj in queryset:
-            obj.status = 'ignored'
+            obj.status = 'resolved'
             obj.save()
-        self.message_user(request, f"{queryset.count()} denúncias ignoradas.")
+        self.message_user(request, "Denúncias resolvidas e posts ocultados.")
+
+# --- OUTROS REGISTROS ---
+@admin.register(Block)
+class BlockAdmin(admin.ModelAdmin):
+    list_display = ('blocker', 'blocked', 'created_at')
+
+@admin.register(Follow)
+class FollowAdmin(admin.ModelAdmin):
+    list_display = ('follower', 'following', 'created_at')
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'sender', 'notification_type', 'is_read', 'created_at')

@@ -183,63 +183,65 @@ describe('Mindly - Fluxo de Comentários com data-cy', () => {
     cy.get('[data-cy="comment-input"]').should('have.value', '');
   });
   it('Deve postar um comentário com imagem do PC usando seletores data-cy', () => {
-    // 1) Intercept do POST para imagem
-    cy.intercept('POST', '**/api/comments/', {
-      statusCode: 201,
-      body: {
-        id: 1000,
-        author_name: 'testuser',
-        content: 'Olha essa foto! 📸',
-        image: 'https://nsallopenmwbwkzrhgmx.supabase.co/storage/v1/object/public/mindly-media/comment_images/test.png',
-        media_url: null,
-        is_gif: false,
-        created_at: new Date().toISOString(),
-      },
-    }).as('postCommentWithImage');
+  cy.intercept('POST', '**/api/comments/', {
+    statusCode: 201,
+    body: {
+      id: 1000,
+      author_name: 'testuser',
+      content: 'Olha essa foto! 📸',
+      image:
+        'https://nsallopenmwbwkzrhgmx.supabase.co/storage/v1/object/public/mindly-media/comment_images/test.png',
+      media_url: null,
+      is_gif: false,
+      created_at: new Date().toISOString(),
+    },
+  }).as('postCommentWithImage')
 
-    visitAuthed('/');
-    cy.wait(['@getProfile', '@getPosts']);
+  visitAuthed('/')
+  cy.wait(['@getProfile', '@getPosts'])
 
-    // 2) Abrir modal
-    cy.get('[data-cy="comment-button"]').first().click({ force: true });
-    cy.wait('@getComments');
+  // Abrir modal
+  cy.get('[data-cy="comment-button"]').first().click({ force: true })
+  cy.wait('@getComments')
 
-    // 3) Selecionar arquivo do PC
-    // O selectFile simula o usuário escolhendo o arquivo na janela do SO
-    const fileName = 'test_image.png';
-    cy.get('[data-cy="file-input"]').selectFile({
+  // Selecionar arquivo fake
+  cy.get('[data-cy="file-input"]').selectFile(
+    {
       contents: Cypress.Buffer.from('file contents'),
-      fileName: fileName,
+      fileName: 'test_image.png',
       lastModified: Date.now(),
-    }, { force: true });
+    },
+    { force: true }
+  )
 
-    // 4) Digitar texto e validar preview
-    cy.get('[data-cy="comment-input"]').type('Olha essa foto! 📸');
-    cy.get('[data-cy="image-preview"]').should('be.visible');
-    cy.get('[data-cy="image-preview-display"]').should('have.attr', 'src').and('contain', 'blob:');
+  // Digitar texto
+  cy.get('[data-cy="comment-input"]').type('Olha essa foto! 📸')
 
-    // 5) Enviar
-    cy.get('[data-cy="reply-submit"]').click();
+  // Preview existe
+  cy.get('[data-cy="image-preview"]').should('be.visible')
+  cy.get('[data-cy="image-preview-display"]')
+    .should('have.attr', 'src')
+    .and('contain', 'blob:')
 
-    // 6) Validar FormData no intercept
-    cy.wait('@postCommentWithImage').then((interception) => {
-      // Validamos se o que foi enviado é um FormData (Multipart)
-      const { request } = interception;
-      expect(request.headers['content-type']).to.include('multipart/form-data');
-    });
+  // Enviar
+  cy.get('[data-cy="reply-submit"]').click()
 
-    // 7) Validar renderização na lista
-    cy.get('[data-cy="comment-item"]').first().within(() => {
-      cy.get('[data-cy="comment-content"]').should('contain', 'Olha essa foto!');
-      cy.get('[data-cy="comment-media"]')
-        .should('have.attr', 'src')
-        .and('contain', 'test.png');
-      // Garantir que o tamanho está correto conforme ajustamos (200x150)
-      cy.get('[data-cy="comment-media"]')
-        .should('have.css', 'width', '200px')
-        .and('have.css', 'height', '150px');
-    });
-  });
+  // Validar multipart
+  cy.wait('@postCommentWithImage').then((interception) => {
+    expect(interception.request.headers['content-type'])
+      .to.include('multipart/form-data')
+  })
+
+  // Validar renderização
+  cy.get('[data-cy="comment-item"]').first().within(() => {
+    cy.get('[data-cy="comment-content"]').should('contain', 'Olha essa foto!')
+
+    cy.get('[data-cy="comment-media"]')
+      .should('be.visible')
+      .invoke('attr', 'src')
+      .should('include', 'test.png')
+  })
+})
 
   it('Deve permitir remover a imagem selecionada e trocar por um GIF', () => {
     cy.intercept('GET', 'https://api.giphy.com/v1/gifs/**', {

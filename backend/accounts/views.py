@@ -1,13 +1,15 @@
 from rest_framework import generics, status, viewsets, permissions
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 from django.utils.timezone import now
-from datetime import timedelta
-from .models import Comment
-from .serializers import CommentSerializer
+from datetime import timedelta, datetime
+from django.http import JsonResponse
+from django.db.models import Q
+import os
 
 # Ferramentas do Social Auth
 from social_django.utils import load_strategy, load_backend
@@ -16,14 +18,10 @@ from social_core.exceptions import MissingBackend, AuthTokenError
 # JWT
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import MyTokenObtainPairSerializer 
 from rest_framework.pagination import PageNumberPagination
-from django.http import JsonResponse
-from datetime import datetime
-from django.db.models import Q
 
 # Seus modelos e serializers
-from .models import Profile, User, Block, Post, Follow, Like, Notification, Report
+from .models import Profile, User, Block, Post, Follow, Like, Notification, Report, Comment
 from .serializers import (
     GoogleAuthSerializer,
     PostSerializer,
@@ -33,7 +31,9 @@ from .serializers import (
     ReportCreateSerializer,
     ReportAdminSerializer,
     ModerationUserSerializer,
-    FollowUserSerializer
+    FollowUserSerializer,
+    CommentSerializer,
+    MyTokenObtainPairSerializer
 )
 
 # --- ROOT API ---
@@ -80,15 +80,8 @@ class GoogleLoginView(APIView):
         
         return Response({'error': 'Erro desconhecido ao autenticar'}, status=status.HTTP_400_BAD_REQUEST)
 
-def save_full_name(backend, details, response, user=None, *args, **kwargs):
-    if backend.name == 'google-oauth2':
-        full_name = response.get('name') or details.get('fullname')
-        if full_name:
-            if user:
-                user.full_name = full_name
-                user.save()
-            details['full_name'] = full_name
-    return {'details': details}
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
 
 # --- PAGINATION ---
 class FeedPagination(PageNumberPagination):
@@ -96,7 +89,7 @@ class FeedPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 50
 
-# --- PROFILES & SOCIAL LOGIC (TAL-12 & TAL-14) ---
+# --- PROFILES & SOCIAL LOGIC ---
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
@@ -107,17 +100,21 @@ class ProfileViewSet(viewsets.ModelViewSet):
         blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
         blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
         
-        # TAL-24: Adicionamos o filtro para remover usuários banidos da lista
         return Profile.objects.exclude(
             Q(user__id__in=blocked_ids) | 
             Q(user__id__in=blocked_by_ids) |
-            Q(user__is_banned=True) # <--- Filtro de Banimento
+            Q(user__is_banned=True)
         ).order_by('user__username')
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+    
+    def get_object(self):
+        if self.action == 'block_user':
+            return Profile.objects.get(pk=self.kwargs.get('pk'))
+        return super().get_object()
 
     @action(detail=True, methods=['post'], url_path='block')
     def block_user(self, request, pk=None):
@@ -134,10 +131,10 @@ class ProfileViewSet(viewsets.ModelViewSet):
             block_exists.delete()
             return Response({"message": "Utilizador desbloqueado."}, status=200)
         
-        # Criar bloqueio
         Block.objects.create(blocker=me, blocked=user_to_block)
+        Follow.objects.filter(follower=me, following=user_to_block).delete()
+        Follow.objects.filter(follower=user_to_block, following=me).delete()
         
-        # TAL-14: Ao bloquear, removemos as relações de follow de ambos os lados
         me.following.remove(user_to_block)
         user_to_block.following.remove(me)
         
@@ -147,15 +144,11 @@ class ProfileViewSet(viewsets.ModelViewSet):
     def connections(self, request, pk=None):
         profile = self.get_object()
         connection_type = request.query_params.get('type', 'followers')
-
         if connection_type == 'following':
-            # Quem o dono deste perfil segue
             users = profile.user.following.all()
         else:
-            # Quem segue o dono deste perfil
             users = profile.user.followers.all()
 
-        # Importante: Importar FollowUserSerializer no topo do arquivo
         serializer = FollowUserSerializer(users, many=True, context={'request': request})
         return Response(serializer.data)
     
@@ -166,86 +159,45 @@ class ProfileViewSet(viewsets.ModelViewSet):
         me = request.user
 
         if me == target_user:
-            return Response(
-                {"error": "You cannot follow yourself."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "You cannot follow yourself."}, status=400)
 
-        # Verificar bloqueio
-        if Block.objects.filter(
-            Q(blocker=target_user, blocked=me) |
-            Q(blocker=me, blocked=target_user)
-        ).exists():
-            return Response(
-                {"error": "Action unavailable due to account restrictions."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if Block.objects.filter(Q(blocker=target_user, blocked=me) | Q(blocker=me, blocked=target_user)).exists():
+            return Response({"error": "Action unavailable."}, status=403)
 
-        follow_obj = Follow.objects.filter(
-            follower=me,
-            following=target_user
-        ).first()
+        follow_obj = Follow.objects.filter(follower=me, following=target_user).first()
 
-        # CASO A: Já segue → UNFOLLOW
         if follow_obj and follow_obj.unfollowed_at is None:
             follow_obj.unfollowed_at = now()
             follow_obj.save(update_fields=["unfollowed_at"])
+            return Response({"is_following": False, "message": "Unfollowed."}, status=200)
 
-            return Response(
-                {
-                    "is_following": False,
-                    "message": "You have unfollowed this user. Please wait 5 minutes before following again."
-                },
-                status=status.HTTP_200_OK
-            )
-
-        # CASO B: Já existia mas estava unfollowed → verificar cooldown
         if follow_obj and follow_obj.unfollowed_at is not None:
-            wait_time = timedelta(minutes=5)
+            if now() < follow_obj.unfollowed_at + timedelta(minutes=5):
+                return Response({"error": "Wait 5 minutes."}, status=400)
 
-            if now() < follow_obj.unfollowed_at + wait_time:
-                diff = (follow_obj.unfollowed_at + wait_time) - now()
-                m, s = divmod(int(diff.total_seconds()), 60)
-                return Response(
-                    {
-                        "error": f"Please wait {m}m {s}s before following again."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Cooldown passou → reativar
             follow_obj.unfollowed_at = None
             follow_obj.save(update_fields=["unfollowed_at"])
+            return Response({"is_following": True, "message": "Following again."}, status=200)
 
-            return Response(
-                {
-                    "is_following": True,
-                    "message": "You are now following this user."
-                },
-                status=status.HTTP_200_OK
-            )
+        Follow.objects.create(follower=me, following=target_user)
+        return Response({"is_following": True, "message": "Following."}, status=201)
+    
+    @action(detail=False, methods=['get'], url_path='blocked-users')
+    def blocked_users(self, request):
+        blocked_relations = Block.objects.filter(blocker=request.user)
+        profiles = Profile.objects.filter(user__in=blocked_relations.values('blocked'))
+        serializer = self.get_serializer(profiles, many=True)
+        return Response(serializer.data)    
 
-        # CASO C: Nunca existiu → criar novo follow
-        Follow.objects.create(
-            follower=me,
-            following=target_user
-        )
+# accounts/views.py
 
-        return Response(
-            {
-                "is_following": True,
-                "message": "You are now following this user."
-            },
-            status=status.HTTP_201_CREATED
-        )
-
-# Esta view continua útil para o "Meu Perfil" do usuário logado
+# Adicione isso logo antes da UserProfilePictureView
 class UserProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = ProfileSerializer 
+    serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
-        return self.request.user.profile
+        return self.request.user
     
     def get_serializer_context(self):
         return {"request": self.request}
@@ -263,7 +215,6 @@ class PostViewSet(viewsets.ModelViewSet):
         all_blocks = list(blocked_users) + list(blocked_by)
 
         return Post.objects.filter(
-            # Só posts de quem NÃO está banido e o post NÃO está deletado
             user__is_banned=False, 
             is_deleted=False
         ).filter(
@@ -273,45 +224,30 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    # NOVO: Garantir que só o dono apaga e que faz Soft Delete
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        
-        # 1. Verificação de dono
         if instance.user != request.user:
-            return Response(
-                {"error": "Não tens permissão para apagar este post."}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        # 2. Executa o Soft Delete (nosso método customizado no Model)
+            return Response({"error": "Sem permissão."}, status=403)
         instance.delete()
-        
-        return Response(
-            {"message": "Post removido com sucesso (Soft Delete)."}, 
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response({"message": "Removido."}, status=204)
+    
+    def perform_update(self, serializer):
+        if serializer.instance.user != self.request.user:
+            raise PermissionDenied("Não podes editar.")
+        serializer.save()
+
     @action(detail=True, methods=['post'], url_path='like')
     def toggle_like(self, request, pk=None):
         post = self.get_object()
         user = request.user
-        
-        # Check if the like already exists
         like_queryset = Like.objects.filter(user=user, post=post)
-        
         if like_queryset.exists():
-            # UNLIKE: If it exists, remove it
             like_queryset.delete()
             is_liked = False
         else:
-            # LIKE: If it doesn't exist, create it
             Like.objects.create(user=user, post=post)
             is_liked = True
-            
-        return Response({
-            'is_liked': is_liked,
-            'likes_count': post.likes.count()
-        }, status=status.HTTP_200_OK)
+        return Response({'is_liked': is_liked, 'likes_count': post.likes.count()}, status=200)
         
 class HybridFeedView(generics.ListAPIView):
     serializer_class = PostSerializer
@@ -322,11 +258,8 @@ class HybridFeedView(generics.ListAPIView):
         user = self.request.user
         following_users = user.following.all()
         blocked_by = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
-        
         return Post.objects.filter(
-            user__in=following_users,
-            user__is_banned=False, # <--- Garante que banidos sumam do feed
-            is_deleted=False
+            user__in=following_users, user__is_banned=False, is_deleted=False
         ).exclude(user__id__in=blocked_by).distinct().order_by('-created_at')
 
 class UserPostsListView(generics.ListAPIView):
@@ -337,44 +270,40 @@ class UserPostsListView(generics.ListAPIView):
     def get_queryset(self):
         profile_id = self.kwargs.get('pk')
         user = self.request.user
-
         try:
             profile = Profile.objects.get(id=profile_id)
-            # Se o dono do perfil estiver banido, ninguém vê nada (exceto talvez ele mesmo, mas ele não consegue logar)
-            if profile.user.is_banned:
-                return Post.objects.none()
-        except Profile.DoesNotExist:
-            return Post.objects.none()
+            if profile.user.is_banned: return Post.objects.none()
+        except Profile.DoesNotExist: return Post.objects.none()
 
-        # 2. Filtrar Posts
-        queryset = Post.objects.filter(
-            user__profile__id=profile_id
-        ).exclude(moderation_status="REJECTED")
+        queryset = Post.objects.filter(user__profile__id=profile_id).exclude(moderation_status="REJECTED")
         
-        # 3. Lógica de Privacidade
         is_owner = profile.user == user
         is_follower = user.following.filter(id=profile.user.id).exists()
-
-        if profile.is_private and not is_owner and not is_follower:
+        if profile.is_private and not is_owner and not is_follower: 
             return Post.objects.none()
 
-        # 4. Filtros de Mídia (TAL-20)
+        # --- NOVA LÓGICA DE FILTRO POR TIPO (TAL-20) ---
         media_only = self.request.query_params.get('media_only')
-        content_type = self.request.query_params.get('type')
+        media_type = self.request.query_params.get('type') # image ou video
 
         if media_only == 'true':
             queryset = queryset.exclude(media__isnull=True).exclude(media='')
-
-        if content_type:
-            exts = {
-                'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-                'video': ['.mp4', '.mov', '.avi', '.mkv', '.webm']
-            }.get(content_type, [])
             
-            q_objects = Q()
-            for ext in exts:
-                q_objects |= Q(media__icontains=ext)
-            queryset = queryset.filter(q_objects)
+            if media_type == 'image':
+                # Filtra pelas extensões de imagem comuns
+                queryset = queryset.filter(
+                    Q(media__icontains='.jpg') | 
+                    Q(media__icontains='.jpeg') | 
+                    Q(media__icontains='.png') | 
+                    Q(media__icontains='.webp')
+                )
+            elif media_type == 'video':
+                # Filtra pelas extensões de vídeo comuns
+                queryset = queryset.filter(
+                    Q(media__icontains='.mp4') | 
+                    Q(media__icontains='.mov') | 
+                    Q(media__icontains='.avi')
+                )
 
         return queryset.order_by('-created_at')
     
@@ -383,113 +312,78 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        # Filtra comentários por post se o ID do post vier na URL
-        # Exemplo: /api/comments/?post_id=1
         post_id = self.request.query_params.get('post_id')
         if post_id:
             return Comment.objects.filter(post_id=post_id).order_by('-created_at')
         return Comment.objects.all()
 
     def perform_create(self, serializer):
-        # Associa automaticamente o autor ao usuário logado
         serializer.save(author=self.request.user) 
 
+    # --- Only the AUTHOR can edit ---
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        if instance.author != self.request.user:
+            raise PermissionDenied("You do not have permission to edit this comment.")
+        serializer.save()
+
+    # --- Author OR Post Owner can delete ---
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if instance.author == user or instance.post.user == user:
+            instance.delete()
+        else:
+            raise PermissionDenied("You do not have authority to remove this comment.")
+
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet apenas de leitura para notificações.
-    Ações: list, retrieve e o custom action mark_as_read.
-    """
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
-
     def get_queryset(self):
-        # SEGURANÇA: Só retorna notificações do próprio utilizador logado
         return Notification.objects.filter(recipient=self.request.user)
 
-    @action(detail=False, methods=['post'])
-    def mark_all_as_read(self, request):
-        """Marca todas as notificações do utilizador como lidas."""
-        self.get_queryset().update(is_read=True)
-        return Response({'status': 'notifications marked as read'}, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=['post'])
+    # No seu views.py, dentro do NotificationViewSet
+    @action(detail=True, methods=['post'], url_path='mark-as-read', url_name='mark-as-read')
     def mark_as_read(self, request, pk=None):
         """Marca uma notificação específica como lida."""
         notification = self.get_object()
         notification.is_read = True
         notification.save()
-        return Response({'status': 'notification marked as read'}, status=status.HTTP_200_OK)   
+        return Response({'status': 'notification marked as read'}, status=status.HTTP_200_OK)
 
-# VIEW PARA DENÚNCIAS
 class ReportViewSet(viewsets.ModelViewSet):
     queryset = Report.objects.all()
-    
     def get_serializer_class(self):
-        if self.action == 'create':
-            return ReportCreateSerializer
-        return ReportAdminSerializer
-
+        return ReportCreateSerializer if self.action == 'create' else ReportAdminSerializer
     def get_permissions(self):
-        if self.action == 'create':
-            return [permissions.IsAuthenticated()]
-        # Adicionei os parênteses aqui para retornar a INSTÂNCIA
-        return [permissions.IsAdminUser()] 
-    # --- NOVO MÉTODO PARA EVITAR ERRO NO CONSOLE ---
+        return [permissions.IsAuthenticated()] if self.action == 'create' else [permissions.IsAdminUser()]
+
     def create(self, request, *args, **kwargs):
         post_id = request.data.get('post')
-        user = request.user
-
-        # 1. Verificar se JÁ EXISTE uma denúncia
-        if Report.objects.filter(reporter=user, post_id=post_id).exists():
-            # Mudamos para 400 para o teste (e o frontend) saberem que foi um erro de validação
-            return Response(
-                {
-                    "detail": "Já denunciaste esta publicação.", 
-                    "already_reported": True
-                }, 
-                status=status.HTTP_400_BAD_REQUEST # <--- CORRIGIDO PARA 400
-            )
-
-        # 2. Se não existir, segue o fluxo normal
+        if Report.objects.filter(reporter=request.user, post_id=post_id).exists():
+            return Response({"detail": "Já denunciaste."}, status=400)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(reporter=user)
-        
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        serializer.save(reporter=request.user)
+        return Response(serializer.data, status=201)
     
-# VIEW PARA MODERAÇÃO DE AVATARES (TAL-22)
 class ModerationViewSet(viewsets.ViewSet):
-    # Aqui, como é um atributo da classe, usamos apenas a CLASSE (sem parênteses)
     permission_classes = [permissions.IsAdminUser]
 
     @action(detail=False, methods=['get'])
     def pending_users(self, request):
-        users = User.objects.filter(image_status='PENDING')
-        serializer = ModerationUserSerializer(users, many=True)
+        # Ajustado para filtrar no Profile
+        profiles = Profile.objects.filter(image_status='PENDING')
+        # Precisamos de um serializer que entenda que queremos o Profile aqui
+        serializer = ProfileSerializer(profiles, many=True, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def approve_user(self, request, pk=None):
         try:
-            user = User.objects.get(pk=pk)
-            user.image_status = 'APPROVED'
-            user.save()
-            return Response({'status': 'user image approved'})
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=404)
-
-    @action(detail=True, methods=['post'])
-    def reject_user(self, request, pk=None):
-        try:
-            user = User.objects.get(pk=pk)
-            user.image_status = 'REJECTED'
-            user.save()
-            return Response({'status': 'user image rejected'})
-        except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=404)
-        
-from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import MyTokenObtainPairSerializer # Vamos criar este agora
-
-class MyTokenObtainPairView(TokenObtainPairView):
-    serializer_class = MyTokenObtainPairSerializer
+            # pk here is the Profile ID
+            profile = Profile.objects.get(pk=pk)
+            profile.image_status = 'APPROVED'
+            profile.save()
+            return Response({'status': 'approved'})
+        except Profile.DoesNotExist:
+            return Response({'error': 'Profile not found'}, status=404)

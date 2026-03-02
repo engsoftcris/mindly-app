@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }) => {
       minWait
     ]);
       setUser(response.data);
+      localStorage.setItem('user', JSON.stringify(response.data));
     } catch {
       logout();
     } finally {

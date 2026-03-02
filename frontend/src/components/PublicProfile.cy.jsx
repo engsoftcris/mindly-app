@@ -19,32 +19,38 @@ describe('<PublicProfile /> - Teste de Componente Isolado', () => {
     )
   }
 
-  it('Deve mostrar botão "Edit Profile" e navegar ao ser o DONO do perfil', () => {
-    const myId = 'cristiano-123';
-    
-    cy.intercept('GET', `**/accounts/profiles/${myId}/`, {
-      statusCode: 200,
-      body: {
-        id: myId, // ID igual ao do currentUser no mount
-        username: 'cristiano',
-        display_name: 'Cristiano Tobias',
-        is_restricted: false,
-        posts: []
-      }
-    }).as('getOwnProfile')
+ it('Deve mostrar botão "Edit Profile" e navegar ao ser o DONO do perfil', () => {
+  // 1. Defina UM ÚNICO ID para ser o ID do Perfil (o UUID que vai na URL)
+  const myProfileId = 'cristiano-profile-uuid-123';
 
-    mountComponent(myId, { id: myId, username: 'cristiano' })
+  cy.intercept('GET', `**/accounts/profiles/${myProfileId}/`, {
+    statusCode: 200,
+    body: {
+      id: myProfileId,
+      user_id: 123,
+      username: 'cristiano',
+      display_name: 'Cristiano Tobias',
+      is_restricted: false,
+      posts: [],
+    }
+  }).as('getOwnProfile');
 
-    // 1. Verifica se o botão Edit aparece
-    cy.contains('button', 'Edit Profile').should('be.visible')
-    
-    // 2. Verifica se NÃO aparece o botão de Follow (Dono não se segue)
-    cy.get('button').contains('Follow').should('not.exist')
+  // 2. IMPORTANTE: O segundo parâmetro (currentUser) DEVE ter o mesmo ID que a URL
+  // porque o isOwner compara loggedInId === id (da URL)
+  mountComponent(myProfileId, { 
+    id: myProfileId, // ID do logado igual ao da URL
+    username: 'cristiano' 
+  });
 
-    // 3. Testa o clique e a navegação para /settings
-    cy.contains('button', 'Edit Profile').click()
-    cy.get('[data-cy="settings-page"]').should('exist')
-  })
+  cy.wait('@getOwnProfile');
+
+  // Agora o isOwner será TRUE e o botão vai aparecer
+  cy.contains('button', 'Edit Profile', { timeout: 10000 }).should('be.visible');
+  cy.contains('button', /follow/i).should('not.exist');
+
+  cy.contains('button', 'Edit Profile').click();
+  cy.get('[data-cy="settings-page"]').should('exist');
+});
 
   it('Deve mostrar "FollowButton" e "UserActionMenu" ao visitar perfil de OUTRO', () => {
     const otherId = 'outro-usuario-456';

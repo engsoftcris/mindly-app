@@ -3,9 +3,18 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
 
+const getUserId = (user) => {
+  if (!user) return null;
+  // Tenta todas as possibilidades que o seu backend costuma mandar
+  return user.id || user.user_id || user.uuid || user.pk || null;
+};
+
 const Navbar = () => {
   const { user, logout } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  const userId = getUserId(user);
+
+  
 
   useEffect(() => {
     if (user) {
@@ -75,7 +84,7 @@ const Navbar = () => {
             {/* LINK DO PERFIL AJUSTADO: Agora envia para /profile/ID_DO_USUARIO */}
             <Link
               data-cy="navbar-profile-link"
-              to={`/profile/${user.id}`} 
+              to={userId ? `/profile/${userId}` : "#"} 
               className="flex items-center gap-4 text-gray-300 hover:text-blue-400 transition font-bold text-lg p-3 hover:bg-gray-900 rounded-full"
             >
               <span data-cy="navbar-profile-icon" className="text-2xl">👤</span>
