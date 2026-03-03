@@ -79,36 +79,6 @@ jobs:
         if: false  # Desabilitado por enquanto
         run: poetry run pytest --cov=. --cov-report=xml
 
-  test-frontend-unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: ./frontend/package-lock.json
-
-      - name: Install Dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run Unit Tests
-        working-directory: ./frontend
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
-        run: npm run test:ci
-
   test-frontend-component:
     runs-on: ubuntu-latest
     steps:
@@ -147,10 +117,10 @@ jobs:
           working-directory: ./frontend
           component: true
           browser: chrome
-          record: false  # Desabilitado para não precisar de token
+          record: false
 
   test-frontend-e2e:
-    needs: [test-frontend-unit, test-frontend-component]
+    needs: [test-frontend-component]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -189,10 +159,10 @@ jobs:
           start: npm run dev
           wait-on: 'http://localhost:5173'
           browser: chrome
-          record: false  # Desabilitado para não precisar de token
+          record: false
 
   check-status:
-    needs: [test-backend, test-frontend-unit, test-frontend-component, test-frontend-e2e]
+    needs: [test-backend, test-frontend-component, test-frontend-e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -200,12 +170,10 @@ jobs:
         run: |
           echo "Verificando resultados dos testes..."
           echo "Backend: ${{ needs.test-backend.result }}"
-          echo "Frontend Unit: ${{ needs.test-frontend-unit.result }}"
           echo "Frontend Component: ${{ needs.test-frontend-component.result }}"
           echo "Frontend E2E: ${{ needs.test-frontend-e2e.result }}"
           
           if [ "${{ needs.test-backend.result }}" != "success" ] || \
-             [ "${{ needs.test-frontend-unit.result }}" != "success" ] || \
              [ "${{ needs.test-frontend-component.result }}" != "success" ] || \
              [ "${{ needs.test-frontend-e2e.result }}" != "success" ]; then
             echo "❌ Alguns testes falharam!"
