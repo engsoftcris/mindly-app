@@ -1,7 +1,8 @@
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { BrowserRouter } from 'react-router-dom';
 import SettingsPage from './SettingsPage';
-import AuthContext from '../context/AuthContext';
+import AuthContext, { AuthProvider } from '../context/AuthContext';
+
 
 describe('<SettingsPage /> - Teste de Configurações', () => {
   let mockAuthContext;
@@ -104,8 +105,13 @@ describe('<SettingsPage /> - Teste de Configurações', () => {
 });
 
 it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)', () => {
-  localStorage.removeItem('refresh');
   localStorage.setItem('access', 'fake-token');
+  localStorage.removeItem('refresh');
+
+  cy.intercept('GET', '**/api/accounts/profile/**', {
+    statusCode: 200,
+    body: { id: '1', username: 'testuser', display_name: 'Test' },
+  }).as('getSettings');
 
   cy.intercept('PATCH', '**/api/accounts/profile/**', {
     statusCode: 401,
@@ -114,12 +120,12 @@ it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)'
 
   cy.mount(
     <MemoryRouter initialEntries={['/settings']}>
-      <AuthContext.Provider value={mockAuthContext}>
+      <AuthProvider>
         <Routes>
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/login" element={<div data-cy="login-page">Login</div>} />
         </Routes>
-      </AuthContext.Provider>
+      </AuthProvider>
     </MemoryRouter>
   );
 
@@ -128,11 +134,8 @@ it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)'
 
   cy.wait('@updateUnauthorized').its('response.statusCode').should('eq', 401);
 
-  // ✅ valida a rota, não window.location
-  cy.location('pathname', { timeout: 10000 }).should('eq', '/login');
-  cy.get('[data-cy="login-page"]').should('be.visible');
+  cy.get('[data-cy="login-page"]', { timeout: 10000 }).should('be.visible');
 
-  // tokens (se o seu fluxo realmente limpa aqui)
   cy.window().then((win) => {
     expect(win.localStorage.getItem('access')).to.be.null;
     expect(win.localStorage.getItem('refresh')).to.be.null;
