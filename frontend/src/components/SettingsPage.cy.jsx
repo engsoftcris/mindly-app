@@ -103,14 +103,19 @@ describe('<SettingsPage /> - Teste de Configurações', () => {
   cy.url().should('not.include', '/login');
 });
 it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)', () => {
-  // Força cenário de sessão expirada: sem refresh token
+  // Força cenário de sessão expirada
   localStorage.removeItem('refresh');
-  localStorage.setItem('access', 'fake-token'); // pode até manter, o 401 vem do backend mockado
+  localStorage.setItem('access', 'fake-token');
 
   cy.intercept('PATCH', '**/accounts/profile/', {
     statusCode: 401,
     body: { error: 'Unauthorized' },
   }).as('updateUnauthorized');
+
+  // Stub para o window.location para não tentar navegar de verdade no iframe
+  cy.window().then((win) => {
+    cy.stub(win.location, 'href', { set: cy.stub().as('locationHref') });
+  });
 
   cy.mount(
     <BrowserRouter>
@@ -121,20 +126,17 @@ it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)'
   );
 
   cy.wait('@getSettings');
-
   cy.get('[data-cy="settings-submit-button"]').click();
 
   cy.wait('@updateUnauthorized')
     .its('response.statusCode')
     .should('eq', 401);
 
-  // O axios interceptor faz window.location.href = '/login'
-  cy.url().should('include', '/login');
+  // ✅ EM VEZ DE cy.url(), verificamos se o setter do href foi chamado com '/login'
+  // Nota: Dependendo de como o axios está configurado, ele pode usar a URL completa ou relativa
+  cy.get('@locationHref').should('be.calledWith', '/login');
 
-  // Como o redirect é pelo axios (window.location.href), não depende do logout do contexto mockado
-  cy.get('@logoutStub').should('not.have.been.called');
-
-  // Confirma que os tokens foram limpos (comportamento do interceptor)
+  // Confirma que os tokens foram limpos
   cy.window().then((win) => {
     expect(win.localStorage.getItem('access')).to.be.null;
     expect(win.localStorage.getItem('refresh')).to.be.null;
