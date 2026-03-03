@@ -102,41 +102,37 @@ describe('<SettingsPage /> - Teste de Configurações', () => {
   cy.get('@logoutStub').should('not.have.been.called');
   cy.url().should('not.include', '/login');
 });
+
 it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)', () => {
-  // Força cenário de sessão expirada
   localStorage.removeItem('refresh');
   localStorage.setItem('access', 'fake-token');
 
-  cy.intercept('PATCH', '**/accounts/profile/', {
+  cy.intercept('PATCH', '**/api/accounts/profile/**', {
     statusCode: 401,
     body: { error: 'Unauthorized' },
   }).as('updateUnauthorized');
 
-  // Stub para o window.location para não tentar navegar de verdade no iframe
-  cy.window().then((win) => {
-    cy.stub(win.location, 'href', { set: cy.stub().as('locationHref') });
-  });
-
   cy.mount(
-    <BrowserRouter>
+    <MemoryRouter initialEntries={['/settings']}>
       <AuthContext.Provider value={mockAuthContext}>
-        <SettingsPage />
+        <Routes>
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/login" element={<div data-cy="login-page">Login</div>} />
+        </Routes>
       </AuthContext.Provider>
-    </BrowserRouter>
+    </MemoryRouter>
   );
 
   cy.wait('@getSettings');
   cy.get('[data-cy="settings-submit-button"]').click();
 
-  cy.wait('@updateUnauthorized')
-    .its('response.statusCode')
-    .should('eq', 401);
+  cy.wait('@updateUnauthorized').its('response.statusCode').should('eq', 401);
 
-  // ✅ EM VEZ DE cy.url(), verificamos se o setter do href foi chamado com '/login'
-  // Nota: Dependendo de como o axios está configurado, ele pode usar a URL completa ou relativa
-  cy.get('@locationHref').should('be.calledWith', '/login');
+  // ✅ valida a rota, não window.location
+  cy.location('pathname', { timeout: 10000 }).should('eq', '/login');
+  cy.get('[data-cy="login-page"]').should('be.visible');
 
-  // Confirma que os tokens foram limpos
+  // tokens (se o seu fluxo realmente limpa aqui)
   cy.window().then((win) => {
     expect(win.localStorage.getItem('access')).to.be.null;
     expect(win.localStorage.getItem('refresh')).to.be.null;
