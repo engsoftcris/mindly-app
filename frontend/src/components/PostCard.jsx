@@ -1,5 +1,5 @@
 // frontend/src/components/PostCard.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { postsAPI } from '../api/axios';
 import { toast } from 'react-toastify';
@@ -131,6 +131,7 @@ const PostCard = ({
           }
           className="w-12 h-12 rounded-full object-cover border border-gray-800"
           alt="avatar"
+          loading="lazy"
         />
       </Link>
 
@@ -215,11 +216,13 @@ const PostCard = ({
               <video
                 src={mediaUrl}
                 controls={!isPending}
+                preload="metadata"
                 className={`max-h-96 w-full object-cover ${isPending ? 'blur-2xl opacity-40' : ''}`}
               />
             ) : (
               <img
                 src={mediaUrl}
+                loading="lazy"
                 className={`max-h-96 w-full object-cover ${isPending ? 'blur-2xl opacity-40' : ''}`}
                 alt="Post media"
               />
@@ -253,4 +256,4 @@ const PostCard = ({
   );
 };
 
-export default PostCard;
+export default memo(PostCard);

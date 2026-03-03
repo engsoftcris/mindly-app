@@ -35,6 +35,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'reports', ReportViewSet, basename='report')
 router.register(r'moderation', ModerationViewSet, basename='moderation')
 
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     

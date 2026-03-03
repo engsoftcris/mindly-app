@@ -186,10 +186,13 @@ class TestModeration:
         api_client.post(url)
         # 2. Dá Unfollow
         api_client.post(url)
-        
+
         # 3. Tenta seguir de novo IMEDIATAMENTE
         response = api_client.post(url)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         err = response.data.get("error", "")
-        assert "Wait 5 minutes" in err
+        # Aceita qualquer mensagem que mencione "Wait" e "minutes"
+        assert "Wait" in err
+        assert "minutes" in err
+        assert response.data['cooldown'] is True

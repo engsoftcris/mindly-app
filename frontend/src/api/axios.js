@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { toast } from 'react-toastify'; // 1. Importa o toast
+import { toast } from 'react-toastify';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -15,18 +15,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 🛡️ 2. Adiciona o interceptor de resposta para mostrar o Toast
+// Interceptor de resposta para mostrar Toast
 api.interceptors.response.use(
   (response) => response, 
   (error) => {
-    // Se a API retornar 403 e tiver o nosso motivo de banimento
     if (error.response?.status === 403 && error.response.data?.ban_reason) {
       toast.error(`Acesso negado: ${error.response.data.ban_reason}`, {
-        toastId: 'ban-toast', // Evita que apareçam vários toasts iguais
+        toastId: 'ban-toast',
       });
       
-      // Limpamos o localStorage para garantir que os PrivateRoutes 
-      // detectem a perda de acesso e redirecionem
       localStorage.removeItem('access');
       localStorage.removeItem('refresh');
     }
@@ -40,14 +37,10 @@ export const profileAPI = {
 };
 
 export const postsAPI = {
-  create: (data) => api.post('/posts/', data),
+  create: (formData) => api.post('/posts/', formData), 
   list: () => api.get('/posts/'),
-  // Ajuste aqui: forçamos o Content-Type para JSON
   update: (id, formData) => api.patch(`/posts/${id}/`, formData, {
-    headers: {
-      // Deixamos o navegador definir o boundary do Multipart automaticamente
-      'Content-Type': 'multipart/form-data',
-    }
+    headers: { 'Content-Type': undefined }
   }),
   delete: (id) => api.delete(`/posts/${id}/`),
   getFeed: (urlOrPage = '/accounts/feed/') => {

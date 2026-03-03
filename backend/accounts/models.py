@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
@@ -8,6 +10,8 @@ from django.utils.timezone import now
 from django.core.validators import MaxLengthValidator
 from django.conf import settings
 import uuid
+from django.core.cache import cache
+
 
 
 class PostManager(models.Manager):
@@ -56,12 +60,47 @@ class User(AbstractBaseUser, PermissionsMixin):
         symmetrical=False,
         related_name="followers",
         blank=True,
-        through="Follow" 
+        through="Follow",
+        # ESTA LINHA É A CHAVE:
+        through_fields=('follower', 'following'),
     )
 
     objects = UserManager()
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
+
+    def get_followers_count(self):
+        """Retorna número de seguidores ativos com cache"""
+        cache_key = f'user_followers_count_{self.id}'
+        count = cache.get(cache_key)
+        
+        if count is None:
+            # CORREÇÃO: Usar o model Follow diretamente com filtro de ativos
+            count = Follow.objects.filter(  # Usa o manager padrão que já filtra unfollowed_at__isnull=True
+                following=self
+            ).count()
+            cache.set(cache_key, count, timeout=300)
+        
+        return count
+    
+    def get_following_count(self):
+        """Retorna número de seguindo ativos com cache"""
+        cache_key = f'user_following_count_{self.id}'
+        count = cache.get(cache_key)
+        
+        if count is None:
+            # CORREÇÃO: Usar o model Follow diretamente com filtro de ativos
+            count = Follow.objects.filter(  # Usa o manager padrão que já filtra unfollowed_at__isnull=True
+                follower=self
+            ).count()
+            cache.set(cache_key, count, timeout=300)
+        
+        return count
+    
+    def invalidate_counts_cache(self):
+        """Invalida o cache quando houver mudança"""
+        cache.delete(f'user_followers_count_{self.id}')
+        cache.delete(f'user_following_count_{self.id}')
 
     # --- ADICIONE/AJUSTE ESTA PROPERTY ---
     @property
@@ -85,6 +124,27 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def image_status(self):
         return self.profile.image_status
+    
+    @property
+    def active_following(self):
+        """Retorna apenas usuários que estão sendo seguidos ativamente (sem unfollow)"""
+        return User.objects.filter(
+            rel_follower__follower=self,  # Mudou de 'followed_by' para 'rel_follower'
+            rel_follower__unfollowed_at__isnull=True
+        )
+    
+    @property
+    def active_followers(self):
+        """Retorna apenas seguidores ativos (que não deram unfollow)"""
+        return User.objects.filter(
+            rel_following__following=self,  # Quem me segue
+            rel_following__unfollowed_at__isnull=True
+        )
+    
+    # Opcional: substituir o following original (cuidado com migrações)
+    @property
+    def following_active(self):
+        return self.active_following
 
     # --- SETTERS (Importante para o Admin e Testes salvarem dados) ---
     @profile_picture.setter
@@ -194,6 +254,11 @@ class Post(models.Model):
     
 # --- SOCIAL MODELS ---
 
+class FollowManager(models.Manager):
+    """Manager padrão - retorna apenas follows ativos (sem unfollow)"""
+    def get_queryset(self):
+        return super().get_queryset().filter(unfollowed_at__isnull=True)
+
 class Follow(models.Model):
     follower = models.ForeignKey(
         User, 
@@ -206,13 +271,52 @@ class Follow(models.Model):
         related_name="rel_following"
     )
     unfollowed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True) # Essencial para a regra de 48h
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Managers
+    objects = FollowManager()  # Manager padrão (só ativos)
+    all_objects = models.Manager()  # Manager completo (todos os registros)
 
     class Meta:
         unique_together = ("follower", "following")
+        indexes = [
+            models.Index(fields=['follower', 'following']),
+            models.Index(fields=['unfollowed_at']),
+        ]
 
     def __str__(self):
-        return f"{self.follower} follows {self.following}"
+        status = " (inactive)" if self.unfollowed_at else " (active)"
+        return f"{self.follower} follows {self.following}{status}"
+    
+    def can_follow_again(self):
+        """Verifica se já passaram 5 minutos desde o unfollow"""
+        if not self.unfollowed_at:
+            return True  # Já está seguindo
+        time_since_unfollow = now() - self.unfollowed_at
+        return time_since_unfollow >= timedelta(minutes=5)
+    
+    def follow_again(self):
+        """Reativa um follow após o cooldown"""
+        if not self.can_follow_again():
+            raise ValueError("Ainda está em cooldown de 5 minutos")
+        self.unfollowed_at = None
+        self.save(update_fields=['unfollowed_at'])
+    
+    def save(self, *args, **kwargs):
+        # Invalida cache antes de salvar
+        if self.follower:
+            self.follower.invalidate_counts_cache()
+        if self.following:
+            self.following.invalidate_counts_cache()
+        super().save(*args, **kwargs)
+    
+    def delete(self, *args, **kwargs):
+        # Invalida cache antes de deletar
+        if self.follower:
+            self.follower.invalidate_counts_cache()
+        if self.following:
+            self.following.invalidate_counts_cache()
+        super().delete(*args, **kwargs)
 
 
 class Block(models.Model):

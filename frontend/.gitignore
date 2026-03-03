@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 backend/media/
+
+# Cypress screenshots and videos
+**/cypress/screenshots/
+**/cypress/videos/
+
+# Se você usa o Cypress Component Testing
+**/cypress/downloads/

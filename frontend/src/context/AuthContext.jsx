@@ -16,28 +16,44 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     navigate('/login');
   }, [navigate]);
+
   const updateUser = useCallback((newData) => {
-  setUser(prev => {
-    if (!prev) return prev;
-    return { ...prev, ...newData };
-  });
-}, []);
+    setUser(prev => {
+      if (!prev) return prev;
+      return { ...prev, ...newData };
+    });
+  }, []);
 
   const fetchUserProfile = useCallback(async () => {
     const minWait = new Promise(resolve => setTimeout(resolve, 1500));
     try {
       const [response] = await Promise.all([
-      api.get('/accounts/profile/'),
-      minWait
-    ]);
+        api.get('/accounts/profile/'),
+        minWait
+      ]);
       setUser(response.data);
       localStorage.setItem('user', JSON.stringify(response.data));
-    } catch {
-      logout();
+    } catch (error) {
+      if (error.response?.status === 401) {
+        logout();
+      }
     } finally {
       setLoading(false);
     }
   }, [logout]);
+
+  const login = async (username, password) => {
+    try {
+      const response = await api.post('/token/', { username, password });
+      localStorage.setItem('access', response.data.access);
+      localStorage.setItem('refresh', response.data.refresh);
+      await fetchUserProfile();
+      navigate('/');
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('access');
@@ -48,22 +64,19 @@ export const AuthProvider = ({ children }) => {
     }
   }, [fetchUserProfile]);
 
-  const login = async (username, password) => {
-    const response = await api.post('/token/', { username, password });
-    localStorage.setItem('access', response.data.access);
-    localStorage.setItem('refresh', response.data.refresh);
-    await fetchUserProfile();
-    navigate('/');
-  };
-
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, loading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      updateUser, 
+      loading
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Exportação do Hook no mesmo ficheiro
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
