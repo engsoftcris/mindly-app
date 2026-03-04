@@ -15,7 +15,7 @@ This project represents a total effort of **104 Story Points (Fibonacci)**, cove
 ### 📱 Social Engine & Engagement
 * **Hybrid Feed:** Intelligent post ordering algorithm with **Infinite Scroll** and optimized database indexing.
 * **Follow Logic (48h):** Specialized backend constraint for user follows with dynamic UI state handling.
-* **Engagement Tools:** * **Comments:** Integrated system with **GIF selector (3s)**.
+* **Engagement Tools:** * **Smart Comments:** Integrated system with **GIF selector (3s)**.
     * **Likes:** High-speed endpoints with frontend micro-animations.
     * **Notifications:** Centralized alert center for in-app events.
 * **Media Management:** Support for multi-media posts (Text/Video 15s) with custom Gallery filters.
