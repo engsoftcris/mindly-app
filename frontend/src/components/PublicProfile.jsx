@@ -1,6 +1,6 @@
 // frontend/src/pages/PublicProfile.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom'; // Adicionado useLocation
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import FollowButton from '../components/FollowButton';
@@ -26,6 +26,7 @@ const getId = (v) => {
 const PublicProfile = () => {
   const { id } = useParams(); // this is Profile UUID
   const navigate = useNavigate();
+  const location = useLocation(); // Adicionado para ler a URL
   const { user: currentUser } = useAuth();
 
   const [profile, setProfile] = useState(null);
@@ -34,6 +35,9 @@ const PublicProfile = () => {
 
   const [activeTab, setActiveTab] = useState('all');
   const [connModal, setConnModal] = useState({ open: false, tab: 'followers' });
+
+  // Estado para o post vindo da notificação
+  const [highlightedPostId, setHighlightedPostId] = useState(null);
 
   // Lightbox State
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -52,6 +56,34 @@ const PublicProfile = () => {
     const loggedInId = getId(currentUser.id || currentUser.profile_id);
     return loggedInId === id;
   }, [currentUser, id]);
+
+  // Captura o ID do post da URL (?post=7)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const postId = params.get('post');
+    if (postId) {
+      setHighlightedPostId(String(postId));
+    }
+  }, [location]);
+
+  // Reordena os posts para colocar o alvo da notificação no TOPO
+  const sortedPosts = useMemo(() => {
+    const allPosts = profile?.posts || [];
+    if (!highlightedPostId) return allPosts;
+
+    const target = allPosts.find(p => String(p.id) === highlightedPostId);
+    if (!target) return allPosts;
+
+    const others = allPosts.filter(p => String(p.id) !== highlightedPostId);
+    return [target, ...others];
+  }, [profile?.posts, highlightedPostId]);
+
+  // Função para limpar o destaque (marcar como lido)
+  const clearHighlight = () => {
+    setHighlightedPostId(null);
+    // Limpa a URL para o post não voltar ao topo no refresh
+    navigate(location.pathname, { replace: true });
+  };
 
   const fetchProfile = async () => {
     const minWait = new Promise((resolve) => setTimeout(resolve, 800));
@@ -211,21 +243,33 @@ const PublicProfile = () => {
             <div className="min-h-[300px]">
               {activeTab === 'all' && (
                 <div className="divide-y divide-gray-800">
-                  {profile?.posts?.length > 0 ? (
-                    profile.posts.map((post) => (
-                      <PostCard
-                        key={post.id}
-                        post={post}
-                        currentUser={currentUser}
-                        onPostUpdate={handlePostUpdate}
-                        onLikeUpdate={handlePostUpdate}
-                        onDeleteSuccess={handlePostDelete}
-                        onCommentClick={() => {
-                          setActiveCommentPost(post);
-                          setIsCommentModalOpen(true);
-                        }}
-                      />
-                    ))
+                  {sortedPosts.length > 0 ? (
+                    sortedPosts.map((post) => {
+                      const isTarget = String(post.id) === highlightedPostId;
+                      return (
+                        <div 
+                          key={post.id}
+                          onClickCapture={isTarget ? clearHighlight : undefined}
+                          className={`transition-all duration-700 ease-in-out ${
+                            isTarget 
+                              ? 'bg-blue-500/10 border-l-4 border-blue-500' 
+                              : 'bg-transparent border-l-4 border-transparent'
+                          }`}
+                        >
+                          <PostCard
+                            post={post}
+                            currentUser={currentUser}
+                            onPostUpdate={handlePostUpdate}
+                            onLikeUpdate={handlePostUpdate}
+                            onDeleteSuccess={handlePostDelete}
+                            onCommentClick={() => {
+                              setActiveCommentPost(post);
+                              setIsCommentModalOpen(true);
+                            }}
+                          />
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="p-20 text-center text-gray-500">No posts yet.</div>
                   )}

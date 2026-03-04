@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
 from rest_framework import status
-from accounts.models import Notification, Follow, Report , User, Comment, Like, Post
+from accounts.models import Block, Notification, Follow, Report , User, Comment, Like, Post
 
 @pytest.mark.django_db
 class TestNotifications:
@@ -135,3 +135,67 @@ class TestNotifications:
             notification_type='COMMENT',
             post=post_to_report
         ).exists()
+    
+    # --- NOVOS TESTES PARA A TAREFA 54 (BLINDAGEM MÚTUA) ---
+
+    def test_notification_hidden_if_sender_is_blocked(self, auth_client, user, other_user):
+        """Valida que notificações de usuários bloqueados NÃO aparecem na listagem (Tarefa 54)"""
+        # 1. 'other_user' interage com o meu post (Gera notificação)
+        post = Post.objects.create(user=user, content="Meu post")
+        Notification.objects.create(
+            recipient=user,
+            sender=other_user,
+            notification_type='LIKE',
+            post=post
+        )
+        
+        # 2. Eu bloqueio o 'other_user'
+        Block.objects.create(blocker=user, blocked=other_user)
+        
+        # 3. Tento ler as minhas notificações
+        url = reverse('notification-list')
+        response = auth_client.get(url)
+        
+        # A notificação deve ser filtrada pela ViewSet (Muralha Mútua)
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 0
+
+    def test_notification_hidden_if_recipient_blocked_sender(self, auth_client, user, other_user):
+        """Valida invisibilidade mútua: se o remetente me bloqueou, a notificação dele some"""
+        # 1. Recebo uma notificação legítima
+        Notification.objects.create(recipient=user, sender=other_user, notification_type='FOLLOW')
+        
+        # 2. O OUTRO usuário me bloqueia (Invisibilidade mútua)
+        Block.objects.create(blocker=other_user, blocked=user)
+        
+        # 3. Minha lista de notificações deve ignorar quem me bloqueou
+        url = reverse('notification-list')
+        response = auth_client.get(url)
+        
+        assert len(response.data) == 0
+
+    def test_search_and_suggestions_exclude_blocked_users(self, auth_client, user, other_user):
+        """Valida que bloqueados não aparecem em buscas nem sugestões (Mútua)"""
+        # 1. Bloqueio o usuário alvo
+        Block.objects.create(blocker=user, blocked=other_user)
+        
+        # 2. Testar Busca (UserSearchView)
+        search_url = f"{reverse('user-search')}?q={other_user.username}"
+        search_response = auth_client.get(search_url)
+        assert len(search_response.data) == 0
+        
+        # 3. Testar Sugestões (SuggestedFollowsView)
+        suggest_url = reverse('suggested-follows')
+        suggest_response = auth_client.get(suggest_url)
+        # O other_user não deve estar na lista de sugestões
+        usernames = [p['username'] for p in suggest_response.data]
+        assert other_user.username not in usernames
+
+    def test_user_can_still_see_own_profile(self, auth_client, user):
+        """Garante que a filtragem de bloqueio não esconde o próprio perfil (Bug Fix)"""
+        # Usamos o ID do profile para a URL (ajusta conforme a tua rota de detail)
+        url = reverse('profile-detail', kwargs={'pk': user.profile.id})
+        response = auth_client.get(url)
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['username'] == user.username

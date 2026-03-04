@@ -96,19 +96,30 @@ class ProfileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Otimizado com select_related
+        if not user.is_authenticated:
+            return Profile.objects.none()
+
+        # 1. MURALHA MÚTUA (Tarefa 54)
         blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
         blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
         
-        return Profile.objects.select_related('user').prefetch_related(
+        # 2. QUERY CORRIGIDA
+        queryset = Profile.objects.select_related('user').prefetch_related(
             'user__posts',
             'user__followers',
             'user__following'
         ).exclude(
-            Q(user__id__in=blocked_ids) | 
-            Q(user__id__in=blocked_by_ids) |
+            Q(user__id__in=all_blocked) | 
             Q(user__is_banned=True)
-        ).order_by('user__username')
+        )
+
+        # SE FOR UMA BUSCA/SUGESTÃO: Excluímos o próprio usuário
+        # SE FOR O PERFIL (Detail): Precisamos permitir que o usuário se veja
+        if self.action in ['list', 'suggestions_followers']:
+             queryset = queryset.exclude(user=user)
+
+        return queryset.order_by('user__username')
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -170,15 +181,27 @@ class ProfileViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='connections')
     def connections(self, request, pk=None):
         profile = self.get_object()
+        user_logado = request.user
         connection_type = request.query_params.get('type', 'followers')
         
-        # Otimizado com select_related
+        # 1. Pegar a base de usuários (Seguidores ou Seguindo)
         if connection_type == 'following':
-            users = profile.user.following.select_related('profile').all()
+            queryset = profile.user.following.all()
         else:
-            users = profile.user.followers.select_related('profile').all()
+            queryset = profile.user.followers.all()
 
-        serializer = FollowUserSerializer(users, many=True, context={'request': request})
+        # 2. MURALHA DE PRIVACIDADE (Tarefa 54)
+        # Se o usuário estiver logado, não mostramos ninguém que ele bloqueou 
+        # ou que o bloqueou na lista de conexões de terceiros.
+        if user_logado.is_authenticated:
+            blocked_ids = Block.objects.filter(blocker=user_logado).values_list('blocked_id', flat=True)
+            blocked_by_ids = Block.objects.filter(blocked=user_logado).values_list('blocker_id', flat=True)
+            all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
+            
+            queryset = queryset.exclude(id__in=all_blocked)
+
+        # 3. Serializar e responder
+        serializer = FollowUserSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['post'], url_path='follow')
@@ -316,42 +339,37 @@ class HybridFeedView(generics.ListAPIView):
         user = self.request.user
         following_only = self.request.query_params.get('following') == 'true'
         
-        # CORREÇÃO: Pegar apenas IDs de quem o usuário SEGUE ATIVAMENTE (sem unfollow)
+        # Filtros de Follow
         following_ids = Follow.objects.filter(
-            follower=user, 
-            unfollowed_at__isnull=True  # ← FILTRO CRÍTICO!
+            follower=user, unfollowed_at__isnull=True
         ).values_list('following_id', flat=True)
         
-        blocked_by = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        # Muralha de Bloqueio Mútua
+        blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+        blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
 
-        # Base da Query
         queryset = Post.objects.select_related('user', 'user__profile') \
             .prefetch_related('likes', 'comments') \
             .annotate(num_likes=Count('likes'))
 
-        # FILTROS DE SEGURANÇA
+        # Excluir Deletados, Banidos, o Próprio User e a Muralha de Bloqueados
         queryset = queryset.filter(
             user__is_banned=False,
             is_deleted=False
-        ).exclude(user=user)
+        ).exclude(
+            Q(user=user) | 
+            Q(user__id__in=all_blocked) | # AQUI
+            Q(user__is_superuser=True)
+        )
 
-        # FILTRO PARA SUPERUSUÁRIOS
-        queryset = queryset.exclude(user__is_superuser=True)
-
-        # LÓGICA DE EXIBIÇÃO
         if following_only:
-            # Aba "Seguindo": mostra APENAS posts de quem o usuário segue ativamente
             queryset = queryset.filter(user__id__in=following_ids)
         else:
-            # Aba "Para você": mostra posts de quem segue ativamente OU perfis públicos
             queryset = queryset.filter(
                 Q(user__id__in=following_ids) | 
                 Q(user__profile__is_private=False)
             )
-
-        # RESPEITAR BLOQUEIOS
-        if blocked_by.exists():
-            queryset = queryset.exclude(user__id__in=blocked_by)
 
         return queryset.distinct().order_by('-created_at')
         
@@ -433,21 +451,24 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Adicionamos o .exclude() aqui para filtrar globalmente
-        return Notification.objects.filter(
-            recipient=self.request.user
-        ).exclude(
-            sender__is_banned=True  # <--- A "mágica" acontece aqui
-        ).order_by('-created_at')
+        user = self.request.user
+        
+        # Muralha de Bloqueio
+        blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+        blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
 
-    @action(detail=False, methods=['post'], url_path='mark_all_as_read')
-    def mark_all_as_read(self, request):
-        """
-        Marca TODAS as notificações do usuário como lidas.
-        Acessível via: POST /api/notifications/mark_all_as_read/
-        """
-        Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
-        return Response({'status': 'all notifications marked as read'}, status=status.HTTP_200_OK)
+        # Esconder notificações de/para bloqueados
+        return Notification.objects.filter(recipient=user).exclude(
+            sender__id__in=all_blocked
+        ).select_related('sender', 'sender__profile', 'post')
+
+    @action(detail=True, methods=['post'])
+    def mark_as_read(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        return Response({'status': 'notification read'})
 
     @action(detail=True, methods=['post'], url_path='mark_as_read')
     def mark_as_read(self, request, pk=None):
@@ -497,46 +518,58 @@ class ModerationViewSet(viewsets.ViewSet):
         
 
 class SuggestedFollowsView(generics.ListAPIView):
-    serializer_class = ProfileSerializer # Ou o seu serializer de perfil
+    serializer_class = ProfileSerializer
 
     def get_queryset(self):
         user = self.request.user
+        if not user.is_authenticated:
+            return Profile.objects.none()
+
+        # 1. MURALHA MÚTUA (Tarefa 54)
+        blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+        blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+        all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
         
-        # CORREÇÃO: IDs de quem você já SEGUE ATIVAMENTE (sem unfollow)
+        # 2. IDs de quem você já SEGUE ATIVAMENTE
         following_ids = Follow.objects.filter(
             follower=user,
-            unfollowed_at__isnull=True  # ← FILTRO CRÍTICO!
+            unfollowed_at__isnull=True
         ).values_list('following_id', flat=True)
         
-        # IDs de quem você já deu unfollow (opcional - pode incluir se quiser)
-        unfollowed_ids = Follow.objects.filter(
-            follower=user,
-            unfollowed_at__isnull=False
-        ).values_list('following_id', flat=True)
-        
-        # Query com todos os filtros
+        # 3. FILTRAGEM TOTAL
         return Profile.objects.filter(
-            is_private=False,           # Somente perfis públicos
-            user__is_superuser=False,   # NÃO sugere administradores
-            user__is_active=True        # Apenas usuários ativos
+            is_private=False,
+            user__is_superuser=False,
+            user__is_active=True
         ).exclude(
-            user=user                   # Não sugere você mesmo
-        ).exclude(
-            user__id__in=following_ids  # NÃO sugere quem você já segue ativamente
-        ).exclude(
-            user__id__in=unfollowed_ids # Opcional: remove quem você deu unfollow
-        ).order_by('?')[:5]             # Limite de performance
+            Q(user=user) | 
+            Q(user__id__in=following_ids) |
+            Q(user__id__in=all_blocked) # <-- NINGUÉM bloqueado aparece aqui
+        ).order_by('?')[:5]
 
 class UserSearchView(generics.ListAPIView):
     serializer_class = ProfileSerializer
 
     def get_queryset(self):
+        user = self.request.user
         query = self.request.query_params.get('q', None)
-        if query:
-            return Profile.objects.filter(
-                Q(user__username__icontains=query) | 
-                Q(user__full_name__icontains=query),
-                user__is_active=True,
-                user__is_superuser=False # Mantendo a nossa regra de segurança!
-            ).distinct()[:10]
-        return Profile.objects.none()
+        
+        if not query:
+            return Profile.objects.none()
+
+        # 1. MURALHA MÚTUA (Tarefa 54)
+        all_blocked = []
+        if user.is_authenticated:
+            blocked_ids = Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)
+            blocked_by_ids = Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)
+            all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
+
+        # 2. BUSCA COM FILTRO DE BLOQUEIO
+        return Profile.objects.filter(
+            Q(user__username__icontains=query) | 
+            Q(user__full_name__icontains=query),
+            user__is_active=True,
+            user__is_superuser=False
+        ).exclude(
+            user__id__in=all_blocked # <-- Se estiver bloqueado, não aparece na busca
+        ).distinct()[:10]

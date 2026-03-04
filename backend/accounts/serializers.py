@@ -1,9 +1,4 @@
-import uuid
-from io import BytesIO
-from PIL import Image
-from django.core.files.base import ContentFile
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-import os
 from rest_framework import exceptions
 from rest_framework import serializers
 from .models import Post, User, Profile, Block, Follow, Comment, Notification, Report
@@ -320,25 +315,46 @@ class FollowUserSerializer(serializers.ModelSerializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     sender_name = serializers.ReadOnlyField(source='sender.username')
-    sender_avatar = serializers.SerializerMethodField() # Ajustado para ler do Profile
+    sender_avatar = serializers.SerializerMethodField()
     sender_uuid = serializers.ReadOnlyField(source='sender.profile.id')
-    post_content = serializers.ReadOnlyField(source='post.content')
     
+    # Este campo é o segredo para o redirecionamento
+    post_author_profile_id = serializers.SerializerMethodField()
+    
+    post_id = serializers.ReadOnlyField(source='post.id')
+
     class Meta:
         model = Notification
         fields = [
-            'id', 'sender', 'sender_uuid', 'sender_name', 'sender_avatar', 
-            'notification_type', 'stored_post_content', 'text', 'post', 'post_content', 'is_read', 'created_at'
+            'id', 'sender_uuid', 'sender_name', 'sender_avatar', 
+            'notification_type', 'post_id', 'post_author_profile_id', 
+            'is_read', 'created_at'
         ]
-        read_only_fields = ['id', 'sender', 'notification_type', 'post', 'created_at']
+
+    def get_post_author_profile_id(self, obj):
+        try:
+            # Se a notificação tem um post associado
+            if obj.post:
+                # Pegamos o autor do post diretamente
+                # Se no seu model Post o campo for 'user', o getattr resolve
+                author = getattr(obj.post, 'author', None) or getattr(obj.post, 'user', None)
+                
+                if author:
+                    # Retornamos o ID do perfil do dono do post
+                    return author.profile.id
+        except Exception as e:
+            print(f"Erro ao buscar autor do post {obj.post_id}: {e}")
+        
+        return None
 
     def get_sender_avatar(self, obj):
-        if not obj.sender: return None
-        request = self.context.get("request")
-        profile = obj.sender.profile
-        if profile.image_status == "APPROVED" and profile.profile_picture:
-            return request.build_absolute_uri(profile.profile_picture.url) if request else profile.profile_picture.url
+        # ... seu código atual da foto aqui ...
+        if obj.sender and obj.sender.profile.profile_picture:
+            request = self.context.get("request")
+            return request.build_absolute_uri(obj.sender.profile.profile_picture.url) if request else obj.sender.profile.profile_picture.url
         return None
+
+    
 
 class ReportCreateSerializer(serializers.ModelSerializer):
     reporter = serializers.HiddenField(default=serializers.CurrentUserDefault())
