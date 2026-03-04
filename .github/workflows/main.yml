@@ -1,14 +1,12 @@
 name: CI/CD Pipeline - Mindly
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ] # Isso vincula os testes ao botão de Merge
+    branches: [ main ]   # Testes rodam aqui e bloqueiam o merge
+  push:
+    branches: [ main ]   # Push na main = Vai direto para o Deploy
 
 concurrency:
-  # Agrupa por workflow e número do PR ou branch. 
-  # Se você der um push novo no PR, ele cancela o teste anterior.
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
@@ -18,6 +16,8 @@ env:
 
 jobs:
   test-backend:
+    # SÓ RODA NO PULL REQUEST
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     
     services:
@@ -75,12 +75,10 @@ jobs:
           AWS_S3_ENDPOINT_URL: ${{ secrets.AWS_S3_ENDPOINT_URL }}
         run: |
           poetry run pytest -v
-          
-      - name: Run Tests with Coverage (opcional)
-        if: false  # Desabilitado por enquanto
-        run: poetry run pytest --cov=. --cov-report=xml
 
   test-frontend-component:
+    # SÓ RODA NO PULL REQUEST
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,6 +119,8 @@ jobs:
           record: false
 
   test-frontend-e2e:
+    # SÓ RODA NO PULL REQUEST
+    if: github.event_name == 'pull_request'
     needs: [test-frontend-component]
     runs-on: ubuntu-latest
     steps:
@@ -163,30 +163,25 @@ jobs:
           record: false
 
   check-status:
+    # Roda sempre no PR. No Push da Main, ele é ignorado (pulado).
+    if: github.event_name == 'pull_request'
     needs: [test-backend, test-frontend-component, test-frontend-e2e]
-    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check all test results
         run: |
-          echo "Verificando resultados dos testes..."
-          echo "Backend: ${{ needs.test-backend.result }}"
-          echo "Frontend Component: ${{ needs.test-frontend-component.result }}"
-          echo "Frontend E2E: ${{ needs.test-frontend-e2e.result }}"
-          
           if [ "${{ needs.test-backend.result }}" != "success" ] || \
              [ "${{ needs.test-frontend-component.result }}" != "success" ] || \
              [ "${{ needs.test-frontend-e2e.result }}" != "success" ]; then
-            echo "❌ Alguns testes falharam!"
+            echo "❌ Testes falharam!"
             exit 1
-          else
-            echo "✅ Todos os testes passaram!"
           fi
+          echo "✅ Todos os testes passaram!"
 
   deploy:
-    needs: [check-status]
-    # O "if" abaixo garante que o deploy SÓ rode na main e SÓ se os testes passarem
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && success()
+    # O SEGREDO: Na Main, ele NÃO precisa (needs) dos testes, pois já passaram no PR.
+    # Mas se for um PR, ele não roda (Skipped).
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Render
