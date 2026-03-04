@@ -2,9 +2,9 @@ name: CI/CD Pipeline - Mindly
 
 on:
   pull_request:
-    branches: [ main ]   # Testes rodam aqui e bloqueiam o merge
+    branches: [ main ]
   push:
-    branches: [ main ]   # Push na main = Vai direto para o Deploy
+    branches: [ main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,10 +16,8 @@ env:
 
 jobs:
   test-backend:
-    # SÓ RODA NO PULL REQUEST
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    
     services:
       db:
         image: postgres:16
@@ -34,34 +32,26 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Cache Poetry dependencies
         uses: actions/cache@v4
         with:
           path: ~/.cache/pypoetry
           key: ${{ runner.os }}-poetry-${{ hashFiles('backend/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-
       - name: Install Dependencies
         working-directory: ./backend
         run: poetry install --no-root
-
       - name: Run Django Tests
         working-directory: ./backend
         env:
@@ -73,35 +63,29 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_STORAGE_BUCKET_NAME: ${{ secrets.AWS_STORAGE_BUCKET_NAME }}
           AWS_S3_ENDPOINT_URL: ${{ secrets.AWS_S3_ENDPOINT_URL }}
-        run: |
-          poetry run pytest -v
+        run: poetry run pytest -v
 
   test-frontend-component:
-    # SÓ RODA NO PULL REQUEST
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: ./frontend/package-lock.json
-
       - name: Install Dependencies
         working-directory: ./frontend
         run: npm ci
-
       - name: Cache Cypress binary
         uses: actions/cache@v4
         with:
           path: ~/.cache/Cypress
           key: cypress-${{ runner.os }}-cypress-${{ hashFiles('frontend/package-lock.json') }}
-
       - name: Cypress Component Run
         uses: cypress-io/github-action@v6
         env:
@@ -116,10 +100,8 @@ jobs:
           working-directory: ./frontend
           component: true
           browser: chrome
-          record: false
 
   test-frontend-e2e:
-    # SÓ RODA NO PULL REQUEST
     if: github.event_name == 'pull_request'
     needs: [test-frontend-component]
     runs-on: ubuntu-latest
@@ -127,24 +109,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: ./frontend/package-lock.json
-
       - name: Install Frontend Dependencies
         working-directory: ./frontend
         run: npm ci
-
-      - name: Cache Cypress binary
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-cypress-${{ hashFiles('frontend/package-lock.json') }}
-
       - name: Cypress E2E Run
         uses: cypress-io/github-action@v6
         env:
@@ -160,37 +133,35 @@ jobs:
           start: npm run dev
           wait-on: 'http://localhost:5173'
           browser: chrome
-          record: false
 
   check-status:
-    # Roda sempre no PR. No Push da Main, ele é ignorado (pulado).
-    if: github.event_name == 'pull_request'
+    # A MUDANÇA É AQUI: Tira o 'if: pull_request' e coloca 'if: always()'
     needs: [test-backend, test-frontend-component, test-frontend-e2e]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check all test results
         run: |
-          if [ "${{ needs.test-backend.result }}" != "success" ] || \
-             [ "${{ needs.test-frontend-component.result }}" != "success" ] || \
-             [ "${{ needs.test-frontend-e2e.result }}" != "success" ]; then
-            echo "❌ Testes falharam!"
-            exit 1
+          # Se for PR, valida os resultados. Na main, ele passa direto!
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ needs.test-backend.result }}" != "success" && "${{ needs.test-backend.result }}" != "skipped" ]] || \
+               [[ "${{ needs.test-frontend-component.result }}" != "success" && "${{ needs.test-frontend-component.result }}" != "skipped" ]] || \
+               [[ "${{ needs.test-frontend-e2e.result }}" != "success" && "${{ needs.test-frontend-e2e.result }}" != "skipped" ]]; then
+              echo "❌ Testes falharam!"
+              exit 1
+            fi
           fi
-          echo "✅ Todos os testes passaram!"
+          echo "✅ Tudo OK para o Deploy!"
 
   deploy:
-    # O SEGREDO: Na Main, ele NÃO precisa (needs) dos testes, pois já passaram no PR.
-    # Mas se for um PR, ele não roda (Skipped).
+    # AGORA O DEPLOY DEPENDE DO CHECK-STATUS PARA NÃO SER PULADO
+    needs: [check-status]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Render
-        run: |
-          echo "🚀 Disparando Deploy no Render..."
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
       - name: Deploy to Vercel
         run: |
-          echo "🚀 Disparando Deploy na Vercel..."
           curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
-          echo "✅ Deploys iniciados com sucesso!"
+          echo "✅ Deploy realizado na main!"
