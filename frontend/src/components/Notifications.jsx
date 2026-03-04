@@ -33,61 +33,55 @@ const Notifications = () => {
     );
   };
 
-  const handleNotificationClick = async (n) => {
-    // 1) Marcar como lida (otimista)
-    if (!n.is_read) {
-      markAsReadLocal(n.id);
-      try {
-        await api.post(`/notifications/${n.id}/mark_as_read/`);
-      } catch (err) {
-        console.error(err);
-        // opcional: reverter estado em caso de falha
-      }
+const handleNotificationClick = async (n) => {
+  // LOG 1: Ver o que chegou do banco
+  console.log("1. OBJETO RECEBIDO:", n);
+  console.log("2. TIPO:", n.notification_type);
+  console.log("3. ID DO POST:", n.post_id);
+  console.log("4. DONO DO POST (UUID):", n.post_author_profile_id);
+
+  // Marca como lida
+  if (!n.is_read) {
+    markAsReadLocal(n.id);
+    api.post(`/notifications/${n.id}/mark_as_read/`).catch(err => {
+      console.error("ERRO AO MARCAR COMO LIDA:", err);
+    });
+  }
+
+  // --- LÓGICA DE NAVEGAÇÃO ---
+
+  // Caso A: FOLLOW
+  if (n.notification_type === 'FOLLOW') {
+    console.log("ENTROU NO BLOCO FOLLOW. Indo para:", n.sender_uuid);
+    if (n.sender_uuid) {
+      return navigate(`/profile/${n.sender_uuid}`);
     }
+  }
 
-    // 2) Roteamento por tipo
-    const isReport = n.notification_type === 'REPORT_UPDATE';
-    if (isReport) {
-      // Inferência simples: "aceite"/"removido" => resolved => post soft-deleted (não navega)
-      const text = (n.text || '').toLowerCase();
-      const isResolved = text.includes('aceite') || text.includes('removido');
+  // Caso B: LIKE ou COMMENT (Interação com Post)
+  if (n.post_id) {
+    console.log("ENTROU NO BLOCO DE POST. Verificando autor...");
 
-      if (isResolved) {
-        // Mostrar snapshot do conteúdo
-        if (n.stored_post_content) {
-          toast.info(`Conteúdo removido: "${n.stored_post_content}"`);
-        } else {
-          toast.info('O conteúdo original foi removido da plataforma.');
-        }
-        return;
-      }
-
-      // Ignorada => post deve existir => navegar pro feed destacando
-      if (n.post) {
-        navigate(`/?highlight=${n.post}`);
-      } else {
-        toast.info('Não foi possível abrir o post desta notificação.');
-      }
-      return;
+    if (n.post_author_profile_id) {
+      const url = `/profile/${n.post_author_profile_id}?post=${n.post_id}`;
+      console.log("SUCESSO! Navegando para o dono do post:", url);
+      return navigate(url);
+    } 
+    
+    // Se o autor veio null, mas o post_id existe:
+    console.warn("ALERTA: post_id existe, mas post_author_profile_id veio NULL do Django.");
+    
+    // Fallback: Se for seu post, vamos tentar o seu próprio ID (recipient)
+    if (n.recipient_uuid) {
+        console.log("USANDO FALLBACK: Navegando para o seu próprio perfil (recipient_uuid)");
+        return navigate(`/profile/${n.recipient_uuid}?post=${n.post_id}`);
     }
+  }
 
-    if (n.notification_type === 'FOLLOW') {
-      if (n.sender_uuid) {
-        navigate(`/profile/${n.sender_uuid}`);
-      } else {
-        toast.info('Não foi possível abrir o perfil do usuário.');
-      }
-      return;
-    }
-
-    // LIKE / COMMENT => navega pro post
-    if (n.post) {
-      navigate(`/?highlight=${n.post}`);
-      return;
-    }
-
-    toast.info('Notificação sem destino de navegação.');
-  };
+  // Se nada acima pegou:
+  console.error("FALHA TOTAL: A notificação não entrou em nenhum critério de navegação.");
+  toast.info('Não foi possível encontrar o destino.');
+};
 
   const renderIcon = (n) => {
     if (n.notification_type === 'LIKE') return <FaHeart className="text-pink-600" size={20} />;

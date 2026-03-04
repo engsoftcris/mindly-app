@@ -268,3 +268,85 @@ class TestBlockSystem:
             blocked_usernames = [item['username'] for item in response.data]
             assert user_b.username in blocked_usernames
             assert user_c.username not in blocked_usernames
+
+    # --- NOVOS TESTES: BLINDAGEM MÚTUA E NOTIFICAÇÕES (TAREFA 54) ---
+
+    def test_mutual_invisibility_in_search(self, auth_client, user, user_b_profile):
+        """Garante que a busca é cega para ambos os lados do bloqueio"""
+        target_user = user_b_profile.user
+        
+        # 1. BLOQUEIO: User A bloqueia User B
+        Block.objects.create(blocker=user, blocked=target_user)
+
+        # 2. Teste: O Bloqueador (User A) tenta buscar o Bloqueado (User B)
+        # Deve retornar vazio (Invisibilidade para o bloqueador)
+        search_url = reverse('user-search') + f"?q={target_user.username}"
+        response_a = auth_client.get(search_url)
+        assert len(response_a.data) == 0
+
+        # 3. Teste: O Bloqueado (User B) tenta buscar o Bloqueador (User A)
+        # (Simulando client do User B)
+        auth_client.force_authenticate(user=target_user)
+        response_b = auth_client.get(reverse('user-search') + f"?q={user.username}")
+        assert len(response_b.data) == 0
+
+    def test_notifications_filtered_by_block(self, auth_client, user, user_b, post_factory):
+        """Garante que notificações de/para bloqueados somem da lista"""
+        # 1. User B interage com User A (Gera notificação)
+        my_post = post_factory(user=user, content="Post do User A")
+        from accounts.models import Notification
+        Notification.objects.create(
+            recipient=user,
+            sender=user_b,
+            notification_type='LIKE',
+            post=my_post,
+            text="User B gostou do seu post"
+        )
+
+        # 2. User A bloqueia User B
+        Block.objects.create(blocker=user, blocked=user_b)
+
+        # 3. User A consulta notificações
+        # A muralha deve esconder a notificação do User B
+        url = reverse('notification-list') # Ajuste o nome conforme seu router
+        response = auth_client.get(url)
+        
+        # Se for paginado, olha no 'results', senão na lista direta
+        results = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        
+        assert len(results) == 0
+
+    def test_suggestions_exclude_mutual_blocks(self, auth_client, user, user_b_profile):
+        """Garante que bloqueados não aparecem em 'Quem Seguir' (Sugestões)"""
+        target_user = user_b_profile.user
+        
+        # 1. Bloqueio Mútuo (B bloqueou A)
+        Block.objects.create(blocker=target_user, blocked=user)
+
+        # 2. User A pede sugestões
+        url = reverse('suggested-follows')
+        response = auth_client.get(url)
+        
+        # O User B não pode estar nas sugestões do User A
+        usernames = [p['username'] for p in response.data]
+        assert target_user.username not in usernames
+
+    def test_profile_detail_access_denied_if_blocked(self, auth_client, user, user_b_profile):
+        """Garante que tentar acessar a URL direta de um perfil bloqueado dá 404/403"""
+        target_user = user_b_profile.user
+        Block.objects.create(blocker=target_user, blocked=user)
+
+        # Tentar acessar o publicPerfil do User B
+        url = reverse('profile-detail', kwargs={'pk': user_b_profile.id})
+        response = auth_client.get(url)
+
+        # Como o queryset exclui bloqueados, o Django deve retornar 404 (Not Found)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_own_profile_remains_visible_to_self(self, auth_client, user):
+        """Bug Fix: Garante que o usuário logado ainda consegue ver o próprio perfil"""
+        url = reverse('profile-detail', kwargs={'pk': user.profile.id})
+        response = auth_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['username'] == user.username

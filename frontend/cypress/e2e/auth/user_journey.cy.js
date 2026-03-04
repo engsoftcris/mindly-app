@@ -237,4 +237,94 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       cy.contains('button', /Para você|For You/i, { timeout: 10000 }).should('be.visible');
     });
   });
+ describe('Fluxo de Notificações e Destaque de Post', () => {
+    it('9. Deve clicar na notificação, ir para o perfil e destacar o post no topo', () => {
+      const postIdAlvo = 77;
+      const uuidAutor = 'perfil-do-autor-123';
+
+      const mockNotification = [{ 
+        id: 10, 
+        sender_name: 'Carlos', 
+        notification_type: 'LIKE', 
+        is_read: false,
+        post_id: postIdAlvo,
+        post_author_profile_id: uuidAutor
+      }];
+
+      const mockProfileAutor = {
+        id: uuidAutor,
+        username: 'autor_post',
+        display_name: 'Autor Original',
+        posts: [
+          { id: 10, content: 'Post antigo', author: { username: 'autor_post' } },
+          { id: postIdAlvo, content: 'Post que recebeu o Like', author: { username: 'autor_post' } },
+          { id: 20, content: 'Post recente', author: { username: 'autor_post' } }
+        ]
+      };
+
+      cy.intercept('GET', '/api/notifications/', { body: mockNotification }).as('getNotif');
+      cy.intercept('POST', `/api/notifications/10/mark_as_read/`, { statusCode: 200 }).as('markRead');
+      cy.intercept('GET', `/api/accounts/profiles/${uuidAutor}/`, { body: mockProfileAutor }).as('getAutorProfile');
+
+      visitAuthed('/notifications');
+      cy.wait('@getNotif');
+
+      cy.contains('Carlos').closest('div').click({ force: true });
+      cy.wait('@markRead');
+
+      cy.url().should('include', `/profile/${uuidAutor}`);
+      cy.url().should('include', `post=${postIdAlvo}`);
+
+      // Valida se o post alvo está no TOPO
+      cy.get('.divide-y > div').first().within(() => {
+        cy.contains('Post que recebeu o Like').should('be.visible');
+      });
+
+      // CORREÇÃO DA ASSERTIVA DE CLASSE (Removido o -l- da cor conforme seu log)
+      cy.get('.divide-y > div').first()
+        .should('have.class', 'bg-blue-500/10')
+        .and('have.class', 'border-l-4')
+        .and('have.class', 'border-blue-500');
+
+      // Clica para limpar
+      cy.get('.divide-y > div').first().click();
+      cy.url().should('not.include', `post=${postIdAlvo}`);
+    });
+  });
+
+  describe('Regras de Bloqueio (Block)', () => {
+    const blockedUserId = 'user-bloqueado-456';
+    const blockerUserId = 'meu-uuid-123';
+
+    it('10. Blocker (Quem bloqueou): Deve continuar vendo tudo do bloqueado', () => {
+      cy.intercept('GET', '/api/accounts/profile/', { body: { ...mockProfile, id: blockerUserId } });
+      cy.intercept('GET', '/api/accounts/feed/**', {
+        body: { results: [{ id: 88, content: 'Post do bloqueado', author: { id: blockedUserId } }] }
+      }).as('getFeedBlocker');
+
+      visitAuthed('/');
+      cy.wait('@getFeedBlocker');
+      cy.contains('Post do bloqueado').should('be.visible');
+    });
+
+    it('11. Blocked (Quem foi bloqueado): Invisibilidade TOTAL do Blocker', () => {
+      cy.intercept('GET', '/api/accounts/profile/', { body: { ...mockProfile, id: blockedUserId } });
+      
+      // 1. Feed Vazio
+      cy.intercept('GET', '/api/accounts/feed/**', { body: { results: [] } }).as('getFeedEmpty');
+      visitAuthed('/');
+      cy.wait('@getFeedEmpty');
+      cy.contains('Post do Blocker').should('not.exist');
+
+      // 2. Notificações Vazias (Não pode aparecer quem te bloqueou)
+      cy.intercept('GET', '/api/notifications/**', { body: [] }).as('getNotifEmpty');
+      visitAuthed('/notifications');
+      cy.contains('Carlos').should('not.exist');
+
+      // 3. Busca/Sugestões Vazias
+      cy.intercept('GET', '/api/accounts/suggested-follows/**', { body: [] }).as('getSuggestionsEmpty');
+      visitAuthed('/');
+      cy.contains('Autor Original').should('not.exist');
+    });
+  });
 });
