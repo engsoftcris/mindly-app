@@ -14,46 +14,39 @@ describe('Fluxo de Deletar Post (TAL-38)', () => {
   };
 
   beforeEach(() => {
-    // ✅ mocks do bootstrap da home
-    cy.intercept('GET', '**/accounts/profile/**', { statusCode: 200, body: userA }).as('getMyProfile');
-    cy.intercept('GET', '**/posts/**', { statusCode: 200, body: mockFeed }).as('getFeed');
+    cy.intercept('GET', '**/api/accounts/profile/**', { statusCode: 200, body: userA }).as('getMyProfile');
+    cy.intercept('GET', '**/api/accounts/feed/**', { statusCode: 200, body: mockFeed }).as('getFeed');
+    cy.intercept('GET', '**/api/notifications/**', { statusCode: 200, body: [] }).as('getNotifications');
 
-    // Se sua home chama notifications, intercepte para evitar ruído
-    cy.intercept('GET', '**/notifications/**', { statusCode: 200, body: [] }).as('getNotifications');
-
-    // ✅ intercept do DELETE (o frontend chama /accounts/posts/:id/)
-    cy.intercept('DELETE', `**/accounts/posts/${postToDelete.id}/`, { statusCode: 204 }).as('deleteRequest');
+    // CORREÇÃO: DELETE com a rota que o frontend está chamando
+    cy.intercept('DELETE', `**/api/accounts/posts/${postToDelete.id}/`, { 
+      statusCode: 204 
+    }).as('deleteRequest');
 
     cy.visit('/', {
       onBeforeLoad(win) {
         win.localStorage.setItem('access', 'fake-token');
+        win.localStorage.setItem('refresh', 'fake-refresh');
       },
     });
 
-    cy.wait(['@getMyProfile', '@getFeed']);
+    cy.wait(['@getMyProfile', '@getFeed'], { timeout: 10000 });
   });
 
   it('Deve realizar o ciclo completo de deleção com sucesso', () => {
-    // 1) post visível
     cy.contains(postToDelete.content).should('be.visible');
 
-    // 2) abre menu do post (usa data-cy do seu UserActionMenu)
     cy.get('[data-cy="user-action-menu-trigger"]').first().click({ force: true });
-
-    // 3) primeiro clique: Delete post
     cy.get('[data-cy="user-action-delete"]').should('exist').click({ force: true });
 
-    // 4) confirma estado
     cy.get('[data-cy="user-action-confirm-delete"]').should('exist').and('contain', 'CONFIRM');
     cy.get('[data-cy="user-action-cancel-delete"]').should('exist').and('contain', 'Cancel');
 
-    // 5) segundo clique: confirma
     cy.get('[data-cy="user-action-confirm-delete"]').click({ force: true });
 
-    // 6) valida request
-    cy.wait('@deleteRequest');
+    // AGORA deve funcionar porque a rota está correta
+    cy.wait('@deleteRequest', { timeout: 10000 });
 
-    // 7) UI reativa: post sai do DOM
     cy.contains(postToDelete.content).should('not.exist');
   });
 
@@ -61,16 +54,11 @@ describe('Fluxo de Deletar Post (TAL-38)', () => {
     cy.contains(postToDelete.content).should('be.visible');
 
     cy.get('[data-cy="user-action-menu-trigger"]').first().click({ force: true });
-
     cy.get('[data-cy="user-action-delete"]').should('exist').click({ force: true });
 
-    // cancela
     cy.get('[data-cy="user-action-cancel-delete"]').should('exist').click({ force: true });
 
-    // post continua
     cy.contains(postToDelete.content).should('be.visible');
-
-    // confirmação desaparece
     cy.get('[data-cy="user-action-confirm-delete"]').should('not.exist');
   });
 });

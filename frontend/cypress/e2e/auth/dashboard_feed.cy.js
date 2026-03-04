@@ -2,11 +2,9 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
   const CLEAN_URL = "https://nsallopenmwbwkzrhgmx.supabase.co/storage/v1/object/public/mindly-media/posts/images/test.png";
 
   beforeEach(() => {
-    // Limpeza total para garantir isolamento no CI/GitHub Actions
     cy.clearLocalStorage();
     cy.clearCookies();
 
-    // 1. MOCK DE PERFIL
     cy.intercept('GET', '**/api/accounts/profile**', {
       statusCode: 200,
       body: { 
@@ -17,17 +15,17 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
       }
     }).as('getProfile');
 
-    // 2. MOCK ABA "PARA VOCÊ" (Endpoint: /posts/)
-    // Usamos Regex para capturar tanto a carga inicial quanto a paginação
-    cy.intercept('GET', /.*\/api\/posts\/?(\?.*)?$/, (req) => {
+    cy.intercept('GET', /.*\/api\/accounts\/feed\/?(\?.*)?$/, (req) => {
       if (req.url.includes('page=2')) {
         req.reply({
           statusCode: 200,
           body: {
             next: null,
             results: [{ 
-              id: 2, content: 'Conteúdo da Página 2!', 
-              author: { username: 'sistema', id: 2 }, created_at: new Date().toISOString() 
+              id: 2, 
+              content: 'Conteúdo da Página 2!', 
+              author: { username: 'sistema', id: 2 }, 
+              created_at: new Date().toISOString() 
             }]
           }
         });
@@ -35,90 +33,74 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
         req.reply({
           statusCode: 200,
           body: {
-            next: `${Cypress.config().baseUrl}/api/posts/?page=2`,
+            next: `${Cypress.config().baseUrl}/api/accounts/feed/?page=2`,
             results: [{ 
-              id: 1, content: 'Hello from Para Você!', 
-              author: { username: 'cristiano', id: 1 }, created_at: new Date().toISOString() 
+              id: 1, 
+              content: 'Hello from Para Você!', 
+              author: { username: 'cristiano', id: 1 }, 
+              created_at: new Date().toISOString() 
             }]
           }
         });
       }
-    }).as('getPostsAll');
+    }).as('getFeedAll');
 
-    // 3. MOCK ABA "SEGUINDO" (Endpoint: /accounts/feed/)
-    cy.intercept('GET', /.*\/api\/accounts\/feed\/?(\?.*)?$/, {
+    cy.intercept('GET', /.*\/api\/accounts\/feed\/\?.*following.*/, {
       statusCode: 200,
       body: {
         next: null,
         results: [{ 
-          id: 10, content: 'Conteúdo da aba Seguindo', 
-          author: { username: 'amigo_teste', id: 5 }, created_at: new Date().toISOString() 
+          id: 10, 
+          content: 'Conteúdo da aba Seguindo', 
+          author: { username: 'amigo_teste', id: 5 }, 
+          created_at: new Date().toISOString() 
         }]
       }
     }).as('getFeedFollowing');
 
-    // 4. MOCK DO POST (Fix do Supabase)
-    cy.intercept('POST', '**/api/posts/**', {
+    // CORREÇÃO: Intercepta a rota REAL que o frontend está usando
+    cy.intercept('POST', '**/api/posts/**', {  // ← Mantém /api/posts/ porque é o que o frontend chama
       statusCode: 201,
       body: { 
         id: 99, 
         content: 'Post com URL Limpa',
-        media_url: CLEAN_URL, // Ajustado para bater com seu componente (media_url)
+        media_url: CLEAN_URL,
         author: { username: 'cristiano', id: 1 },
         moderation_status: 'APPROVED',
         created_at: new Date().toISOString()
       }
     }).as('createPost');
 
-    // 5. INJEÇÃO DE TOKEN VIA WINDOW (Simula usuário logado)
     cy.window().then((win) => {
       win.localStorage.setItem('access', 'fake-token-123');
       win.localStorage.setItem('refresh', 'fake-refresh-123');
     });
 
     cy.visit('/');
-    
-    // Espera os mocks obrigatórios da carga inicial
-    cy.wait(['@getProfile', '@getPostsAll'], { timeout: 30000 });
+    cy.wait(['@getProfile', '@getFeedAll'], { timeout: 30000 });
   });
 
   it('1. Deve exibir posts iniciais e carregar mais via Infinite Scroll', () => {
-    // 1. Garante que o conteúdo da página 1 apareceu
     cy.contains('Hello from Para Você!', { timeout: 15000 }).should('be.visible');
-    
-    // 2. Em vez de buscar por '.divide-y > div', buscamos por qualquer elemento 
-    // que contenha o texto do post, garantindo que a lista renderizou.
     cy.contains('Hello from Para Você!').should('exist');
-
-    // 3. Rolar até o fim para disparar o Observer
-    // Tentamos rolar o container principal ou o window
     cy.scrollTo('bottom', { ensureScrollable: false });
-    
-    // Forçamos o scroll para o último elemento de post encontrado
-    // Ajustei o seletor para pegar os itens da lista de forma mais flexível
     cy.get('article, [data-cy="post-item"], .py-4').last().scrollIntoView();
-    
-    // 4. Aguarda a requisição da página 2 (Página 2 enviada pelo Mock)
-    cy.wait('@getPostsAll', { timeout: 15000 });
-    
-    // 5. Valida que o conteúdo da Página 2 apareceu na tela
+    cy.wait('@getFeedAll', { timeout: 15000 });
     cy.contains('Conteúdo da Página 2!', { timeout: 10000 }).should('be.visible');
   });
 
   it('2. Deve criar um post novo e validar o retorno da API', () => {
     const textoPost = 'Testando postagem robusta no Dashboard';
 
-    // O CreatePost agora é parte direta do Dashboard
     cy.get('textarea', { timeout: 15000 })
       .should('be.visible')
-      .type(textoPost, { delay: 30 }); // Delay suave para simular digitação real
+      .type(textoPost, { delay: 30 });
 
-    // Verifica se o botão Post está habilitado
     cy.get('button[type="submit"]')
       .should('not.be.disabled')
       .click();
 
-    // Espera o POST e valida o body da resposta
+    // AGORA deve funcionar porque o mock está na rota correta
     cy.wait('@createPost', { timeout: 20000 }).then((interception) => {
       expect(interception.response.statusCode).to.eq(201);
       const media = interception.response.body.media_url;
@@ -126,27 +108,16 @@ describe('Dashboard - Feed, Scroll & Storage Fix (Robust Version)', () => {
       cy.log('✅ URL do Supabase Validada: ' + media);
     });
 
-    // O campo deve ser limpo e o novo post deve aparecer no topo
     cy.get('textarea').should('have.value', '');
     cy.contains('Post com URL Limpa').should('be.visible');
   });
 
   it('3. Deve alternar entre abas "Para você" e "Seguindo"', () => {
-    // 1. Garantir que a página inicial carregou
     cy.contains('Hello from Para Você!', { timeout: 10000 }).should('be.visible');
-
-    // 2. Clique na aba Seguindo (Ajuste o seletor se você usa data-cy nas abas)
-    // Se você tiver data-cy nas abas, use: cy.get('[data-cy="tab-following"]').click()
     cy.contains('button', /Seguindo/i)
       .should('be.visible')
       .click({ force: true });
-
-    // 3. Aguarda a requisição
-    // Se o wait falha, é porque o onClick do seu botão não está chamando a API correta
     cy.wait('@getFeedFollowing', { timeout: 15000 });
-
-    // 4. Valida conteúdo
     cy.contains('Conteúdo da aba Seguindo').should('be.visible');
   });
-
 });

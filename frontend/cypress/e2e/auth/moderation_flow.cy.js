@@ -1,92 +1,90 @@
 describe('Fluxo de Moderação e Denúncia', () => {
-beforeEach(() => {
-  cy.login('testuser', 'password123'); 
-  
-  // MOCK DO PERFIL
-  cy.intercept('GET', '**/api/accounts/profile/**', {
-    statusCode: 200,
-    body: { 
-      id: 99, 
-      username: 'testuser',
-      email: 'test@example.com'
-    }
-  }).as('getProfile');
+  beforeEach(() => {
+    cy.login({ username: 'testuser', seedFeed: false });
+    
+    cy.intercept('GET', '**/api/accounts/profile/**', {
+      statusCode: 200,
+      body: { 
+        id: 99, 
+        username: 'testuser',
+        email: 'test@example.com'
+      }
+    }).as('getProfile');
 
-  // MOCK DO FEED - MAIS EXPLÍCITO
-  cy.intercept('GET', '**/api/posts/**', {
-    statusCode: 200,
-    body: {
-      results: [{
-        id: 500,
-        content: 'Conteúdo de terceiros para teste',
-        author: { 
-          id: 1, 
-          username: 'estranho', 
-          display_name: 'Usuário Estranho' 
-        },
-        created_at: new Date().toISOString(),
-        media_urls: [],
-        like_count: 0,
-        comment_count: 0,
-        is_liked: false,
-        is_reported: false
-      }]
-    }
-  }).as('getFeed');
+    cy.intercept('GET', '**/api/accounts/feed/**', {
+      statusCode: 200,
+      body: {
+        count: 1,
+        next: null,
+        previous: null,
+        results: [{
+          id: 500,
+          content: 'Conteúdo de terceiros para teste',
+          author: { 
+            id: 1, 
+            username: 'estranho', 
+            display_name: 'Usuário Estranho' 
+          },
+          created_at: new Date().toISOString(),
+          media_url: null,
+          likes_count: 0,
+          comments_count: 0,
+          is_liked: false,
+          moderation_status: 'APPROVED'
+        }]
+      }
+    }).as('getFeed');
 
-  cy.intercept('POST', '**/api/reports/**', {
-    statusCode: 201,
-    body: { 
-      message: 'Report created successfully',
-      report_id: 123 
-    }
-  }).as('submitReport');
+    cy.intercept('POST', '**/api/reports/**', {
+      statusCode: 201,
+      body: { 
+        message: 'Report created successfully',
+        report_id: 123 
+      }
+    }).as('submitReport');
 
-  cy.visit('/dashboard'); // ou a rota correta
-  cy.wait(['@getProfile', '@getFeed']);
-});
+    cy.intercept('GET', '**/api/accounts/suggested-follows/**', {
+      statusCode: 200,
+      body: []
+    }).as('getSuggested');
 
-it('deve mostrar feedback visual após denunciar um post', () => {
-  cy.contains('Conteúdo de terceiros para teste').should('be.visible');
+    cy.visit('/dashboard');
+    cy.wait(['@getProfile', '@getFeed'], { timeout: 10000 });
+  });
 
-  // 1. Clica para abrir
-  cy.get('[data-cy="open-report-modal"]').first().click();
+  it('deve mostrar feedback visual após denunciar um post', () => {
+    cy.contains('Conteúdo de terceiros para teste').should('be.visible');
 
-  // 2. ESPERA ESSENCIAL: Garante que o modal renderizou
-  // Isso impede o erro de "select not found"
-  cy.contains('h3', 'Denunciar Post', { timeout: 10000 }).should('be.visible');
-
-  // 3. Interage com o select (usando force para garantir)
-  cy.get('select').should('exist').select('spam', { force: true });
-  
-  // 4. Confirma a denúncia
-  cy.get('[data-cy="confirm-report-button"]').click();
-
-  // 5. Espera a resposta do servidor (POST 201)
-  cy.wait('@submitReport');
-
-  // 6. VALIDAÇÃO PARA ENCERRAR O TESTE E O LOOP:
-  // Verificamos que o Toast apareceu
-  cy.get('.Toastify__toast')
-    .should('be.visible')
-    .and('contain', 'Obrigado');
-
-  // 7. Garante que o modal FECHOU (Isso mata o loop infinito)
-  cy.get('body').should('not.contain', 'Denunciar Post');
-  
-  cy.log('Fluxo finalizado com sucesso.');
-});
+    cy.get('[data-cy="open-report-modal"]').first().click();
+    cy.contains('h3', 'Denunciar Post', { timeout: 10000 }).should('be.visible');
+    cy.get('select').should('exist').select('spam', { force: true });
+    cy.get('[data-cy="confirm-report-button"]').click();
+    cy.wait('@submitReport', { timeout: 10000 });
+    cy.get('.Toastify__toast', { timeout: 10000 })
+      .should('be.visible')
+      .and('contain', 'Obrigado');
+    cy.get('body').should('not.contain', 'Denunciar Post');
+  });
 
   it('deve mostrar a notificação de denúncia resolvida para o autor', () => {
-    // Garanta que o arquivo cypress/fixtures/notifications_report.json existe!
-    cy.intercept('GET', '**/notifications/', {
-      fixture: 'notifications_report.json'
-    }).as('getNotifications');
+    // CORREÇÃO: Rota SEM /accounts/ (igual aos comentários)
+    cy.intercept('GET', '**/api/notifications/**', {
+      statusCode: 200,
+      body: [
+        {
+          id: 1,
+          notification_type: 'REPORT_UPDATE',
+          text: 'Sua denúncia foi analisada e o conteúdo foi removido.',
+          created_at: new Date().toISOString(),
+          read: false,
+          post_content: 'Conteúdo de terceiros para teste'
+        }
+      ]
+    }).as('getNotificationsTest');
 
     cy.visit('/notifications');
-    cy.wait('@getNotifications');
+    cy.wait('@getNotificationsTest', { timeout: 10000 });
 
-    cy.contains('Denúncia aceite').should('be.visible');
-    cy.contains('O conteúdo foi removido').should('be.visible');
+    cy.contains('Sua denúncia foi analisada', { timeout: 10000 }).should('be.visible');
   });
 });

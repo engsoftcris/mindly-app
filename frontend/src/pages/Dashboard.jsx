@@ -25,7 +25,9 @@ const Dashboard = () => {
       if (urlOrPage && typeof urlOrPage === 'string' && urlOrPage.includes('http')) {
         response = await postsAPI.getFeed(urlOrPage);
       } else {
-        const endpoint = activeTab === 'all' ? "/posts/" : "/accounts/feed/";
+        const endpoint = activeTab === 'all' 
+  ? "/accounts/feed/"   // Agora a Home também usa a nossa lógica protegida!
+  : "/accounts/feed/?following=true"; // Exemplo: você pode passar um filtro se quiser
         response = await postsAPI.getFeed(endpoint);
       }
       await minWait;

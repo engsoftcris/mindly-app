@@ -11,6 +11,8 @@ import Navbar from "./components/Navbar";
 import PrivateRoute from "./components/PrivateRoute";
 import NotificationsPage from "./components/Notifications.jsx"
 import LoadingScreen from "./components/LoadingScreen";
+import SuggestedUsers from "./components/SuggestedUsers";
+import SearchBar from "./components/SearchBar";
 
 function App() {
   const { user, loading} = useAuth();
@@ -38,7 +40,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black flex justify-center">
-      <div className="w-full max-w-[1024px] flex min-h-screen">
+      <div className="w-full max-w-[1300px] flex min-h-screen">
         <header className="w-[80px] xl:w-64 flex-shrink-0">
           <Navbar />
         </header>
@@ -54,12 +56,21 @@ function App() {
         </main>
 
         <aside className="hidden lg:block w-[350px] ml-4">
-          <div className="sticky top-2">
-            <div className="bg-[#16181C] rounded-2xl p-4 border border-gray-800 text-white">
-              <h2 className="text-lg font-bold mb-4">O que está acontecendo</h2>
-            </div>
-          </div>
-        </aside>
+  <div className="sticky top-2 space-y-4 pt-2">
+    
+    {/* 1. COMPONENTE DE BUSCA */}
+    <SearchBar />
+
+    {/* 2. COMPONENTE DE SUGESTÕES (Substituindo o "O que está acontecendo") */}
+    <SuggestedUsers />
+
+    {/* 3. RODAPÉ (Opcional) */}
+    <div className="px-4 text-gray-500 text-xs">
+      <p>© 2026 Mindly - Cristiano</p>
+    </div>
+    
+  </div>
+</aside>
       </div>
 
       {/* LUGAR CORRETO DO TOAST CONTAINER: Dentro do return principal */}

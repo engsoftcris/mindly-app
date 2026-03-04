@@ -2,62 +2,67 @@ describe('Post Creation Flow (Supabase URL Fix)', () => {
   const CLEAN_URL =
     'https://nsallopenmwbwkzrhgmx.supabase.co/storage/v1/object/public/mindly-media/posts/images/test.png';
 
-  const visitAuthed = (path = '/') => {
-    cy.visit(path, {
-      onBeforeLoad(win) {
-        win.localStorage.setItem('access', 'fake-token-123');
-        win.localStorage.setItem('refresh', 'fake-refresh-123');
-      },
-    });
-  };
-
   beforeEach(() => {
     cy.clearLocalStorage();
     cy.clearCookies();
 
-    // 1) Mock Perfil (não depende de /api)
-    cy.intercept('GET', '**/accounts/profile/**', {
-      statusCode: 200,
-      body: {
-        id: 1,
-        username: 'cristiano',
-        display_name: 'Cristiano Tobias',
-        profile_picture: null,
-      },
-    }).as('getProfile');
+    // Usar cy.login() em vez de visitAuthed manual
+    cy.login({ username: 'cristiano', seedFeed: false });
 
-    // 2) Mock Feed inicial (posts em qualquer baseURL)
-    cy.intercept('GET', '**/posts/**', {
+    // CORREÇÃO: Mock do feed com a rota correta
+    cy.intercept('GET', '**/api/accounts/feed/**', {
       statusCode: 200,
       body: {
         count: 1,
         next: null,
+        previous: null,
         results: [
           {
             id: 100,
             content: 'Post antigo do sistema',
-            author: { username: 'sistema', id: 2 },
+            author: { 
+              username: 'sistema', 
+              id: 2,
+              display_name: 'Sistema',
+              profile_picture: null
+            },
             created_at: new Date().toISOString(),
+            likes_count: 0,
+            comments_count: 0,
+            is_liked: false,
+            moderation_status: 'APPROVED'
           },
         ],
       },
-    }).as('getPostsAll');
+    }).as('getFeed'); // Mudar nome para getFeed
 
-    // 3) Mock criação de post (aceita /posts/ com ou sem /api)
-    cy.intercept('POST', '**/posts/**', {
+    // CORREÇÃO: Mock criação de post (rota sem /accounts/)
+    cy.intercept('POST', '**/api/posts/**', {
       statusCode: 201,
       body: {
         id: 99,
         content: 'Sucesso: Post com URL Limpa',
         media_url: CLEAN_URL,
-        author: { username: 'cristiano', id: 1 },
+        author: { 
+          username: 'cristiano', 
+          id: 1,
+          display_name: 'Cristiano Tobias',
+          profile_picture: null
+        },
         moderation_status: 'APPROVED',
         created_at: new Date().toISOString(),
+        likes_count: 0,
+        comments_count: 0,
+        is_liked: false
       },
     }).as('createPost');
 
-    visitAuthed('/');
-    cy.wait(['@getProfile', '@getPostsAll'], { timeout: 20000 });
+    // Mock de notificações e sugestões para evitar 401
+    cy.intercept('GET', '**/api/notifications/**', { statusCode: 200, body: [] }).as('getNotifications');
+    cy.intercept('GET', '**/api/accounts/suggested-follows/**', { statusCode: 200, body: [] }).as('getSuggestions');
+
+    cy.visit('/');
+    cy.wait(['@getProfile', '@getFeed', '@getNotifications', '@getSuggestions'], { timeout: 20000 });
   });
 
   it('1. Deve garantir que o campo de criação está visível no Dashboard', () => {
@@ -93,32 +98,43 @@ describe('Post Creation Flow (Supabase URL Fix)', () => {
   });
 
   it('4. Deve processar o upload de uma imagem e exibir o preview', () => {
-  const pngBase64 =
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax8p0kAAAAASUVORK5CYII='; // 1x1 px PNG
+    const pngBase64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax8p0kAAAAASUVORK5CYII=';
 
-  cy.get('input[type="file"]').selectFile(
-    {
-      contents: Cypress.Buffer.from(pngBase64, 'base64'),
-      fileName: 'test-image.png',
-      mimeType: 'image/png',
-      lastModified: Date.now(),
-    },
-    { force: true }
-  );
+    cy.get('input[type="file"]').selectFile(
+      {
+        contents: Cypress.Buffer.from(pngBase64, 'base64'),
+        fileName: 'test-image.png',
+        mimeType: 'image/png',
+        lastModified: Date.now(),
+      },
+      { force: true }
+    );
 
-  cy.get('img[alt="Preview"]').should('be.visible');
+    cy.get('img[alt="Preview"]').should('be.visible');
 
-  cy.contains('button', '✕').click({ force: true });
-  cy.get('img[alt="Preview"]').should('not.exist');
-});
-
+    cy.contains('button', '✕').click({ force: true });
+    cy.get('img[alt="Preview"]').should('not.exist');
+  });
 
   it('6. Deve mostrar estado de carregamento e desativar o botão ao postar', () => {
     // Override só para este teste
-    cy.intercept('POST', '**/posts/**', {
+    cy.intercept('POST', '**/api/posts/**', {
       delay: 1000,
       statusCode: 201,
-      body: { id: 101, content: 'Post Lento', author: { username: 'cristiano' } },
+      body: { 
+        id: 101, 
+        content: 'Post Lento', 
+        author: { 
+          username: 'cristiano',
+          display_name: 'Cristiano Tobias',
+          profile_picture: null
+        },
+        created_at: new Date().toISOString(),
+        likes_count: 0,
+        comments_count: 0,
+        is_liked: false
+      },
     }).as('postLento');
 
     cy.get('textarea').first().type('Postando com calma...');
@@ -126,8 +142,6 @@ describe('Post Creation Flow (Supabase URL Fix)', () => {
 
     cy.get('button[type="submit"]').should('be.disabled');
     cy.get('textarea').should('be.disabled');
-
-    // Se o texto "Posting..." existir no seu botão, mantenha:
     cy.get('button[type="submit"]').should('contain', 'Posting...');
 
     cy.wait('@postLento');

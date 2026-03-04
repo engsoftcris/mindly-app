@@ -93,25 +93,28 @@ describe('Profile Settings & Real-time Sync (UUID Era) - Robust Version', () => 
   });
 
  it('3. Persistência: Deve manter o nome "Ricardo" ao navegar para a Home', () => {
-    const updatedName = 'Ricardo Silva Pro';
-    
-    cy.intercept('GET', '**/api/accounts/profile/', {
-      statusCode: 200,
-      body: { id: MOCK_UUID, username: USERNAME, display_name: updatedName },
-    }).as('getProfileRicardo');
+  const updatedName = 'Ricardo Silva Pro';
+  
+  cy.intercept('GET', '**/api/accounts/profile/', {
+    statusCode: 200,
+    body: { id: MOCK_UUID, username: USERNAME, display_name: updatedName },
+  }).as('getProfileRicardo');
 
-    cy.intercept('GET', '**/api/posts/**', {
-      statusCode: 200,
-      body: { results: [] },
-    }).as('getPosts');
+  // CORREÇÃO: Mudar de posts para feed
+  cy.intercept('GET', '**/api/accounts/feed/**', {
+    statusCode: 200,
+    body: { count: 0, results: [] },
+  }).as('getFeed');  // ← Nome do alias mudado para getFeed
 
-    cy.get('[data-cy="navbar-home-link"]').click();
+  cy.get('[data-cy="navbar-home-link"]').click();
 
-    cy.url().should('eq', `${Cypress.config().baseUrl}/`);
-    cy.wait('@getPosts');
+  cy.url().should('eq', `${Cypress.config().baseUrl}/`);
+  
+  // CORREÇÃO: Esperar pelo feed, não pelos posts
+  cy.wait('@getFeed', { timeout: 10000 });
 
-    cy.get('[data-cy="navbar-user-display-name"]', { timeout: 10000 })
-      .should('be.visible')
-      .and('contain', 'Ricardo');
-  });
+  cy.get('[data-cy="navbar-user-display-name"]', { timeout: 10000 })
+    .should('be.visible')
+    .and('contain', 'Ricardo');
+});
 });

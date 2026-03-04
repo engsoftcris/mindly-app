@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import api from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify'; // ← Importar toast
 
 const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -26,7 +27,6 @@ const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
       const response = await api.get(`/accounts/profiles/${profileId}/connections/`, {
         params: { type: tab }
       });
-      // suportar paginado ou lista
       const data = Array.isArray(response.data) ? response.data : (response.data.results || []);
       setUsers(data);
     } catch (error) {
@@ -43,45 +43,74 @@ const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
   };
 
   const handleToggleFollow = async (e, u) => {
-    e.stopPropagation();
-    if (!u?.profile_id) return;
+  e.stopPropagation();
+  if (!u?.profile_id) return;
 
-    // não seguir você mesmo
-    if (currentUser && String(currentUser.id) === String(u.profile_id)) return;
+  if (currentUser && String(currentUser.id) === String(u.profile_id)) return;
 
-    const prev = u.is_following;
+  const prev = u.is_following;
+  const username = u.display_name || u.username;
 
-    // optimistic
-    setUsers((arr) =>
-      arr.map((item) =>
-        item.profile_id === u.profile_id ? { ...item, is_following: !prev } : item
-      )
-    );
+  // optimistic update
+  setUsers((arr) =>
+    arr.map((item) =>
+      item.profile_id === u.profile_id ? { ...item, is_following: !prev } : item
+    )
+  );
 
-    setBusyId(u.profile_id);
-    try {
-      const res = await api.post(`/accounts/profiles/${u.profile_id}/follow/`);
+  setBusyId(u.profile_id);
+  try {
+    const res = await api.post(`/accounts/profiles/${u.profile_id}/follow/`);
 
-      // estado final é o do backend
-      if (res?.data?.is_following !== undefined) {
-        setUsers((arr) =>
-          arr.map((item) =>
-            item.profile_id === u.profile_id ? { ...item, is_following: res.data.is_following } : item
-          )
-        );
+    // estado final do backend
+    if (res?.data?.is_following !== undefined) {
+      setUsers((arr) =>
+        arr.map((item) =>
+          item.profile_id === u.profile_id ? { ...item, is_following: res.data.is_following } : item
+        )
+      );
+      
+      if (res.data.is_following) {
+        toast.success(`Agora você está seguindo ${username}! 🎉`);
+      } else {
+        toast.info(`Você deixou de seguir ${username}.`);
       }
-    } catch (err) {
-      // rollback
+    }
+  } catch (err) {
+    // Verificar se é erro de cooldown (5 minutos)
+    if (err.response?.status === 400 && err.response?.data?.cooldown) {
+      const minutes = err.response.data.minutes_remaining || 5;
+      
+      // Toast específico para cooldown
+      toast.warning(
+        <div>
+          <p className="font-bold">⏱️ Aguarde {minutes} minutos</p>
+          <p className="text-sm opacity-90">Você pode seguir novamente em {minutes} minutos.</p>
+        </div>,
+        { autoClose: 5000 }
+      );
+      
+      // Rollback apenas se for erro de cooldown
       setUsers((arr) =>
         arr.map((item) =>
           item.profile_id === u.profile_id ? { ...item, is_following: prev } : item
         )
       );
-      console.error("Falha ao seguir/deixar de seguir:", err);
-    } finally {
-      setBusyId(null);
+    } else {
+      // Rollback para outros erros
+      setUsers((arr) =>
+        arr.map((item) =>
+          item.profile_id === u.profile_id ? { ...item, is_following: prev } : item
+        )
+      );
+      
+      toast.error(`Não foi possível ${prev ? 'deixar de seguir' : 'seguir'} ${username}. Tente novamente.`);
     }
-  };
+    console.error("Falha ao seguir/deixar de seguir:", err);
+  } finally {
+    setBusyId(null);
+  }
+};
 
   if (!isOpen) return null;
 

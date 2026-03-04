@@ -6,7 +6,7 @@ import BlockedUsersList from './BlockedUsersList';
 import ProfilePhotoEditor from './ProfilePhotoEditor'; // Importando o novo componente
 
 const SettingsPage = () => {
-    const { user, updateUser } = useAuth(); // Pegando 'user' do contexto para a foto atual
+    const { user, updateUser, logout } = useAuth(); // Pegando 'user' do contexto para a foto atual
     const navigate = useNavigate();
 
     const [activeTab, setActiveTab] = useState('profile'); 
@@ -71,6 +71,11 @@ const SettingsPage = () => {
             setTimeout(() => setStatusMessage(''), 3000);
         } catch (error) {
             console.error(error);
+              if (error?.response?.status === 401) {
+    logout();
+    return;
+  }
+            
             setStatusMessage('Failed to update settings. ❌');
         }
     };

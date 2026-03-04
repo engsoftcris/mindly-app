@@ -17,6 +17,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         # Buscando campos que agora pertencem ao Profile
     display_name = serializers.CharField(source='profile.display_name', required=False)
     bio = serializers.CharField(source='profile.bio', required=False, allow_blank=True)
+    is_private = serializers.BooleanField(source='profile.is_private', required=False)
 
     class Meta:
         model = User
@@ -30,6 +31,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "upload_picture",
             "social_id",
             "provider",
+            "is_private",
         ]
         read_only_fields = ["id", "username"]
 
@@ -53,21 +55,25 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return image
 
     def update(self, instance, validated_data):
-        # 1. Extrai os dados do Profile (o DRF coloca eles num dicionário chamado 'profile' 
-        # por causa do source='profile.xxx')
+        # 1. Extrai os dados do Profile
         profile_data = validated_data.pop('profile', {})
         
-        # 2. Atualiza os campos do User (username, email, full_name)
+        # 2. Atualiza os campos do User
         instance.full_name = validated_data.get('full_name', instance.full_name)
         instance.email = validated_data.get('email', instance.email)
         instance.save()
 
         # 3. Atualiza o Profile
         profile = instance.profile
+        
+        # AQUI O FIX: Garante que o is_private seja atualizado se vier no payload
+        if 'is_private' in profile_data:
+            profile.is_private = profile_data['is_private']
+
         for attr, value in profile_data.items():
             setattr(profile, attr, value)
         
-        # 4. Lógica da Foto: Se veio upload_picture via serializer
+        # 4. Lógica da Foto
         upload_picture = validated_data.pop('upload_picture', None)
         if upload_picture:
             profile.profile_picture = upload_picture
