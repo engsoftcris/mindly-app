@@ -185,16 +185,17 @@ jobs:
 
   deploy:
     needs: [check-status]
-    if: github.ref == 'refs/heads/main' && success()
+    # O "if" abaixo garante que o deploy SÓ rode na main e SÓ se os testes passarem
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && success()
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Render
         run: |
           echo "🚀 Disparando Deploy no Render..."
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          echo "✅ Deploy iniciado com sucesso!"
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
       - name: Deploy to Vercel
         run: |
           echo "🚀 Disparando Deploy na Vercel..."
-          curl -X POST ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
           echo "✅ Deploys iniciados com sucesso!"
