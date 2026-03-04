@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "exit 0",
+  "ignoreCommand": "[ \"$VERCEL_ENV\" = \"production\" ] && [ \"$VERCEL_DEPLOY_EXT_ID\" = \"\" ]",
   "rewrites": [
     {
       "source": "/(.*)",
