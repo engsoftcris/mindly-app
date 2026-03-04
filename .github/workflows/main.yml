@@ -2,14 +2,16 @@ name: CI/CD Pipeline - Mindly
 
 on:
   push:
-    branches: [ main, 'feature/**' ]
-  # Removido pull_request para evitar duplicidade, 
-  # o Ruleset do GitHub usará o status do push da branch.
+    branches: [ main ]
+  pull_request:
+    branches: [ main ] # Isso vincula os testes ao botão de Merge
 
 concurrency:
-  # Agrupa por workflow e branch. Se houver novo push na mesma branch, cancela o anterior.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Agrupa por workflow e número do PR ou branch. 
+  # Se você der um push novo no PR, ele cancela o teste anterior.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -191,3 +193,8 @@ jobs:
           echo "🚀 Disparando Deploy no Render..."
           curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
           echo "✅ Deploy iniciado com sucesso!"
+      - name: Deploy to Vercel
+        run: |
+          echo "🚀 Disparando Deploy na Vercel..."
+          curl -X POST ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          echo "✅ Deploys iniciados com sucesso!"
