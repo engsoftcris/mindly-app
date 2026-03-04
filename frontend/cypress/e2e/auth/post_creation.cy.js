@@ -6,7 +6,9 @@ describe('Flow: Post Creation with Synthetic Media', () => {
   it('should create a post with a synthetic image file', () => {
     const content = 'Synthetic Image Test ' + Date.now();
     
-    // INTERCEPT ÚNICO para o feed
+    // Uma imagem 1x1 pixel em Base64 para garantir que carrega sem rede externa
+    const base64Image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
     cy.intercept('GET', '**/api/accounts/feed/**', (req) => {
       if (globalThis.postCreated) {
         req.reply({
@@ -16,11 +18,8 @@ describe('Flow: Post Creation with Synthetic Media', () => {
             results: [{
               id: 123,
               content: content,
-              media_url: 'https://via.placeholder.com/150',
-              author: {
-                username: 'testuser',
-                display_name: 'Test User'
-              },
+              media_url: base64Image, // ✅ USANDO BASE64 AQUI
+              author: { username: 'testuser', display_name: 'Test User' },
               created_at: new Date().toISOString(),
               likes_count: 0,
               comments_count: 0
@@ -28,28 +27,17 @@ describe('Flow: Post Creation with Synthetic Media', () => {
           }
         });
       } else {
-        req.reply({
-          statusCode: 200,
-          body: {
-            count: 0,
-            results: []
-          }
-        });
+        req.reply({ statusCode: 200, body: { count: 0, results: [] } });
       }
     }).as('getFeed');
 
-    // CORREÇÃO: Rota do POST sem /accounts/ (igual ao que o frontend chama)
     cy.intercept('POST', '**/api/posts/**', {
       statusCode: 201,
       body: {
         id: 123,
         content: content,
-        media_url: 'https://via.placeholder.com/150',
-        author: {
-          username: 'testuser',
-          display_name: 'Test User',
-          profile_picture: null
-        },
+        media_url: base64Image, // ✅ E AQUI TAMBÉM
+        author: { username: 'testuser', display_name: 'Test User', profile_picture: null },
         created_at: new Date().toISOString(),
         likes_count: 0,
         comments_count: 0,
@@ -58,37 +46,32 @@ describe('Flow: Post Creation with Synthetic Media', () => {
     }).as('postRequest');
 
     cy.visit('/');
-    
     globalThis.postCreated = false;
+    cy.wait('@getFeed');
     
-    cy.wait('@getFeed', { timeout: 10000 });
-    
-    cy.get('textarea[placeholder*="What\'s on your mind?"]', { timeout: 10000 })
-      .first()
-      .should('be.visible')
-      .type(content);
+    cy.get('textarea[placeholder*="What\'s on your mind?"]').first().type(content);
 
     cy.get('input[type="file"]').selectFile({
       contents: Cypress.Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==', 'base64'),
       fileName: 'synthetic-test.png',
-      mimeType: 'image/png',
-      lastModified: Date.now()
+      mimeType: 'image/png'
     }, { force: true });
 
-    cy.get('button[type="submit"]', { timeout: 10000 })
-      .should('not.be.disabled')
-      .click();
-
-    // AGORA deve funcionar porque a rota está correta
-    cy.wait('@postRequest', { timeout: 10000 });
+    cy.get('button[type="submit"]').click();
+    cy.wait('@postRequest');
     
     globalThis.postCreated = true;
-    
     cy.reload();
-    cy.wait('@getFeed', { timeout: 10000 });
+    cy.wait('@getFeed');
 
-    cy.contains(content, { timeout: 10000 }).should('be.visible');
-    cy.get('img[alt="Post media"]', { timeout: 10000 }).should('be.visible');
+    cy.contains(content).should('be.visible');
+
+    // Validação final: agora vai dar > 0 porque o base64 é imediato
+    cy.get('img[alt="Post media"]', { timeout: 10000 })
+      .should('be.visible')
+      .and(($img) => {
+        expect($img[0].naturalWidth).to.be.greaterThan(0);
+      });
   });
 
   it('should create a post with a synthetic video file', () => {

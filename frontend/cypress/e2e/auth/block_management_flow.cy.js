@@ -72,64 +72,59 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
   cy.get('[data-cy="post-card"]').should('not.exist');
 });
 
-  it('Deve realizar o fluxo de bloqueio corretamente', () => {
-  cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
-    statusCode: 200,
-    body: {
-      id: TARGET_UUID,
-      username: TARGET_USER,
-      display_name: 'Alvo',
-      profile_picture: '',
-      bio: '',
-      is_blocked: false,
-      is_restricted: false,
-      posts: [],
-    },
-  }).as('getTargetProfile');
+ it('Deve realizar o fluxo de bloqueio corretamente', () => {
+    cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
+      statusCode: 200,
+      body: {
+        id: TARGET_UUID,
+        username: TARGET_USER,
+        display_name: 'Alvo',
+        profile_picture: '',
+        bio: '',
+        is_blocked: false,
+        is_restricted: false,
+        posts: [],
+      },
+    }).as('getTargetProfile');
 
-  cy.intercept('POST', `**/api/accounts/profiles/${TARGET_UUID}/block/`, {
-    statusCode: 201,
-    body: { is_blocked: true },
-  }).as('blockAction');
+    cy.intercept('POST', `**/api/accounts/profiles/${TARGET_UUID}/block/`, {
+      statusCode: 201,
+      body: { is_blocked: true },
+    }).as('blockAction');
 
-  cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
-  cy.wait('@getTargetProfile');
+    // Intercept da lista de bloqueados que será usada depois
+    cy.intercept('GET', '**/api/accounts/profiles/blocked-users/', {
+      statusCode: 200,
+      body: [{ id: TARGET_UUID, username: TARGET_USER, display_name: 'Alvo' }],
+    }).as('listBlocked');
 
-  // ✅ garante que o perfil carregou e o menu existe
-  cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
-  cy.get('[data-cy="user-action-menu"]', { timeout: 20000 }).should('be.visible');
+    cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
+    cy.wait('@getTargetProfile');
 
-  // ✅ abre menu e valida estado aberto
-  cy.get('[data-cy="user-action-menu-trigger"]', { timeout: 20000 })
-    .should('be.visible')
-    .click({ force: true })
-    .should('have.attr', 'aria-expanded', 'true');
+    cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
+    
+    // Abre o menu e bloqueia
+    openActionMenu();
+    clickBlock();
 
-  // ✅ panel NÃO é portal
-  cy.get('[data-cy="user-action-menu-panel"]', { timeout: 10000 })
-    .should('be.visible');
+    cy.wait('@blockAction');
 
-  cy.get('[data-cy="user-action-block"]', { timeout: 10000 })
-    .should('be.visible')
-    .click({ force: true });
+    // ✅ CORREÇÃO 1: Use regex ou espere a mudança de fato. 
+    // Se o seu app redireciona para /feed, garantimos que a URL mudou.
+    cy.url({ timeout: 20000 }).should('match', /\/feed/);
 
-  cy.wait('@blockAction');
+    // ✅ CORREÇÃO 2: Em vez de usar cy.login novamente (que reinicia o app),
+    // vamos navegar via UI ou diretamente pelo cy.visit para manter a sessão quente.
+    cy.visit('/settings');
+    
+    cy.get('[data-cy="settings-view-blocked"]', { timeout: 20000 })
+      .should('be.visible')
+      .click();
+      
+    cy.wait('@listBlocked');
 
-  // Seu componente navega pra /feed após bloquear a partir de /profile
-  cy.location('pathname', { timeout: 20000 }).should('include', '/feed');
-
-  // intercept de settings ANTES de ir pra settings
-  cy.intercept('GET', '**/api/accounts/profiles/blocked-users/', {
-    statusCode: 200,
-    body: [{ id: TARGET_UUID, username: TARGET_USER, display_name: 'Alvo' }],
-  }).as('listBlocked');
-
-  cy.login({ path: '/settings', seedFeed: false });
-  cy.get('[data-cy="settings-view-blocked"]', { timeout: 20000 }).click();
-  cy.wait('@listBlocked');
-
-  cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
-});
+    cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
+  });
 
   it('Deve bloquear múltiplos usuários e gerenciar a lista corretamente', () => {
     cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
