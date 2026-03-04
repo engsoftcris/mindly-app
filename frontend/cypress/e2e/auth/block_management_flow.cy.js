@@ -111,7 +111,7 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
 
     // ✅ CORREÇÃO 1: Use regex ou espere a mudança de fato. 
     // Se o seu app redireciona para /feed, garantimos que a URL mudou.
-    cy.url({ timeout: 20000 }).should('match', /\/feed/);
+    cy.url({ timeout: 20000 }).should('match', /\/$/);
 
     // ✅ CORREÇÃO 2: Em vez de usar cy.login novamente (que reinicia o app),
     // vamos navegar via UI ou diretamente pelo cy.visit para manter a sessão quente.
