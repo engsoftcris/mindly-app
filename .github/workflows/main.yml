@@ -3,14 +3,13 @@ name: CI/CD Pipeline - Mindly
 on:
   push:
     branches: [ main, 'feature/**' ]
-  pull_request:
-    branches: [ main ]
-    types: [opened, synchronize, reopened]
+  # Removido pull_request para evitar duplicidade, 
+  # o Ruleset do GitHub usará o status do push da branch.
 
 concurrency:
+  # Agrupa por workflow e branch. Se houver novo push na mesma branch, cancela o anterior.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
