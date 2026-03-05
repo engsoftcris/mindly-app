@@ -20,12 +20,8 @@ from rest_framework_simplejwt.views import (
 )
 
 # Importações das tuas Views
-from accounts.views import api_root, PostViewSet, CommentViewSet, NotificationViewSet, ReportViewSet, ModerationViewSet
+from accounts.views import ApiRootView, PostViewSet, CommentViewSet, NotificationViewSet, ReportViewSet, ModerationViewSet
 
-# Função de Health Check
-@csrf_exempt
-def health_check(request):
-    return JsonResponse({"status": "online", "message": "Mindly Backend is awake"}, status=200)
 
 # 1. Configuração do Router para Posts e outras ViewSets
 router = DefaultRouter()
@@ -38,10 +34,7 @@ router.register(r'moderation', ModerationViewSet, basename='moderation')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    
-    # Rota de Health Check (para o Uptime Monitor)
-    path("api/health/", health_check, name='health_check'),
-    
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     # Rota principal para o Feed e Posts (/api/posts/)
     path("api/", include(router.urls)),
     
@@ -50,7 +43,7 @@ urlpatterns = [
 
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     
-    path('', api_root, name='index'),
+    path('', ApiRootView.as_view(), name='api-root'),
     
     # Rotas de suporte JWT
     #path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),

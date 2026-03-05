@@ -5,13 +5,6 @@ from accounts.models import Post, Comment
 
 @pytest.mark.django_db
 class TestComments:
-    def test_health_check_endpoint(self, api_client):
-        """Valida se o nosso 'keep-awake' endpoint está vivo"""
-        url = reverse('health_check')
-        response = api_client.get(url)
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json()['status'] == 'online'
-
     def test_create_comment_authenticated(self, api_client, user, post):
         """Testa se um user logado pode comentar num post"""
         api_client.force_authenticate(user=user)

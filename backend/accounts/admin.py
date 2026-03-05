@@ -111,10 +111,22 @@ class PostAdmin(admin.ModelAdmin):
         return obj.content[:50] + "..." if len(obj.content) > 50 else obj.content
     
     def media_preview(self, obj):
-        if obj.media:
-            return format_html('<img src="{}" style="width:30px;height:30px;object-fit:cover;"/>', obj.media.url)
-        return "Texto"
-    media_preview.short_description = 'Mídia'
+        if not obj.media:
+            return "Texto"
+        
+        url = obj.media.url
+        # Verifica se é um formato de vídeo comum
+        if url.lower().endswith(('.mp4', '.webm', '.mov')):
+            return format_html(
+                '<video src="{}" style="width:100px;height:auto;" muted loop playsinline></video>',
+                url
+            )
+        
+        # Se for imagem, mantém o padrão
+        return format_html(
+            '<img src="{}" style="width:45px;height:45px;object-fit:cover;border-radius:4px;" />',
+            url
+        )
 
 # --- ADMIN DE DENÚNCIAS (REPORTS) ---
 @admin.register(Report)
