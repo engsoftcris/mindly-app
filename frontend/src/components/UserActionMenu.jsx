@@ -35,18 +35,24 @@ const UserActionMenu = ({
   const username = targetProfile?.username || targetProfile?.user?.username || 'user';
   const profileId = targetProfile?.id || targetProfile?.pk;
 
-  const targetUserId = useMemo(() => {
-    const v =
-      targetProfile?.user_id ??
-      targetProfile?.id ??
-      targetProfile?.user ??
-      targetProfile?.user?.id;
+ const targetUserId = useMemo(() => {
+  // Vamos ver exatamente o que tem nesse objeto no console
+  
+  const v = targetProfile?.id || targetProfile?.profile_id || targetProfile?.user_id;
+  
+  const finalId = v ? String(v) : null;
+  return finalId;
+}, [targetProfile]);
 
-    if (v == null) return null;
-    return typeof v === 'string' || typeof v === 'number' ? String(v) : null;
-  }, [targetProfile]);
+// No canBlock, vamos logar a comparação
+const canBlock = useMemo(() => {
+  const cur = String(currentUserId || "");
+  const tar = String(targetUserId || "");
+  const result = !!(profileId && cur && tar && cur !== tar);
+  
+  return result;
+}, [profileId, currentUserId, targetUserId]);
 
-  const canBlock = !!(profileId && currentUserId && targetUserId && currentUserId !== targetUserId);
 
   // Função unificada para Bloquear/Desbloquear (Toggle)
   const handleToggleBlock = async (e) => {

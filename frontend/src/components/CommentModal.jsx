@@ -40,18 +40,17 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
   const charsLeft = MAX_CHARS - newComment.length;
 
   // Logged-in user id (Django User.id)
-  const currentUserId = currentUser?.user_id != null ? String(currentUser.user_id) : null;
+ // Substitua a linha do currentUserId (por volta da linha 44):
+const currentUserId = useMemo(() => {
+  return currentUser?.id || currentUser?.profile_id || null;
+}, [currentUser]);
 
-  // Post owner id (Django User.id)
-  const postOwnerId = useMemo(() => {
-    return getId(
-      post?.author?.id ??
-      post?.author?.user?.id ??
-      post?.author?.user ??
-      post?.user?.id ??
-      post?.user
-    );
-  }, [post]);
+// No CommentModal.jsx, altere o postOwnerId:
+// Procure a linha do postOwnerId no CommentModal.jsx
+const postOwnerId = useMemo(() => {
+  // Pegue o ID do perfil (UUID), não o do usuário (Integer)
+  return post?.author?.id || post?.author?.profile_id || null; 
+}, [post]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];

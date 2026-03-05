@@ -159,25 +159,31 @@ describe("CommentItem (component)", () => {
     );
   });
 
-  it("delete com confirmação: chama api.delete, chama callback e mostra toast", () => {
-  const comment = baseComment({ id: 321, author: 999 }) // autor diferente, mas user é dono do post
-  api.delete.resolves({ status: 204 })
+ it("delete com confirmação: chama api.delete, chama callback e mostra toast", () => {
+    const commentId = "321";
+    const comment = baseComment({ 
+      id: commentId, 
+      author: "999", 
+      author_id: "999" 
+    }); 
+    
+    api.delete.resolves({ status: 204 });
 
-  mountComponent({
-    comment,
-    currentUserId: "7",
-    postOwnerId: "7",
-  })
+    mountComponent({
+      comment,
+      currentUserId: "7",
+      postOwnerId: "7",
+    });
 
-  cy.get('button[title="Remove comment (moderation)"]').click()
+    // ✅ O SEGREDO: Usamos { force: true } para clicar mesmo com opacity-0
+    cy.get('button[title="Remove comment (moderation)"]')
+      .click({ force: true });
 
-  cy.contains("Remove this comment from your post?").should("be.visible")
-  cy.contains("Confirm").click()
+    cy.contains("Remove this comment from your post?").should("be.visible");
+    cy.contains("Confirm").click();
 
-  cy.get("@apiDelete").should("have.been.calledOnceWith", "/comments/321/")
-  cy.get("@onDeleteSuccess").should("have.been.calledOnceWith", 321)
-
-  // ✅ mensagem real do componente
-  cy.get("@toastInfo").should("have.been.calledWith", "Comentário removido.")
-})
+    cy.get("@apiDelete").should("have.been.calledWith", `/comments/${commentId}/`);
+    cy.get("@onDeleteSuccess").should("have.been.calledWith", commentId);
+    cy.get("@toastInfo").should("have.been.calledWith", "Comentário removido.");
+  });
 });

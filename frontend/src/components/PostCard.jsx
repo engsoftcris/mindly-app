@@ -58,27 +58,42 @@ const PostCard = ({
 
   const author = post?.author;
 
-  // ✅ IDs normalizados (strings)
-  const currentUserId = useMemo(
-    () => (currentUser?.user_id != null ? String(currentUser.user_id) : getId(currentUser?.id)),
-    [currentUser]
-  );
+ // ✅ Pega o UUID do usuário logado (ex: "08b3aa69...")
+  const currentUserId = useMemo(() => {
+    // No seu caso, o id já está vindo como o UUID
+    const id = currentUser?.id || currentUser?.profile_id;
+    return id ? String(id) : null;
+  }, [currentUser]);
 
-  const authorUserId = useMemo(
-  () => (author?.id != null ? String(author.id) : null),
-  [author]
-);
+  // ✅ Pega o UUID do autor do post (ex: "08b3aa69...")
+  const authorUserId = useMemo(() => {
+    // Aqui buscamos o profile_id ou o id (se for UUID) do autor
+    const id = author?.profile_id || author?.id;
+    
+    // Pequena trava de segurança: se o id for um número (como o "4" do log), 
+    // ele não vai bater com o UUID. Precisamos do UUID aqui.
+    return id ? String(id) : null;
+  }, [author]);
+
+
+  const isOwnPost = useMemo(() => {
+    if (!currentUserId || !authorUserId) return false;
+    // Se o autorUserId estiver vindo como "4", e o logado como "08b3...", vai dar false.
+    // Certifique-se que o authorUserId também seja o UUID longo.
+    return currentUserId === authorUserId;
+  }, [currentUserId, authorUserId]);
+
 
   const profileIdForLink = useMemo(() => getProfileId(author), [author]);
 
-  // ✅ Agora isOwnPost compara USER.id com author.user_id
-  const isOwnPost = !!(currentUserId && authorUserId && currentUserId === authorUserId);
-
+ 
   const isPending = post?.moderation_status === 'PENDING';
   const isRejected = post?.moderation_status === 'REJECTED';
 
   const handleUpdate = async () => {
     const next = (editContent || '').trim();
+    
+    // Se não mudou nada, só fecha o modo edição
     if (!next || next === (post?.content || '').trim()) {
       setIsEditing(false);
       setEditContent(post?.content || '');
@@ -87,7 +102,14 @@ const PostCard = ({
 
     setLoading(true);
     try {
-      const response = await postsAPI.update(post.id, { content: next });
+      // ✅ O SEGREDO: Usar FormData para evitar o erro 415
+      const formData = new FormData();
+      formData.append('content', next);
+
+      // Enviamos o formData. 
+      // Nota: Verifique se o seu postsAPI.update aceita o objeto de configuração do Axios
+      // Caso dê erro no postsAPI, use: await api.patch(`/posts/${post.id}/`, formData)
+      const response = await postsAPI.update(post.id, formData);
 
       setPost(response.data);
       if (onPostUpdate) onPostUpdate(response.data);
@@ -95,6 +117,7 @@ const PostCard = ({
       toast.success('Post updated and sent for review.');
       setIsEditing(false);
     } catch (error) {
+      console.error("Erro na edição:", error.response?.data);
       const msg =
         error?.response?.data?.detail ||
         error?.response?.data?.content?.[0] ||

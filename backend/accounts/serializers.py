@@ -260,7 +260,7 @@ class BlockSerializer(serializers.ModelSerializer):
 class CommentSerializer(serializers.ModelSerializer):
     author_name = serializers.ReadOnlyField(source='author.username')
     author_avatar = serializers.SerializerMethodField()
-    author_id = serializers.IntegerField(source='author.id', read_only=True)
+    author_id = serializers.CharField(source='author.profile.id', read_only=True)
 
     class Meta:
         model = Comment

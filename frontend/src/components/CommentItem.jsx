@@ -1,5 +1,5 @@
 // frontend/src/components/CommentItem.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import { FaEdit, FaTrash, FaCheck, FaTimes } from 'react-icons/fa';
@@ -22,29 +22,26 @@ const CommentItem = ({ comment, currentUserId, postOwnerId, onDeleteSuccess }) =
   const [editContent, setEditContent] = useState(comment.content || '');
   const [loading, setLoading] = useState(false);
 
-  // Autor do comentário (aceita vários shapes)
-  const commentAuthorId = toId(comment.author ?? comment.author_id ?? comment.user);
-  const ownerPostId = toId(postOwnerId);
+  // No CommentItem.jsx, altere como pegamos o commentAuthorId:
+const commentAuthorId = useMemo(() => {
+  // Agora o author_id virá como '08b3aa69...' do backend
+  const id = comment.author_id || comment.author?.id;
+  return id ? String(id) : null;
+}, [comment]);
 
-  const isCommentOwner = !!(currentUserId && commentAuthorId && currentUserId === commentAuthorId);
-  const isPostOwner = !!(currentUserId && ownerPostId && currentUserId === ownerPostId);
+const ownerPostId = useMemo(() => {
+  // O postOwnerId que o Modal passa também está vindo como "4". 
+  // Precisamos que o Modal passe o UUID!
+  return postOwnerId ? String(postOwnerId) : null;
+}, [postOwnerId]);
 
+// E a comparação agora será UUID com UUID:
+const isCommentOwner = !!(currentUserId && commentAuthorId && currentUserId === commentAuthorId);  const isPostOwner = !!(currentUserId && ownerPostId && currentUserId === ownerPostId);
   // Regras
   const canEdit = isCommentOwner; // ✅ autor sempre pode editar
   const canDelete = isCommentOwner || isPostOwner; // ✅ autor OU dono do post
 
-  // Debug enquanto ajusta
-  console.log('PERMISSOES', {
-    currentUserId,
-    commentAuthorId,
-    ownerPostId,
-    isCommentOwner,
-    isPostOwner,
-    canEdit,
-    canDelete,
-    commentId: comment.id,
-  });
-
+ 
   const handleUpdate = async () => {
     const next = (editContent || '').trim();
 

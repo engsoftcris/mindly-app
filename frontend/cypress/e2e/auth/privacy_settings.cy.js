@@ -86,29 +86,33 @@ describe('Flow: Profile Privacy Settings', () => {
   // it('should show confirmation modal when toggling private mode', () => {...})
 
   it('should update UI immediately after toggling (optimistic update)', () => {
+    // CORREÇÃO: Usar delay nativo do Cypress em vez de setTimeout
     cy.intercept('PATCH', '**/api/accounts/profile/', (req) => {
-      // Delay para testar UI otimista
-      setTimeout(() => {
-        req.reply({
-          statusCode: 200,
-          body: {
-            ...req.body,
-            message: "Settings updated successfully! ✅"
-          }
-        });
-      }, 2000);
+      req.reply({
+        statusCode: 200,
+        body: {
+          ...req.body,
+          message: "Settings updated successfully! ✅"
+        },
+        delay: 2000 // O Cypress segura a resposta por 2s de forma correta
+      });
     }).as('updateSettingsSlow');
 
+    // 1. Clica no toggle
     cy.get('[data-cy="settings-privacy-toggle"]').click();
     
-    // UI deve mudar imediatamente (otimista)
+    // 2. VALIDAÇÃO OTIMISTA: A UI deve mudar na hora, mesmo sem o servidor responder
+    // (Pois o intercept ainda está "segurando" a resposta por 2 segundos)
     cy.get('[data-cy="settings-privacy-toggle"]')
       .should('have.class', 'bg-indigo-600');
     
+    // 3. Clica no salvar
     cy.get('[data-cy="settings-submit-button"]').click();
+    
+    // 4. Espera o intercept terminar (os 2 segundos de delay)
     cy.wait('@updateSettingsSlow');
     
-    // Estado permanece o mesmo após sucesso
+    // 5. Verifica se o estado se manteve após a resposta chegar
     cy.get('[data-cy="settings-privacy-toggle"]')
       .should('have.class', 'bg-indigo-600');
   });
