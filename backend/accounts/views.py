@@ -306,7 +306,7 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         if serializer.instance.user != self.request.user:
             raise PermissionDenied("Não podes editar.")
-        serializer.save()
+        serializer.save(moderation_status='PENDING')
 
     @action(detail=True, methods=['post'], url_path='like')
     def toggle_like(self, request, pk=None):
