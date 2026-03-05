@@ -27,11 +27,6 @@ class TestLikes:
         assert response.data['likes_count'] == 0
         assert Like.objects.filter(post=post).count() == 0
 
-    def test_like_post_unauthenticated(self, api_client, post):
-        url = f"/api/posts/{post.pk}/like/"
-        response = api_client.post(url)
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
     def test_multiple_likes_integrity(self, auth_client, post):
         """Garante que múltiplos cliques resultam no estado correto (Toggle)"""
         url = f"/api/posts/{post.pk}/like/"

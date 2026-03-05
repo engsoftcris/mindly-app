@@ -10,6 +10,7 @@ from datetime import timedelta, datetime, timezone
 from django.http import JsonResponse
 from django.db.models import Q, Count
 import os
+from django.shortcuts import render
 
 # Ferramentas do Social Auth
 from social_django.utils import load_strategy, load_backend
@@ -35,16 +36,21 @@ from .serializers import (
     MyTokenObtainPairSerializer
 )
 
-# --- ROOT API ---
-def api_root(request):
-    return JsonResponse({
-        "project": "Mindly API",
-        "status": "active",
-        "version": "0.1.0",
-        "timestamp": datetime.now().isoformat(),
-        "author": "engsoftcris"
-    })
 
+
+# --- ROOT API ---
+class ApiRootView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # Passa apenas contexto para o template do dashboard
+        from django.utils.timezone import now
+        context = {
+            "status": "online",        # ou "offline" se quiser mock
+            "timestamp": now().isoformat()
+        }
+        return render(request, "api.html", context)
+    
 # --- AUTHENTICATION ---
 class GoogleLoginView(APIView):
     permission_classes = [AllowAny]
