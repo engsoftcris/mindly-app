@@ -81,6 +81,8 @@ This project represents a **total engineering effort of 104 Story Points (Fibona
 * **Scalable Storage**
   Architecture prepared for S3 / Cloudinary integration with explicit *“Under Analysis”* UI states.
 
+  :)
+
 ---
 
 > **Mindly is not a demo project.**
