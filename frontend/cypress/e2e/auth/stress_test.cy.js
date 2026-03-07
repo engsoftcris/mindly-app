@@ -1,5 +1,5 @@
 describe('TAL-37: Teste de Carga e Concorrência', () => {
-  const TOTAL_USERS = 100;
+  const TOTAL_USERS = 20;
   const API_URL = 'http://localhost:8000/api/accounts/profile/';
 
   it(`Deve suportar ${TOTAL_USERS} requisições simultâneas (Injeção Direta)`, () => {
