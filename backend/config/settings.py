@@ -103,8 +103,10 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated"
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
+         "accounts.middleware.JWTAuthenticationSafe",
         "rest_framework.authentication.SessionAuthentication",
-        "accounts.middleware.JWTAuthenticationSafe",
+       
+        
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",

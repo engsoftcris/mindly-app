@@ -300,7 +300,22 @@ class PostViewSet(viewsets.ModelViewSet):
         ).exclude(user__id__in=all_blocks).distinct().order_by('-created_at')
     
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        # 1. Salva o post (o Django processa o upload aqui)
+        instance = serializer.save(user=self.request.user)
+
+        # 2. Lógica TAL-37: Limpeza imediata de buffers e temporários
+        if instance.media:
+            try:
+                # Fecha o arquivo explicitamente para liberar o descritor de arquivo (Too many open files)
+                if hasattr(instance.media, 'file'):
+                    instance.media.file.close()
+                
+                # O Django costuma manter o arquivo no /tmp até o fim do processo.
+                # Ao deletar o atributo 'file' do objeto em memória após o save, 
+                # ajudamos o Garbage Collector a limpar o lixo do disco.
+                del instance.media.file
+            except Exception as e:
+                print(f"Erro ao limpar temporários: {e}")
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

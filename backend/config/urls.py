@@ -8,10 +8,6 @@ import os
 from django.views.decorators.csrf import csrf_exempt
 from accounts.views import MyTokenObtainPairView
 
-@csrf_exempt # Garante que requisições externas não sejam barradas por falta de token CSRF
-def health_check(request):
-    return JsonResponse({"status": "online", "message": "Mindly Backend is awake"}, status=200)
-
 # Importações do REST Framework
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import (
@@ -30,6 +26,17 @@ router.register(r'comments', CommentViewSet, basename='comment')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'reports', ReportViewSet, basename='report')
 router.register(r'moderation', ModerationViewSet, basename='moderation')
+
+@csrf_exempt
+def health_check(request):
+    """
+    Rota para Cron-job e Health Check do Render.
+    Retorna apenas JSON, sem tocar no banco ou em middlewares pesados.
+    """
+    return JsonResponse(
+        {"status": "online", "message": "Mindly Backend is awake"}, 
+        status=200
+    )
 
 
 urlpatterns = [
@@ -51,6 +58,8 @@ urlpatterns = [
     
     # Social Auth
     path('social-auth/', include('social_django.urls', namespace='social')),
+
+    path('api/health/', health_check, name='health-check'),
 ]
 
 # Servir Media e Static em Desenvolvimento
