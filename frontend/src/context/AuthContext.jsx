@@ -25,11 +25,9 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchUserProfile = useCallback(async () => {
-    const minWait = new Promise(resolve => setTimeout(resolve, 1500));
     try {
       const [response] = await Promise.all([
         api.get('/accounts/profile/'),
-        minWait
       ]);
       setUser(response.data);
       localStorage.setItem('user', JSON.stringify(response.data));

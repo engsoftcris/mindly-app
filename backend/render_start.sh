@@ -19,5 +19,11 @@ echo "--- PASSO 1.5: CRIANDO SUPERUSER ---"
 # O '|| true' serve para o script não travar caso o usuário já exista
 python manage.py createsuperuser --noinput || echo "Superuser já existe ou erro na criação."
 
-echo "--- PASSO 2: SUBINDO GUNICORN ---"
-exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+echo "--- PASSO 2: SUBINDO GUNICORN COM OTIMIZAÇÃO [TAL-37] ---"
+# Adicionamos --worker-class gevent para concorrência e --timeout 120 para evitar o erro 504
+exec gunicorn config.wsgi:application \
+    --bind 0.0.0.0:$PORT \
+    --worker-class gevent \
+    --workers 4 \
+    --timeout 120 \
+    --keep-alive 5
