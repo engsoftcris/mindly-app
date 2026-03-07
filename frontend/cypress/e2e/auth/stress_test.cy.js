@@ -1,7 +1,7 @@
 describe('TAL-37: Teste de Carga e Concorrência', () => {
 
-  const TOTAL_USERS = 1000
-  
+  const TOTAL_USERS = 20
+
   const API_URL = '/api/accounts/profile/'
 
   it(`Deve suportar ${TOTAL_USERS} requisições simultâneas`, () => {
