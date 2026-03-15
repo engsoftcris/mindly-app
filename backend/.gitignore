@@ -31,7 +31,6 @@ wheels/
 *.egg
 
 # --- Quality & Testing (ISO 9126 / CI) ---
-.pylintrc
 .mypy_cache/
 .pytest_cache/
 .coverage

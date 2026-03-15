@@ -43,35 +43,3 @@ dev = [
     "djangorestframework-stubs (>=3.16.8,<4.0.0)"
 ]
 
-[tool.mypy]
-# Indica ao mypy para usar os plugins específicos para Django e DRF
-plugins = [
-    "mypy_django_plugin.main",
-    "mypy_drf_plugin.main",
-]
-
-# Configurações de rigor (Strict mode parcial para não travar seu desenvolvimento)
-strict = true
-ignore_missing_imports = true
-check_untyped_defs = true
-
-# Ignora erros em arquivos que você não controla ou que são gerados automaticamente
-exclude = [
-    "migrations/",
-    "venv/",
-    ".venv/",
-    "tests/",
-]
-
-[tool.django-stubs]
-# MUITO IMPORTANTE: Aponte para o seu arquivo de settings
-django_settings_module = "config.settings"
-
-# Aqui você pode ignorar campos específicos se o plugin reclamar
-[[tool.mypy.overrides]]
-module = "*.migrations.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "manage"
-ignore_errors = true
