@@ -164,10 +164,16 @@ jobs:
 
   deploy-production:
     needs: [test-backend, test-frontend-component, test-frontend-e2e]
+    # Só executa se os testes passarem e for um push na branch main
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Render
+      - name: Deploy to Render (Backend)
         run: |
           echo "🚀 Disparando Deploy no Render..."
           curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Deploy to Vercel (Frontend)
+        run: |
+          echo "🚀 Disparando Deploy na Vercel via Hook..."
+          curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
