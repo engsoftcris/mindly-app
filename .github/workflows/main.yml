@@ -155,7 +155,6 @@ jobs:
           browser: chrome
 
   check-status:
-    if: github.event_name == 'pull_request'
     needs: [test-backend, test-frontend-component, test-frontend-e2e]
     runs-on: ubuntu-latest
     steps:
@@ -163,7 +162,7 @@ jobs:
         run: echo "✅ Qualidade garantida para o merge!"
 
   deploy-production:
-    needs: [test-backend, test-frontend-component, test-frontend-e2e]
+    needs: [check-status]
     # Só executa se os testes passarem e for um push na branch main
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
