@@ -111,30 +111,80 @@ describe('Mindly - Fluxo de Comentários com data-cy', () => {
     cy.get('[data-cy="comment-input"]').should('have.value', '')
   })
 
-  // 6. POSTAR IMAGEM
+ // 6. POSTAR IMAGEM - Ajustado para o seu CommentModal.jsx
   it('Deve postar um comentário com imagem do PC usando seletores data-cy', () => {
     cy.intercept('POST', '/api/comments/', {
       statusCode: 201,
-      body: { id: 1000, author: { username: 'testuser' }, content: 'Foto! 📸', image: 'test.png', created_at: new Date().toISOString() }
-    }).as('postCommentImage')
-    visitAuthed('/')
-    cy.get('[data-cy="comment-button"]').first().click({ force: true })
-    cy.get('[data-cy="file-input"]').selectFile({ contents: Cypress.Buffer.from('test'), fileName: 'test.png' }, { force: true })
-    cy.get('[data-cy="reply-submit"]').click({ force: true })
-    cy.wait('@postCommentImage')
-  })
+      body: { 
+        id: 1000, 
+        author: { username: 'testuser' }, 
+        content: 'Foto! 📸', 
+        image: 'test.png', 
+        created_at: new Date().toISOString() 
+      }
+    }).as('postCommentImage');
 
-  // 7. REMOVER IMAGEM E TROCAR POR GIF (CORRIGIDO MOCK)
+    visitAuthed('/');
+    cy.wait(['@getProfile', '@getFeed']);
+    
+    // Abre o modal
+    cy.get('[data-cy="comment-button"]').first().click({ force: true });
+    cy.wait('@getComments');
+
+    // BLINDAGEM: Localiza o input que está DENTRO do modal-card
+    cy.get('[data-cy="comment-modal-card"]').within(() => {
+      // Usa attachFile ou selectFile diretamente no input hidden
+      cy.get('input[data-cy="file-input"]').selectFile(
+        { 
+          contents: Cypress.Buffer.from('fake-image-data'), 
+          fileName: 'test.png', 
+          mimeType: 'image/png' 
+        }, 
+        { force: true }
+      );
+    });
+
+    // VALIDAÇÃO: O seu código renderiza a div com data-cy="image-preview"
+    // Aumentamos o timeout para o URL.createObjectURL processar
+    cy.get('[data-cy="image-preview"]', { timeout: 15000 }).should('be.visible');
+    
+    // Verifica se a imagem dentro do preview carregou o src
+    cy.get('[data-cy="image-preview-display"]').should('have.attr', 'src').and('include', 'blob:');
+
+    cy.get('[data-cy="reply-submit"]').click({ force: true });
+    cy.wait('@postCommentImage');
+  });
+
+  // 7. REMOVER IMAGEM - Ajustado para o seu CommentModal.jsx
   it('Deve permitir remover a imagem selecionada e trocar por um GIF', () => {
-    visitAuthed('/')
-    cy.get('[data-cy="comment-button"]').first().click({ force: true })
-    cy.get('[data-cy="file-input"]').selectFile({ contents: Cypress.Buffer.from('t'), fileName: 'i.png' }, { force: true })
-    cy.get('[data-cy="remove-image"]').click({ force: true })
-    cy.get('[data-cy="open-gif"]').click({ force: true })
-    cy.wait('@giphyFetch')
-    cy.get('[data-cy="gif-item"]').first().click({ force: true })
-    cy.get('[data-cy="gif-preview"]').should('exist')
-  })
+    visitAuthed('/');
+    cy.get('[data-cy="comment-button"]').first().click({ force: true });
+    
+    cy.get('[data-cy="comment-modal-card"]').within(() => {
+      cy.get('input[data-cy="file-input"]').selectFile(
+        { 
+          contents: Cypress.Buffer.from('fake-image-data'), 
+          fileName: 'i.png', 
+          mimeType: 'image/png' 
+        }, 
+        { force: true }
+      );
+    });
+
+    // Espera o preview e clica no seu botão de fechar (FaTimes)
+    cy.get('[data-cy="remove-image"]').should('be.visible').click({ force: true });
+    
+    // O preview deve sumir
+    cy.get('[data-cy="image-preview"]').should('not.exist');
+
+    // Troca para GIF
+    cy.get('[data-cy="open-gif"]').click({ force: true });
+    cy.wait('@giphyFetch');
+    cy.get('[data-cy="gif-item"]').first().click({ force: true });
+    
+    // Valida o preview do GIF (que você também tem no código)
+    cy.get('[data-cy="gif-preview"]').should('be.visible');
+  });
 
   // 8. ERRO DE API
   it('Deve mostrar mensagem de erro se a API falhar', () => {

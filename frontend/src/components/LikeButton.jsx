@@ -14,32 +14,40 @@ const LikeButton = ({ post, onLikeToggle }) => {
     try {
       // Endpoint matched with backend: /api/posts/{id}/like/
       const response = await api.post(`/posts/${post.id}/like/`);
-      
+
       // Notify parent to update the posts list
       onLikeToggle(post.id, response.data.is_liked, response.data.likes_count);
     } catch (error) {
-      console.error("Error toggling like:", error);
+      console.error('Error toggling like:', error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <button 
+    <button
+      data-cy="like-button" // <-- Adicionado para o teste
       onClick={handleLike}
       disabled={loading}
       className={`flex items-center gap-2 transition-colors group ${
-        post.is_liked ? "text-pink-500" : "text-gray-500 hover:text-pink-500"
+        post.is_liked ? 'text-pink-500' : 'text-gray-500 hover:text-pink-500'
       }`}
     >
-      <div className={`p-2 rounded-full group-hover:bg-pink-500/10 transition-colors`}>
-        <Heart 
-          size={18} 
-          fill={post.is_liked ? "currentColor" : "none"} 
-          className={loading ? "animate-pulse" : ""}
+      <div
+        className={`p-2 rounded-full group-hover:bg-pink-500/10 transition-colors`}
+      >
+        <Heart
+          size={18}
+          fill={post.is_liked ? 'currentColor' : 'none'}
+          className={loading ? 'animate-pulse' : ''}
         />
       </div>
-      <span className="text-xs font-medium">{post.likes_count || 0}</span>
+      <span
+        data-cy="likes-count" // <-- Adicionado para o teste
+        className="text-xs font-medium"
+      >
+        {post.likes_count || 0}
+      </span>
     </button>
   );
 };

@@ -21,7 +21,8 @@ dependencies = [
     "moviepy (>=2.2.1,<3.0.0)",
     "django-storages (>=1.14.6,<2.0.0)",
     "boto3 (>=1.42.49,<2.0.0)",
-    "gevent (>=25.9.1,<26.0.0)"
+    "gevent (>=25.9.1,<26.0.0)",
+    "redis (>=5.0.0,<6.0.0)",
 ]
 
 [build-system]
@@ -34,5 +35,43 @@ dev = [
     "pytest-django>=4.11.1,<5.0.0",
     "factory-boy>=3.3.3,<4.0.0",
     "faker>=40.1.2,<41.0.0",
-    "black>=26.1.0,<27.0.0"
+    "black>=26.1.0,<27.0.0",
+    "pytest-cov (>=7.0.0,<8.0.0)",
+    "pylint (>=4.0.5,<5.0.0)",
+    "mypy (>=1.19.1,<2.0.0)",
+    "django-stubs (>=5.2.9,<6.0.0)",
+    "djangorestframework-stubs (>=3.16.8,<4.0.0)"
 ]
+
+[tool.mypy]
+# Indica ao mypy para usar os plugins específicos para Django e DRF
+plugins = [
+    "mypy_django_plugin.main",
+    "mypy_drf_plugin.main",
+]
+
+# Configurações de rigor (Strict mode parcial para não travar seu desenvolvimento)
+strict = true
+ignore_missing_imports = true
+check_untyped_defs = true
+
+# Ignora erros em arquivos que você não controla ou que são gerados automaticamente
+exclude = [
+    "migrations/",
+    "venv/",
+    ".venv/",
+    "tests/",
+]
+
+[tool.django-stubs]
+# MUITO IMPORTANTE: Aponte para o seu arquivo de settings
+django_settings_module = "config.settings"
+
+# Aqui você pode ignorar campos específicos se o plugin reclamar
+[[tool.mypy.overrides]]
+module = "*.migrations.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "manage"
+ignore_errors = true

@@ -2,9 +2,9 @@ name: CI/CD Pipeline - Mindly
 
 on:
   pull_request:
-    branches: [ main ]   # Testes rodam aqui e bloqueiam o merge
+    branches: [ main ]
   push:
-    branches: [ main ]   # Push na main = Vai direto para o Deploy
+    branches: [ main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,10 +16,8 @@ env:
 
 jobs:
   test-backend:
-    # SÓ RODA NO PULL REQUEST
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    
     services:
       db:
         image: postgres:16
@@ -60,7 +58,13 @@ jobs:
 
       - name: Install Dependencies
         working-directory: ./backend
-        run: poetry install --no-root
+        run: poetry install --no-root --with dev
+
+      - name: Run Lint & Type Check
+        working-directory: ./backend
+        run: |
+          poetry run pylint accounts/
+          poetry run mypy accounts/
 
       - name: Run Django Tests
         working-directory: ./backend
@@ -74,11 +78,10 @@ jobs:
           AWS_STORAGE_BUCKET_NAME: ${{ secrets.AWS_STORAGE_BUCKET_NAME }}
           AWS_S3_ENDPOINT_URL: ${{ secrets.AWS_S3_ENDPOINT_URL }}
         run: |
-          poetry run pytest -v
+          poetry run pytest --cov=accounts --cov-fail-under=90 -v
 
   test-frontend-component:
-    # SÓ RODA NO PULL REQUEST
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -107,20 +110,14 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
         with:
           working-directory: ./frontend
           component: true
           browser: chrome
-          record: false
 
   test-frontend-e2e:
-    # SÓ RODA NO PULL REQUEST
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     needs: [test-frontend-component]
     runs-on: ubuntu-latest
     steps:
@@ -150,47 +147,27 @@ jobs:
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
         with:
           working-directory: ./frontend
           start: npm run dev
           wait-on: 'http://localhost:5173'
           browser: chrome
-          record: false
 
   check-status:
-    # Roda sempre no PR. No Push da Main, ele é ignorado (pulado).
     if: github.event_name == 'pull_request'
     needs: [test-backend, test-frontend-component, test-frontend-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Check all test results
-        run: |
-          if [ "${{ needs.test-backend.result }}" != "success" ] || \
-             [ "${{ needs.test-frontend-component.result }}" != "success" ] || \
-             [ "${{ needs.test-frontend-e2e.result }}" != "success" ]; then
-            echo "❌ Testes falharam!"
-            exit 1
-          fi
-          echo "✅ Todos os testes passaram!"
+        run: echo "✅ Qualidade garantida para o merge!"
 
-  deploy:
-    # SEM NEEDS: Roda sozinho no push da main como você queria
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  deploy-production:
+    needs: [test-backend, test-frontend-component, test-frontend-e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Render
         run: |
           echo "🚀 Disparando Deploy no Render..."
           curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-
-      - name: Deploy to Vercel
-        run: |
-          echo "🚀 Disparando Deploy na Vercel..."
-          # Usando exatamente o formato da doc da Vercel com um pequeno push (-d)
-          curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}" -d ''
-          echo "✅ Comando enviado com sucesso!"

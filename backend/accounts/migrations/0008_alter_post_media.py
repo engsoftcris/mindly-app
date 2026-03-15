@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 null=True,
                 upload_to=accounts.models.get_post_media_path,
-                validators=[], # I removed the broken function here
+                validators=[],  # I removed the broken function here
             ),
         ),
     ]

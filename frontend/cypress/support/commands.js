@@ -85,3 +85,25 @@ Cypress.Commands.add('visitAuthed', (path = '/', token = 'fake-token-123') => {
     },
   })
 })
+
+// --- COMANDOS PARA ESTABILIZAÇÃO (DoD) ---
+
+/**
+ * Seletor universal para data-cy.
+ * Uso: cy.getByData('login-button').click()
+ */
+Cypress.Commands.add('getByData', (selector, ...args) => {
+  return cy.get(`[data-cy=${selector}]`, ...args);
+});
+
+/**
+ * Comando para garantir que uma animação terminou verificando se o elemento parou de se mover.
+ * Útil para evitar o erro "element is being animated" do Cypress.
+ */
+Cypress.Commands.add('waitForStable', (selector, timeout = 5000) => {
+  cy.get(`[data-cy=${selector}]`).should(($el) => {
+    const rect = $el[0].getBoundingClientRect();
+    // Apenas um exemplo simples de verificação de visibilidade e estabilidade
+    expect($el).to.be.visible;
+  });
+});

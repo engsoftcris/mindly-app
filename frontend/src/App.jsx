@@ -1,28 +1,28 @@
-import { Routes, Route, useLocation, Navigate } from "react-router-dom";
-import { useAuth } from "./context/AuthContext";
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import SettingsPage from "./components/SettingsPage.jsx"; 
-import PublicProfile from "./components/PublicProfile"; 
-import Navbar from "./components/Navbar";
-import PrivateRoute from "./components/PrivateRoute";
-import NotificationsPage from "./components/Notifications.jsx"
-import LoadingScreen from "./components/LoadingScreen";
-import SuggestedUsers from "./components/SuggestedUsers";
-import SearchBar from "./components/SearchBar";
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import SettingsPage from './components/SettingsPage.jsx';
+import PublicProfile from './components/PublicProfile';
+import Navbar from './components/Navbar';
+import PrivateRoute from './components/PrivateRoute';
+import NotificationsPage from './components/Notifications.jsx';
+import LoadingScreen from './components/LoadingScreen';
+import SuggestedUsers from './components/SuggestedUsers';
+import SearchBar from './components/SearchBar';
 
 function App() {
-  const { user, loading} = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
   // 1. Enquanto o AuthContext checa o token no localStorage, mostramos o loading
   if (loading) {
     return <LoadingScreen />;
   }
 
-  const isAuthRoute = location.pathname === "/login";
+  const isAuthRoute = location.pathname === '/login';
 
   if (isAuthRoute) {
     if (user) return <Navigate to="/" replace />;
@@ -47,40 +47,66 @@ function App() {
 
         <main className="w-[600px] border-x border-gray-800 bg-black min-h-screen flex-shrink-0 no-scrollbar overflow-y-auto">
           <Routes>
-            <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-            <Route path="/notifications" element={<PrivateRoute><NotificationsPage /></PrivateRoute>} />
-            <Route path="/profile/:id" element={<PrivateRoute><PublicProfile /></PrivateRoute>} />
-            <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
+            <Route
+              path="/"
+              element={
+                <PrivateRoute>
+                  <Dashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <PrivateRoute>
+                  <NotificationsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/profile/:id"
+              element={
+                <PrivateRoute>
+                  <PublicProfile />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <PrivateRoute>
+                  <SettingsPage />
+                </PrivateRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
 
         <aside className="hidden lg:block w-[350px] ml-4">
-  <div className="sticky top-2 space-y-4 pt-2">
-    
-    {/* 1. COMPONENTE DE BUSCA */}
-    <SearchBar />
+          <div className="sticky top-2 space-y-4 pt-2">
+            {/* 1. COMPONENTE DE BUSCA */}
+            <SearchBar />
 
-    {/* 2. COMPONENTE DE SUGESTÕES (Substituindo o "O que está acontecendo") */}
-    <SuggestedUsers />
+            {/* 2. COMPONENTE DE SUGESTÕES (Substituindo o "O que está acontecendo") */}
+            <SuggestedUsers />
 
-    {/* 3. RODAPÉ (Opcional) */}
-    <div className="px-4 text-gray-500 text-xs">
-      <p>© 2026 Mindly - Cristiano</p>
-    </div>
-    
-  </div>
-</aside>
+            {/* 3. RODAPÉ (Opcional) */}
+            <div className="px-4 text-gray-500 text-xs">
+              <p>© 2026 Mindly - Cristiano</p>
+            </div>
+          </div>
+        </aside>
       </div>
 
       {/* LUGAR CORRETO DO TOAST CONTAINER: Dentro do return principal */}
-      <ToastContainer 
-          position="bottom-center" 
-          autoClose={4000} 
-          hideProgressBar={false}
-          closeOnClick
-          pauseOnHover
-          theme="dark" 
+      <ToastContainer
+        position="bottom-center"
+        autoClose={4000}
+        hideProgressBar={false}
+        closeOnClick
+        pauseOnHover
+        theme="dark"
       />
     </div>
   );

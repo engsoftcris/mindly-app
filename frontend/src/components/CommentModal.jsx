@@ -9,18 +9,6 @@ import GiftSelector from './GiftSelector';
 
 const MAX_CHARS = 280;
 
-const getId = (v) => {
-  if (v == null) return null;
-  if (typeof v === 'number' || typeof v === 'string') return String(v);
-
-  if (typeof v === 'object') {
-    if (v.id != null) return String(v.id);
-    if (v.user != null) return getId(v.user);
-    if (v.pk != null) return String(v.pk);
-  }
-  return null;
-};
-
 const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
   const { user: currentUser } = useAuth();
 
@@ -40,17 +28,17 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
   const charsLeft = MAX_CHARS - newComment.length;
 
   // Logged-in user id (Django User.id)
- // Substitua a linha do currentUserId (por volta da linha 44):
-const currentUserId = useMemo(() => {
-  return currentUser?.id || currentUser?.profile_id || null;
-}, [currentUser]);
+  // Substitua a linha do currentUserId (por volta da linha 44):
+  const currentUserId = useMemo(() => {
+    return currentUser?.id || currentUser?.profile_id || null;
+  }, [currentUser]);
 
-// No CommentModal.jsx, altere o postOwnerId:
-// Procure a linha do postOwnerId no CommentModal.jsx
-const postOwnerId = useMemo(() => {
-  // Pegue o ID do perfil (UUID), não o do usuário (Integer)
-  return post?.author?.id || post?.author?.profile_id || null; 
-}, [post]);
+  // No CommentModal.jsx, altere o postOwnerId:
+  // Procure a linha do postOwnerId no CommentModal.jsx
+  const postOwnerId = useMemo(() => {
+    // Pegue o ID do perfil (UUID), não o do usuário (Integer)
+    return post?.author?.id || post?.author?.profile_id || null;
+  }, [post]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -129,10 +117,16 @@ const postOwnerId = useMemo(() => {
 
       toast.success('Reply posted.');
     } catch (error) {
-      console.error('Error posting comment:', error?.response?.status, error?.response?.data);
+      console.error(
+        'Error posting comment:',
+        error?.response?.status,
+        error?.response?.data
+      );
       const msg =
         error?.response?.data?.detail ||
-        (typeof error?.response?.data === 'string' ? error.response.data : null) ||
+        (typeof error?.response?.data === 'string'
+          ? error.response.data
+          : null) ||
         'Could not post reply.';
       toast.error(msg);
     } finally {
@@ -187,21 +181,34 @@ const postOwnerId = useMemo(() => {
 
             <div className="pb-4">
               <div className="flex items-center space-x-1">
-                <span data-cy="original-post-author" className="font-bold text-white">
+                <span
+                  data-cy="original-post-author"
+                  className="font-bold text-white"
+                >
                   {post.author?.display_name || post.author?.username}
                 </span>
-                <span data-cy="original-post-username" className="text-gray-500 text-sm">
+                <span
+                  data-cy="original-post-username"
+                  className="text-gray-500 text-sm"
+                >
                   @{post.author?.username}
                 </span>
               </div>
-              <p data-cy="original-post-content" className="text-gray-300 mt-1 leading-normal">
+              <p
+                data-cy="original-post-content"
+                className="text-gray-300 mt-1 leading-normal"
+              >
                 {post.content}
               </p>
             </div>
           </div>
 
           {/* New Comment Input */}
-          <form data-cy="comment-form" onSubmit={handleSubmit} className="flex space-x-3 mb-8">
+          <form
+            data-cy="comment-form"
+            onSubmit={handleSubmit}
+            className="flex space-x-3 mb-8"
+          >
             <div className="w-12 flex-shrink-0">
               <div className="w-12 h-12 rounded-full bg-gray-700 border border-gray-800 flex items-center justify-center text-white font-bold">
                 ?
@@ -222,7 +229,10 @@ const postOwnerId = useMemo(() => {
 
               {/* GIF preview */}
               {selectedGift && (
-                <div data-cy="gif-preview" className="relative mb-4 inline-block">
+                <div
+                  data-cy="gif-preview"
+                  className="relative mb-4 inline-block"
+                >
                   <img
                     data-cy="gif-preview-image"
                     src={selectedGift}
@@ -242,7 +252,10 @@ const postOwnerId = useMemo(() => {
 
               {/* Image preview */}
               {imagePreview && (
-                <div data-cy="image-preview" className="relative mb-4 inline-block">
+                <div
+                  data-cy="image-preview"
+                  className="relative mb-4 inline-block"
+                >
                   <img
                     data-cy="image-preview-display"
                     src={imagePreview}
@@ -286,7 +299,8 @@ const postOwnerId = useMemo(() => {
                             setShowGiftSelector(false);
                             setSelectedImage(null);
                             setImagePreview(null);
-                            if (fileInputRef.current) fileInputRef.current.value = '';
+                            if (fileInputRef.current)
+                              fileInputRef.current.value = '';
                           }}
                           setCanUseGifs={setCanUseGifts}
                         />
@@ -314,14 +328,20 @@ const postOwnerId = useMemo(() => {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <span data-cy="chars-left" className="text-[12px] text-gray-500">
+                  <span
+                    data-cy="chars-left"
+                    className="text-[12px] text-gray-500"
+                  >
                     {charsLeft}
                   </span>
 
                   <button
                     data-cy="reply-submit"
                     type="submit"
-                    disabled={(!newComment.trim() && !selectedGift && !selectedImage) || loading}
+                    disabled={
+                      (!newComment.trim() && !selectedGift && !selectedImage) ||
+                      loading
+                    }
                     className="bg-blue-500 text-white px-6 py-1.5 rounded-full font-bold disabled:opacity-50 hover:bg-blue-600 transition"
                   >
                     {loading ? '...' : 'Reply'}
@@ -336,7 +356,9 @@ const postOwnerId = useMemo(() => {
           {/* Comments list */}
           <div data-cy="comments-list" className="space-y-6 mb-4">
             {fetching ? (
-              <div className="text-center text-gray-500 py-4 text-sm">Loading replies...</div>
+              <div className="text-center text-gray-500 py-4 text-sm">
+                Loading replies...
+              </div>
             ) : (
               comments.map((comment) => (
                 <CommentItem
@@ -344,7 +366,9 @@ const postOwnerId = useMemo(() => {
                   comment={comment}
                   currentUserId={currentUserId}
                   postOwnerId={postOwnerId}
-                  onDeleteSuccess={(id) => setComments((prev) => prev.filter((c) => c.id !== id))}
+                  onDeleteSuccess={(id) =>
+                    setComments((prev) => prev.filter((c) => c.id !== id))
+                  }
                 />
               ))
             )}

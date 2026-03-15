@@ -6,4 +6,5 @@ class AccountsConfig(AppConfig):
     name = "accounts"
 
     def ready(self):
-        from . import signals  # noqa
+        # pylint: disable=import-outside-toplevel, unused-import
+        from . import signals

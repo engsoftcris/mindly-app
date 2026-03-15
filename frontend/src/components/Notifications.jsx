@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { FaHeart, FaComment, FaUserPlus, FaShieldAlt } from 'react-icons/fa';
@@ -14,7 +14,9 @@ const Notifications = () => {
       try {
         const response = await api.get('/notifications/');
         // Suporta retorno paginado (results) ou array direto
-        const data = Array.isArray(response.data) ? response.data : response.data?.results;
+        const data = Array.isArray(response.data)
+          ? response.data
+          : response.data?.results;
         setNotifications(data || []);
       } catch (error) {
         console.error('Erro ao carregar notificações', error);
@@ -33,61 +35,71 @@ const Notifications = () => {
     );
   };
 
-const handleNotificationClick = async (n) => {
-  // LOG 1: Ver o que chegou do banco
-  console.log("1. OBJETO RECEBIDO:", n);
-  console.log("2. TIPO:", n.notification_type);
-  console.log("3. ID DO POST:", n.post_id);
-  console.log("4. DONO DO POST (UUID):", n.post_author_profile_id);
+  const handleNotificationClick = async (n) => {
+    // LOG 1: Ver o que chegou do banco
+    console.log('1. OBJETO RECEBIDO:', n);
+    console.log('2. TIPO:', n.notification_type);
+    console.log('3. ID DO POST:', n.post_id);
+    console.log('4. DONO DO POST (UUID):', n.post_author_profile_id);
 
-  // Marca como lida
-  if (!n.is_read) {
-    markAsReadLocal(n.id);
-    api.post(`/notifications/${n.id}/mark_as_read/`).catch(err => {
-      console.error("ERRO AO MARCAR COMO LIDA:", err);
-    });
-  }
-
-  // --- LÓGICA DE NAVEGAÇÃO ---
-
-  // Caso A: FOLLOW
-  if (n.notification_type === 'FOLLOW') {
-    console.log("ENTROU NO BLOCO FOLLOW. Indo para:", n.sender_uuid);
-    if (n.sender_uuid) {
-      return navigate(`/profile/${n.sender_uuid}`);
+    // Marca como lida
+    if (!n.is_read) {
+      markAsReadLocal(n.id);
+      api.post(`/notifications/${n.id}/mark_as_read/`).catch((err) => {
+        console.error('ERRO AO MARCAR COMO LIDA:', err);
+      });
     }
-  }
 
-  // Caso B: LIKE ou COMMENT (Interação com Post)
-  if (n.post_id) {
-    console.log("ENTROU NO BLOCO DE POST. Verificando autor...");
+    // --- LÓGICA DE NAVEGAÇÃO ---
 
-    if (n.post_author_profile_id) {
-      const url = `/profile/${n.post_author_profile_id}?post=${n.post_id}`;
-      console.log("SUCESSO! Navegando para o dono do post:", url);
-      return navigate(url);
-    } 
-    
-    // Se o autor veio null, mas o post_id existe:
-    console.warn("ALERTA: post_id existe, mas post_author_profile_id veio NULL do Django.");
-    
-    // Fallback: Se for seu post, vamos tentar o seu próprio ID (recipient)
-    if (n.recipient_uuid) {
-        console.log("USANDO FALLBACK: Navegando para o seu próprio perfil (recipient_uuid)");
+    // Caso A: FOLLOW
+    if (n.notification_type === 'FOLLOW') {
+      console.log('ENTROU NO BLOCO FOLLOW. Indo para:', n.sender_uuid);
+      if (n.sender_uuid) {
+        return navigate(`/profile/${n.sender_uuid}`);
+      }
+    }
+
+    // Caso B: LIKE ou COMMENT (Interação com Post)
+    if (n.post_id) {
+      console.log('ENTROU NO BLOCO DE POST. Verificando autor...');
+
+      if (n.post_author_profile_id) {
+        const url = `/profile/${n.post_author_profile_id}?post=${n.post_id}`;
+        console.log('SUCESSO! Navegando para o dono do post:', url);
+        return navigate(url);
+      }
+
+      // Se o autor veio null, mas o post_id existe:
+      console.warn(
+        'ALERTA: post_id existe, mas post_author_profile_id veio NULL do Django.'
+      );
+
+      // Fallback: Se for seu post, vamos tentar o seu próprio ID (recipient)
+      if (n.recipient_uuid) {
+        console.log(
+          'USANDO FALLBACK: Navegando para o seu próprio perfil (recipient_uuid)'
+        );
         return navigate(`/profile/${n.recipient_uuid}?post=${n.post_id}`);
+      }
     }
-  }
 
-  // Se nada acima pegou:
-  console.error("FALHA TOTAL: A notificação não entrou em nenhum critério de navegação.");
-  toast.info('Não foi possível encontrar o destino.');
-};
+    // Se nada acima pegou:
+    console.error(
+      'FALHA TOTAL: A notificação não entrou em nenhum critério de navegação.'
+    );
+    toast.info('Não foi possível encontrar o destino.');
+  };
 
   const renderIcon = (n) => {
-    if (n.notification_type === 'LIKE') return <FaHeart className="text-pink-600" size={20} />;
-    if (n.notification_type === 'COMMENT') return <FaComment className="text-blue-400" size={20} />;
-    if (n.notification_type === 'FOLLOW') return <FaUserPlus className="text-blue-500" size={20} />;
-    if (n.notification_type === 'REPORT_UPDATE') return <FaShieldAlt className="text-amber-500" size={20} />;
+    if (n.notification_type === 'LIKE')
+      return <FaHeart className="text-pink-600" size={20} />;
+    if (n.notification_type === 'COMMENT')
+      return <FaComment className="text-blue-400" size={20} />;
+    if (n.notification_type === 'FOLLOW')
+      return <FaUserPlus className="text-blue-500" size={20} />;
+    if (n.notification_type === 'REPORT_UPDATE')
+      return <FaShieldAlt className="text-amber-500" size={20} />;
     return null;
   };
 
@@ -97,7 +109,9 @@ const handleNotificationClick = async (n) => {
     if (isReport) {
       return (
         <div className="flex flex-col gap-1">
-          <span className="text-gray-200">{n.text || 'Atualização de denúncia'}</span>
+          <span className="text-gray-200">
+            {n.text || 'Atualização de denúncia'}
+          </span>
           {(n.stored_post_content || n.post_content) && (
             <p className="text-gray-500 text-sm italic mt-1">
               "{n.stored_post_content || n.post_content}"
@@ -115,7 +129,6 @@ const handleNotificationClick = async (n) => {
         {n.notification_type === 'LIKE' && 'curtiu seu post'}
         {n.notification_type === 'COMMENT' && 'comentou no seu post'}
         {n.notification_type === 'FOLLOW' && 'começou a te seguir'}
-
         {n.post_content && (
           <p className="text-gray-500 text-sm line-clamp-2 italic mt-1 leading-relaxed">
             "{n.post_content}"
@@ -158,7 +171,9 @@ const handleNotificationClick = async (n) => {
       ) : (
         <div className="divide-y divide-gray-800">
           {notifications.length === 0 ? (
-            <div className="p-10 text-center text-gray-500">Nenhuma notificação.</div>
+            <div className="p-10 text-center text-gray-500">
+              Nenhuma notificação.
+            </div>
           ) : (
             notifications.map((n) => (
               <div
@@ -174,7 +189,9 @@ const handleNotificationClick = async (n) => {
                   <div className="text-white text-[15px]">{renderBody(n)}</div>
                 </div>
 
-                {!n.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full self-center" />}
+                {!n.is_read && (
+                  <div className="w-2 h-2 bg-blue-500 rounded-full self-center" />
+                )}
               </div>
             ))
           )}

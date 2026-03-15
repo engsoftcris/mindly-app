@@ -14,16 +14,14 @@ const Navbar = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const userId = getUserId(user);
 
-  
-
   useEffect(() => {
     if (user) {
       const fetchUnread = async () => {
         try {
           const res = await api.get('/notifications/');
-          setUnreadCount(res.data.filter(n => !n.is_read).length);
-        } catch (err) { 
-          console.log(err); 
+          setUnreadCount(res.data.filter((n) => !n.is_read).length);
+        } catch (err) {
+          console.log(err);
         }
       };
       fetchUnread();
@@ -57,8 +55,12 @@ const Navbar = () => {
               to="/"
               className="flex items-center gap-4 text-gray-300 hover:text-blue-400 transition font-bold text-lg p-3 hover:bg-gray-900 rounded-full"
             >
-              <span data-cy="navbar-home-icon" className="text-2xl">🏠</span>
-              <span data-cy="navbar-home-text" className="hidden xl:inline">Home</span>
+              <span data-cy="navbar-home-icon" className="text-2xl">
+                🏠
+              </span>
+              <span data-cy="navbar-home-text" className="hidden xl:inline">
+                Home
+              </span>
             </Link>
 
             {/* BOTÃO DE NOTIFICAÇÕES */}
@@ -67,11 +69,18 @@ const Navbar = () => {
               to="/notifications"
               className="flex items-center gap-4 text-gray-300 hover:text-blue-400 transition font-bold text-lg p-3 hover:bg-gray-900 rounded-full"
             >
-              <span data-cy="navbar-notifications-icon" className="text-2xl">🔔</span>
+              <span data-cy="navbar-notifications-icon" className="text-2xl">
+                🔔
+              </span>
               <div className="flex items-center gap-2">
-                <span data-cy="navbar-notifications-text" className="hidden xl:inline">Notificações</span>
+                <span
+                  data-cy="navbar-notifications-text"
+                  className="hidden xl:inline"
+                >
+                  Notificações
+                </span>
                 {unreadCount > 0 && (
-                  <span 
+                  <span
                     data-cy="navbar-notifications-badge"
                     className="bg-blue-500 text-white text-xs font-black px-2 py-0.5 rounded-full"
                   >
@@ -84,11 +93,15 @@ const Navbar = () => {
             {/* LINK DO PERFIL AJUSTADO: Agora envia para /profile/ID_DO_USUARIO */}
             <Link
               data-cy="navbar-profile-link"
-              to={userId ? `/profile/${userId}` : "#"} 
+              to={userId ? `/profile/${userId}` : '#'}
               className="flex items-center gap-4 text-gray-300 hover:text-blue-400 transition font-bold text-lg p-3 hover:bg-gray-900 rounded-full"
             >
-              <span data-cy="navbar-profile-icon" className="text-2xl">👤</span>
-              <span data-cy="navbar-profile-text" className="hidden xl:inline">Perfil</span>
+              <span data-cy="navbar-profile-icon" className="text-2xl">
+                👤
+              </span>
+              <span data-cy="navbar-profile-text" className="hidden xl:inline">
+                Perfil
+              </span>
             </Link>
           </>
         ) : (
@@ -104,19 +117,36 @@ const Navbar = () => {
 
       {/* User section */}
       {user && (
-        <div data-cy="navbar-user-section" className="mt-auto border-t border-gray-800 pt-4 flex flex-col gap-4">
-          <div data-cy="navbar-user-info" className="flex items-center gap-3 px-2">
+        <div
+          data-cy="navbar-user-section"
+          className="mt-auto border-t border-gray-800 pt-4 flex flex-col gap-4"
+        >
+          <div
+            data-cy="navbar-user-info"
+            className="flex items-center gap-3 px-2"
+          >
             <img
               data-cy="navbar-user-avatar"
-              src={user.profile_picture || "/static/images/default-avatar.png"}
+              src={user.profile_picture || '/static/images/default-avatar.png'}
               className="w-10 h-10 rounded-full object-cover border border-gray-800"
               alt="avatar"
             />
-            <div data-cy="navbar-user-text" className="hidden xl:block overflow-hidden">
-              <p data-cy="navbar-user-display-name" className="text-white text-sm font-bold truncate">
-                {user.display_name ? user.display_name.split(' ')[0] : user.username}
+            <div
+              data-cy="navbar-user-text"
+              className="hidden xl:block overflow-hidden"
+            >
+              <p
+                data-cy="navbar-user-display-name"
+                className="text-white text-sm font-bold truncate"
+              >
+                {user.display_name
+                  ? user.display_name.split(' ')[0]
+                  : user.username}
               </p>
-              <p data-cy="navbar-user-username" className="text-gray-500 text-xs truncate">
+              <p
+                data-cy="navbar-user-username"
+                className="text-gray-500 text-xs truncate"
+              >
                 @{user.username}
               </p>
             </div>

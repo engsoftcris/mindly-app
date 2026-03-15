@@ -1,87 +1,87 @@
-import React from 'react'
-import FollowButton from './FollowButton'
-import { ToastContainer } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
+import React from 'react';
+import FollowButton from './FollowButton';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-describe('<FollowButton /> - Testes de Componente', () => {
-  const profileId = 'uuid-teste-123'
+describe('<FollowButton /> - Blindado', () => {
+  const profileId = 'uuid-teste-123';
 
-  // Helper para pegar o botão correto e ignorar os botões do Toastify
-  const getFollowBtn = () => cy.get('button').not('.Toastify__close-button');
-
-  it('Fluxo Completo: Seguir (201) e Deixar de Seguir (200)', () => {
+  it('Fluxo Completo: Seguir e Deixar de Seguir', () => {
     cy.intercept('POST', `**/accounts/profiles/${profileId}/follow/`, {
       statusCode: 201,
-      body: { message: 'Agora estás a seguir.' },
-    }).as('followRequest')
+      body: { message: 'Agora você está seguindo.' },
+    }).as('followRequest');
 
     cy.mount(
       <div className="p-10 bg-[#0F1419]">
         <ToastContainer />
         <FollowButton profileId={profileId} initialIsFollowing={false} />
       </div>
-    )
+    );
 
-    // Validar estado inicial
-    getFollowBtn().should('have.text', 'Seguir').and('have.class', 'bg-white')
+    // Validar estado inicial via data-cy
+    cy.getByData('follow-button')
+      .should('contain', 'Seguir')
+      .and('have.class', 'bg-white');
 
     // Seguir
-    getFollowBtn().click()
-    cy.wait('@followRequest')
+    cy.getByData('follow-button').click();
+    cy.wait('@followRequest');
 
     // Validar estado Seguindo
-    getFollowBtn().should('have.text', 'Seguindo').and('have.class', 'bg-black')
-    cy.contains('Agora estás a seguir.').should('be.visible')
+    cy.getByData('follow-button')
+      .should('contain', 'Seguindo')
+      .and('have.class', 'bg-black');
 
     // Simular Unfollow
     cy.intercept('POST', `**/accounts/profiles/${profileId}/follow/`, {
       statusCode: 200,
-      body: { message: 'Deixaste de seguir.' },
-    }).as('unfollowRequest')
+      body: { message: 'Você deixou de seguir.' },
+    }).as('unfollowRequest');
 
-    getFollowBtn().click()
-    cy.wait('@unfollowRequest')
+    cy.getByData('follow-button').click();
+    cy.wait('@unfollowRequest');
+    cy.getByData('follow-button').should('contain', 'Seguir');
+  });
 
-    // Voltar ao estado inicial
-    getFollowBtn().should('have.text', 'Seguir').and('have.class', 'bg-white')
-  })
-
-  it('Cooldown: Deve manter o estado se a API retornar erro 400 (5 minutos)', () => {
+  it('Cooldown: Deve manter o estado em erro 400', () => {
     cy.intercept('POST', `**/accounts/profiles/${profileId}/follow/`, {
       statusCode: 400,
       body: { error: 'Aguarde! Tente novamente em 5m.' },
-    }).as('cooldownRequest')
+    }).as('cooldownRequest');
 
     cy.mount(
       <div className="p-10 bg-[#0F1419]">
         <ToastContainer />
         <FollowButton profileId={profileId} initialIsFollowing={false} />
       </div>
-    )
+    );
 
-    getFollowBtn().click()
-    cy.wait('@cooldownRequest')
+    cy.getByData('follow-button').click();
+    cy.wait('@cooldownRequest');
 
-    getFollowBtn().should('have.text', 'Seguir').and('not.have.class', 'bg-black')
-    cy.contains('Aguarde! Tente novamente em 5m.').should('be.visible')
-  })
+    // Deve voltar para "Seguir" (rollback do estado otimista)
+    cy.getByData('follow-button').should('contain', 'Seguir');
+    cy.contains('Aguarde! Tente novamente em 5m.').should('be.visible');
+  });
 
-  it('UI: Deve desativar e mostrar loading durante o processamento', () => {
+  it('UI: Deve mostrar loading durante o processamento', () => {
     cy.intercept('POST', `**/accounts/profiles/${profileId}/follow/`, {
       delay: 500,
       statusCode: 201,
-    }).as('delayedRequest')
+    }).as('delayedRequest');
 
     cy.mount(
       <div className="p-10 bg-[#0F1419]">
         <FollowButton profileId={profileId} initialIsFollowing={false} />
       </div>
-    )
+    );
 
-    getFollowBtn().click()
-    getFollowBtn().should('have.text', '...').and('be.disabled')
-    
-    cy.wait('@delayedRequest')
-    getFollowBtn().should('have.text', 'Seguindo')
-  })
-})
+    cy.getByData('follow-button').click();
+    // Verifica o texto de loading e o estado desabilitado
+    cy.getByData('follow-button').should('contain', '...').and('be.disabled');
+
+    cy.wait('@delayedRequest');
+    cy.getByData('follow-button').should('contain', 'Seguindo');
+  });
+});

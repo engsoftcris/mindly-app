@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; // Adicionado useCallback
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
@@ -7,65 +7,94 @@ const BlockedUsersList = () => {
   const [blockedProfiles, setBlockedProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchBlockedUsers();
-  }, []);
-
-  const fetchBlockedUsers = async () => {
+  // 1. Envolvemos a função em useCallback para que ela não mude a cada render
+  // Isso resolve o erro 'React Hook useEffect has a missing dependency'
+  const fetchBlockedUsers = useCallback(async () => {
     try {
-      // Esta é a action que acabamos de testar no Pytest!
       const response = await api.get('/accounts/profiles/blocked-users/');
-      // Se a sua API for direta (ReturnList), usamos response.data
-      // Se for paginada, usamos response.data.results
-      const data = Array.isArray(response.data) ? response.data : response.data.results || [];
+      const data = Array.isArray(response.data)
+        ? response.data
+        : response.data.results || [];
       setBlockedProfiles(data);
-    } catch (err) {
+    } catch (_err) {
+      // 2. Mudado de 'err' para '_err' para satisfazer o linter
       toast.error('Could not load blocked users.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // Array vazio aqui porque não depende de outras props/state
+
+  useEffect(() => {
+    fetchBlockedUsers();
+  }, [fetchBlockedUsers]); // Agora a função é uma dependência estável
 
   const handleUnblock = async (profileId, username) => {
     try {
-      // O mesmo endpoint de Toggle que já usamos
       await api.post(`/accounts/profiles/${profileId}/block/`);
       toast.success(`@${username} unblocked.`);
-      
-      // Remove da lista local instantaneamente
-      setBlockedProfiles(prev => prev.filter(p => p.id !== profileId));
-    } catch (err) {
+      setBlockedProfiles((prev) => prev.filter((p) => p.id !== profileId));
+    } catch (_err) {
+      // 3. Mudado para '_err' aqui também
       toast.error('Failed to unblock user.');
     }
   };
 
-  if (loading) return <div className="p-4 text-center text-gray-500">Loading...</div>;
+  if (loading)
+    return (
+      <div data-cy="loading-spinner" className="p-4 text-center text-gray-500">
+        Loading...
+      </div>
+    );
 
   return (
     <div className="max-w-2xl mx-auto bg-black min-h-screen border-x border-gray-800">
       <div className="p-4 border-b border-gray-800 flex items-center gap-4">
-        <h2 className="text-xl font-bold text-white">Blocked Users</h2>
+        <h2
+          data-cy="blocked-list-title"
+          className="text-xl font-bold text-white"
+        >
+          Blocked Users
+        </h2>
       </div>
 
       {blockedProfiles.length === 0 ? (
         <div className="p-8 text-center text-gray-500">
-          <p>You haven't blocked anyone yet.</p>
+          <p data-cy="empty-list-message">You haven't blocked anyone yet.</p>
         </div>
       ) : (
-        <div className="divide-y divide-gray-800">
+        <div
+          className="divide-y divide-gray-800"
+          data-cy="blocked-users-container"
+        >
           {blockedProfiles.map((profile) => (
-            <div key={profile.id} className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-              <Link to={`/profile/${profile.id}`} className="flex items-center gap-3 group">
+            <div
+              key={profile.id}
+              data-cy={`blocked-user-card-${profile.username}`}
+              className="p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+            >
+              <Link
+                to={`/profile/${profile.id}`}
+                className="flex items-center gap-3 group"
+              >
                 <img
-                  src={profile.profile_picture || '/static/images/default-avatar.png'}
+                  src={
+                    profile.profile_picture ||
+                    '/static/images/default-avatar.png'
+                  }
                   alt={profile.username}
                   className="w-12 h-12 rounded-full object-cover border border-gray-800"
+                  data-cy="blocked-user-avatar"
                 />
                 <div>
                   <div className="font-bold text-white group-hover:underline">
                     {profile.display_name || profile.username}
                   </div>
-                  <div className="text-gray-500 text-sm">@{profile.username}</div>
+                  <div
+                    className="text-gray-500 text-sm"
+                    data-cy="blocked-user-handle"
+                  >
+                    @{profile.username}
+                  </div>
                 </div>
               </Link>
 

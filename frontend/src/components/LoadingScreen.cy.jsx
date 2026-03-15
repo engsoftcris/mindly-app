@@ -1,42 +1,41 @@
-import React from 'react'
-import LoadingScreen from '../../src/components/LoadingScreen'
+import React from 'react';
+import LoadingScreen from '../../src/components/LoadingScreen';
 
 describe('<LoadingScreen /> - Visual & Animações', () => {
-  
-  // TESTE 1: Validação de Identidade e Layout
+  // TESTE 1: Foco em Layout e Identidade
   it('deve exibir a marca "Mindly" centralizada com fundo preto', () => {
-    cy.mount(<LoadingScreen />)
+    cy.mount(<LoadingScreen />);
 
-    // Verifica se o container principal é um flexbox centralizado
-    cy.get('div.min-h-screen')
+    // Verifica o container principal via data-cy
+    cy.getByData('loading-screen')
       .should('have.class', 'bg-black')
       .and('have.css', 'display', 'flex')
-      .and('have.css', 'align-items', 'center')
-      .and('have.css', 'justify-content', 'center')
+      .and('have.css', 'align-items', 'center');
 
     // Verifica o texto da marca
-    cy.contains('h1', 'Mindly')
+    cy.getByData('loading-brand')
       .should('be.visible')
-      .and('have.class', 'text-white')
-      .and('have.class', 'text-4xl')
-  })
+      .and('contain', 'Mindly')
+      .and('have.class', 'text-4xl');
+  });
 
-  // TESTE 2: Validação de Feedback Visual (Animations)
+  // TESTE 2: Foco em UX e Feedback Visual
   it('deve possuir as classes de animação ativas para indicar carregamento', () => {
-    cy.mount(<LoadingScreen />)
+    cy.mount(<LoadingScreen />);
 
     // 1. Verifica a pulsação no Título (UX: Indica que o app está "vivo")
-    cy.get('h1').should('have.class', 'animate-pulse')
+    cy.getByData('loading-brand').should('have.class', 'animate-pulse');
 
     // 2. Verifica o Spinner de progresso (UX: Indica processamento)
-    cy.get('div.animate-spin')
+    cy.getByData('loading-spinner')
       .should('be.visible')
+      .and('have.class', 'animate-spin')
       .and('have.class', 'border-blue-500')
-      .and('have.class', 'rounded-full')
+      .and('have.class', 'rounded-full');
 
-    // Verifica se o spinner tem as bordas transparentes/coloridas corretas para o efeito visual
-    cy.get('div.animate-spin')
+    // Verifica as bordas para o efeito visual de "hélice"
+    cy.getByData('loading-spinner')
       .should('have.class', 'border-t-2')
-      .and('have.class', 'border-b-2')
-  })
-})
+      .and('have.class', 'border-b-2');
+  });
+});

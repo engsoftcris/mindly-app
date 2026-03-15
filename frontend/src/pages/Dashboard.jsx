@@ -1,46 +1,54 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { postsAPI } from "../api/axios";
-import { useAuth } from "../context/AuthContext";
-import CreatePost from "../components/CreatePost";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { postsAPI } from '../api/axios';
+import { useAuth } from '../context/AuthContext';
+import CreatePost from '../components/CreatePost';
 import Feed from '../components/Feed';
-import LoadingScreen from "../components/LoadingScreen";
+import LoadingScreen from '../components/LoadingScreen';
 
 const Dashboard = () => {
   const [posts, setPosts] = useState([]);
   const [nextPage, setNextPage] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('all'); 
+  const [activeTab, setActiveTab] = useState('all');
   const { user: currentUser } = useAuth();
 
   const loadingRef = useRef(false);
 
-  const fetchFeed = useCallback(async (urlOrPage = null) => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
-    setLoading(true);
-    const minWait = new Promise(resolve => setTimeout(resolve, 800));
+  const fetchFeed = useCallback(
+    async (urlOrPage = null) => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
+      setLoading(true);
+      const minWait = new Promise((resolve) => setTimeout(resolve, 800));
 
-    try {
-      let response;
-      if (urlOrPage && typeof urlOrPage === 'string' && urlOrPage.includes('http')) {
-        response = await postsAPI.getFeed(urlOrPage);
-      } else {
-        const endpoint = activeTab === 'all' 
-  ? "/accounts/feed/"   // Agora a Home também usa a nossa lógica protegida!
-  : "/accounts/feed/?following=true"; // Exemplo: você pode passar um filtro se quiser
-        response = await postsAPI.getFeed(endpoint);
+      try {
+        let response;
+        if (
+          urlOrPage &&
+          typeof urlOrPage === 'string' &&
+          urlOrPage.includes('http')
+        ) {
+          response = await postsAPI.getFeed(urlOrPage);
+        } else {
+          const endpoint =
+            activeTab === 'all'
+              ? '/accounts/feed/' // Agora a Home também usa a nossa lógica protegida!
+              : '/accounts/feed/?following=true'; // Exemplo: você pode passar um filtro se quiser
+          response = await postsAPI.getFeed(endpoint);
+        }
+        await minWait;
+        const newPosts = response.data.results || response.data;
+        setPosts((prev) => (urlOrPage ? [...prev, ...newPosts] : newPosts));
+        setNextPage(response.data.next || null);
+      } catch (error) {
+        console.error('Error fetching feed:', error);
+      } finally {
+        loadingRef.current = false;
+        setLoading(false);
       }
-      await minWait;
-      const newPosts = response.data.results || response.data;
-      setPosts(prev => (urlOrPage ? [...prev, ...newPosts] : newPosts));
-      setNextPage(response.data.next || null);
-    } catch (error) {
-      console.error("Error fetching feed:", error);
-    } finally {
-      loadingRef.current = false;
-      setLoading(false);
-    }
-  }, [activeTab]);
+    },
+    [activeTab]
+  );
 
   useEffect(() => {
     setPosts([]);
@@ -49,21 +57,24 @@ const Dashboard = () => {
   }, [activeTab, fetchFeed]);
 
   const handlePostCreated = (newPost) => {
-    setPosts(prev => [newPost, ...prev]);
+    setPosts((prev) => [newPost, ...prev]);
   };
 
   const observer = useRef();
-  const lastPostElementRef = useCallback(node => {
-    if (loading) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && nextPage) {
-        fetchFeed(nextPage);
-      }
-    });
-    if (node) observer.current.observe(node);
-  }, [loading, nextPage, fetchFeed]);
-   
+  const lastPostElementRef = useCallback(
+    (node) => {
+      if (loading) return;
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && nextPage) {
+          fetchFeed(nextPage);
+        }
+      });
+      if (node) observer.current.observe(node);
+    },
+    [loading, nextPage, fetchFeed]
+  );
+
   if (loading && posts.length === 0) {
     return <LoadingScreen />;
   }
@@ -73,15 +84,19 @@ const Dashboard = () => {
       <div className="sticky top-0 z-30 bg-black/80 backdrop-blur-md border-b border-gray-800">
         <div className="flex w-full">
           {['all', 'following'].map((tab) => (
-            <button 
+            <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className="flex-1 py-4 hover:bg-white/5 transition relative"
             >
-              <span className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-gray-500'}`}>
+              <span
+                className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-gray-500'}`}
+              >
                 {tab === 'all' ? 'Para você' : 'Seguindo'}
               </span>
-              {activeTab === tab && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-blue-500 rounded-full"></div>}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-blue-500 rounded-full"></div>
+              )}
             </button>
           ))}
         </div>
@@ -91,10 +106,10 @@ const Dashboard = () => {
 
       {/* CHAMADA DO FEED COM TODA A LÓGICA PRESERVADA */}
       {posts.length > 0 ? (
-        <Feed 
-          posts={posts} 
-          currentUser={currentUser} 
-          setPosts={setPosts} 
+        <Feed
+          posts={posts}
+          currentUser={currentUser}
+          setPosts={setPosts}
           lastPostElementRef={lastPostElementRef}
         />
       ) : (
