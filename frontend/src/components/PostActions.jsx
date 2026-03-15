@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../api/axios';
+import api from '../api/axios';
 import { toast } from 'react-toastify';
 
 const PostActions = ({ post, onUpdate, onDelete }) => {
@@ -8,45 +8,64 @@ const PostActions = ({ post, onUpdate, onDelete }) => {
 
   const handleUpdate = async () => {
     try {
-      const response = await api.patch(`/posts/${post.id}/`, { content: editContent });
-      toast.success("Post enviado para revisão!");
+      const response = await api.patch(`/posts/${post.id}/`, {
+        content: editContent,
+      });
+      toast.success('Post enviado para revisão!');
       setIsEditing(false);
-      onUpdate(response.data); // Atualiza o estado no componente pai
-    } catch (error) {
-      toast.error("Erro ao editar post.");
+      onUpdate(response.data);
+    } catch (_error) {
+      // ✅ Aqui já estava certo (com underline)
+      toast.error('Erro ao editar post.');
     }
   };
 
   const handleDelete = async () => {
-    if (window.confirm("Tem certeza que deseja excluir este post?")) {
+    if (window.confirm('Tem certeza que deseja excluir este post?')) {
       try {
         await api.delete(`/posts/${post.id}/`);
-        toast.info("Post excluído.");
+        toast.info('Post excluído.');
         onDelete(post.id);
-      } catch (error) {
-        toast.error("Não foi possível excluir.");
+      } catch (_error) {
+        // ✅ Ajustado de 'error' para '_error'
+        toast.error('Não foi possível excluir.');
       }
     }
   };
 
   return (
-    <div className="post-controls">
+    <div className="post-controls" data-cy="post-actions-container">
       {isEditing ? (
         <>
-          <textarea 
-            value={editContent} 
+          <textarea
+            data-cy="post-edit-textarea"
+            value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
             className="edit-textarea"
           />
-          <button onClick={handleUpdate}>Salvar</button>
-          <button onClick={() => setIsEditing(false)}>Cancelar</button>
+          <button data-cy="post-save-btn" onClick={handleUpdate}>
+            Salvar
+          </button>
+          <button data-cy="post-cancel-btn" onClick={() => setIsEditing(false)}>
+            Cancelar
+          </button>
         </>
       ) : (
         <>
-          <button onClick={() => setIsEditing(true)}>Editar</button>
-          <button onClick={handleDelete} style={{ color: 'red' }}>Excluir</button>
+          <button data-cy="post-edit-btn" onClick={() => setIsEditing(true)}>
+            Editar
+          </button>
+          <button
+            data-cy="post-delete-btn"
+            onClick={handleDelete}
+            style={{ color: 'red' }}
+          >
+            Excluir
+          </button>
         </>
       )}
     </div>
   );
 };
+
+export default PostActions;

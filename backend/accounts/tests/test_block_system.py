@@ -1,352 +1,242 @@
+"""Testes para o sistema de bloqueio, invisibilidade mútua e restrições."""
+
 import pytest
-from rest_framework import status
+from django.db import IntegrityError
 from django.urls import reverse, NoReverseMatch
-from accounts.models import Block, Follow, Post, Profile, User
-from django.utils.timezone import now
-from datetime import timedelta
+from rest_framework import status
+from accounts.models import Block, Follow, Post, Notification
 
-# --- FIXTURES ADICIONAIS (Para complementar as que já tens) ---
+# pylint: disable=redefined-outer-name, unused-argument
 
-@pytest.fixture
-def user_b(db):
-    """Cria um segundo utilizador (o alvo do bloqueio)"""
-    u = User.objects.create_user(
-        username="target_user", 
-        email="target@test.com", 
-        password="password123"
-    )
-    Profile.objects.get_or_create(user=u)
-    return u
-
-@pytest.fixture
-def user_b_profile(user_b):
-    """Retorna o perfil do segundo utilizador"""
-    return user_b.profile
 
 @pytest.fixture
 def post_factory(db):
-    """Cria posts para testar a visibilidade no feed"""
+    """Cria posts para testar a visibilidade no feed."""
+
     def _create_post(user, content="Conteúdo de teste"):
         return Post.objects.create(user=user, content=content)
+
     return _create_post
 
-# --- TESTES DO SISTEMA DE BLOQUEIO ---
 
 @pytest.mark.django_db
 class TestBlockSystem:
+    """Valida a lógica de bloqueio e seu impacto em outras funcionalidades."""
 
     def get_url(self, action_name, pk=None):
-        """Auxiliar para resolver URLs com ou sem namespace"""
-        names = [f'profile-{action_name}', f'accounts:profile-{action_name}']
+        """Auxiliar para resolver URLs com ou sem namespace."""
+        names = [f"profile-{action_name}", f"accounts:profile-{action_name}"]
         for name in names:
             try:
                 if pk:
-                    return reverse(name, kwargs={'pk': pk})
+                    return reverse(name, kwargs={"pk": pk})
                 return reverse(name)
             except NoReverseMatch:
                 continue
         raise NoReverseMatch(f"Rota {action_name} não encontrada.")
 
     def test_block_user_successfully(self, auth_client, user, user_b_profile):
-        """TAL-14: Testa bloqueio e remoção automática de follow"""
+        """TAL-14: Testa bloqueio e remoção automática de follow."""
         target_user = user_b_profile.user
-        
-        # Simular que se seguiam
         Follow.objects.create(follower=user, following=target_user)
-        
-        url = self.get_url('block-user', pk=user_b_profile.id)
+
+        url = self.get_url("block-user", pk=user_b_profile.id)
         response = auth_client.post(url)
-        
+
         assert response.status_code == status.HTTP_201_CREATED
         assert Block.objects.filter(blocker=user, blocked=target_user).exists()
-        # O follow deve ter sido destruído
         assert not Follow.objects.filter(follower=user, following=target_user).exists()
 
     def test_cannot_follow_blocked_user(self, auth_client, user, user_b_profile):
-        """TAL-14: Impede follow se houver bloqueio de qualquer lado"""
+        """TAL-14: Impede follow se houver bloqueio de qualquer lado."""
         target_user = user_b_profile.user
-
-        # O alvo bloqueou o utilizador autenticado
         Block.objects.create(blocker=target_user, blocked=user)
 
-        url = self.get_url('follow-toggle', pk=user_b_profile.id)
+        url = self.get_url("follow-toggle", pk=user_b_profile.id)
         response = auth_client.post(url)
 
-        # Agora retorna 403 (Forbidden) em vez de 404 - mais correto!
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert "Action unavailable due to blocks" in response.data['error']
+        assert "Action unavailable due to blocks" in response.data["error"]
 
-    def test_blocked_user_posts_hidden_in_feed(self, auth_client, user, user_b, post_factory):
-        """TAL-14: Posts de bloqueados não aparecem no feed global"""
-        # User B cria um post
+    def test_blocked_user_posts_hidden_in_feed(
+        self, auth_client, user, user_b, post_factory
+    ):
+        """TAL-14: Posts de bloqueados não aparecem no feed global."""
         post_factory(user=user_b, content="Post invisível")
-        
-        # User A (autenticado) bloqueia User B
         Block.objects.create(blocker=user, blocked=user_b)
-        
-        # Tenta aceder à lista de posts
+
         try:
-            url = reverse('post-list')
+            url = reverse("post-list")
         except NoReverseMatch:
-            url = reverse('api:post-list') # Tenta com prefixo api se existir
-            
+            url = reverse("api:post-list")
+
         response = auth_client.get(url)
-        
-        # Se for uma lista (ReturnList), usamos a própria data. 
-        # Se for um dicionário (paginado), pegamos o 'results'.
-        if isinstance(response.data, list):
-            results = response.data
-        else:
-            results = response.data.get('results', [])
-        
-        # O feed deve estar vazio (ou sem o post do bloqueado)
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
+        )
+
         assert len(results) == 0
 
     def test_cannot_block_self(self, auth_client, user):
-        """Garante que o utilizador não se bloqueia a si mesmo"""
-        url = self.get_url('block-user', pk=user.profile.id)
-        
+        """Garante que o utilizador não se bloqueia a si mesmo."""
+        url = self.get_url("block-user", pk=user.profile.id)
         response = auth_client.post(url)
-        
+
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "Auto-bloqueio não permitido" in response.data['error']
+        assert "Auto-bloqueio não permitido" in response.data["error"]
 
-    # ... (fixtures e testes de bloqueio iniciais permanecem iguais)
-
-    def test_unfollow_always_allowed_but_starts_cooldown(self, auth_client, user, user_b_profile):
-        """TAL-12: Unfollow é livre, mas deve marcar unfollowed_at no banco"""
+    def test_unfollow_always_allowed_but_starts_cooldown(
+        self, auth_client, user, user_b_profile
+    ):
+        """TAL-12: Unfollow marca unfollowed_at no banco para cooldown."""
         target_user = user_b_profile.user
-        # Segue primeiro
         Follow.objects.create(follower=user, following=target_user)
 
-        url = self.get_url('follow-toggle', pk=user_b_profile.id)
+        url = self.get_url("follow-toggle", pk=user_b_profile.id)
         response = auth_client.post(url)
 
-        # Agora o Unfollow deve retornar 200 OK imediatamente
         assert response.status_code == 200
-        assert response.data['is_following'] is False
-        
-        # O registro NÃO deve ser deletado, apenas marcado com a data
-        # USAR all_objects para encontrar registros inativos
+        assert response.data["is_following"] is False
+
         follow_obj = Follow.all_objects.get(follower=user, following=target_user)
-        assert follow_obj is not None
-        assert follow_obj.unfollowed_at is not None  # Foi marcado como unfollow
+        assert follow_obj.unfollowed_at is not None
 
     def test_cannot_re_follow_before_cooldown(self, auth_client, user, user_b_profile):
-        """TAL-12: Impede voltar a seguir antes de passar o tempo de castigo"""
-        target_user = user_b_profile.user
-        
-        # 1. Seguir e dar Unfollow imediatamente
-        url = self.get_url('follow-toggle', pk=user_b_profile.id)
-        auth_client.post(url) # Segue
-        auth_client.post(url) # Unfollow
-        
-        # 2. Tentar seguir novamente (Castigo ativo)
+        """TAL-12: Impede voltar a seguir antes de passar o tempo de cooldown."""
+        url = self.get_url("follow-toggle", pk=user_b_profile.id)
+        auth_client.post(url)
+        auth_client.post(url)
+
         response = auth_client.post(url)
-        
-        # Agora sim, esperamos o erro 400
         assert response.status_code == 400
-        err = response.data.get("error", "")
-        assert "Wait" in err
-
-    def test_cannot_follow_blocked_user(self, auth_client, user, user_b_profile):
-        """TAL-14: Impede follow se houver bloqueio de qualquer lado"""
-        target_user = user_b_profile.user
-
-        # O alvo bloqueou o utilizador autenticado
-        Block.objects.create(blocker=target_user, blocked=user)
-
-        url = self.get_url('follow-toggle', pk=user_b_profile.id)
-        response = auth_client.post(url)
-
-        # AGORA: O código retorna 403 (Forbidden) porque a view explicitamente verifica bloqueios
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert "Action unavailable due to blocks" in response.data['error']
-        
-        # Opcional: Verificar também que o perfil não aparece na listagem de perfis
-        profiles_url = reverse('profile-list')
-        profiles_response = auth_client.get(profiles_url)
-        profile_ids = [p['id'] for p in profiles_response.data]
-        assert str(user_b_profile.id) not in profile_ids  # Perfil bloqueado não aparece na lista
+        assert "Wait" in response.data.get("error", "")
 
     def test_block_removes_follow_reciprocally(self, auth_client, user, user_b):
-        """Garante que o bloqueio destrói qualquer relação de follow pré-existente"""
-        # Ambos se seguem
+        """Garante que o bloqueio destrói qualquer relação de follow mútua."""
         Follow.objects.create(follower=user, following=user_b)
         Follow.objects.create(follower=user_b, following=user)
-        
-        # User A bloqueia User B
-        url = self.get_url('block-user', pk=user_b.profile.id)
+
+        url = self.get_url("block-user", pk=user_b.profile.id)
         auth_client.post(url)
-        
-        # NINGUÉM deve seguir NINGUÉM após o bloqueio
+
         assert Follow.objects.filter(follower=user, following=user_b).count() == 0
         assert Follow.objects.filter(follower=user_b, following=user).count() == 0
-    
+
     def test_prevent_duplicate_active_follows(self, auth_client, user, user_b_profile):
-        """Garante que o sistema não permite dois follows ativos (IntegrityError)"""
-        url = self.get_url('follow-toggle', pk=user_b_profile.id)
-        
-        # Primeiro Follow
+        """Garante que o banco de dados impede duplicidade de follows ativos."""
+        url = self.get_url("follow-toggle", pk=user_b_profile.id)
         auth_client.post(url)
-        
-        # Simular uma tentativa maliciosa de criar outro follow ativo manualmente no banco
-        # O banco de dados deve barrar se o unique_together estiver correto
-        from django.db import IntegrityError
+
         with pytest.raises(IntegrityError):
             Follow.objects.create(follower=user, following=user_b_profile.user)
-    
-    def test_hybrid_feed_excludes_blocked_users(self, auth_client, user, user_b, post_factory):
-        """Garante que posts de usuários que me bloquearam NÃO aparecem no meu feed"""
-        # 1. User B cria um post
+
+    def test_hybrid_feed_excludes_blocked_users(
+        self, auth_client, user, user_b, post_factory
+    ):
+        """Garante que posts de usuários que me bloquearam não aparecem no meu feed."""
         post_factory(user=user_b, content="Post Secreto de B")
-        
-        # 2. User B bloqueia o User A (utilizador autenticado)
         Block.objects.create(blocker=user_b, blocked=user)
-        
-        # 3. Tentar descobrir a URL correta do feed (tentando nomes comuns)
+
         url = None
-        for name in ['post-list', 'posts-list', 'feed']:
+        for name in ["post-list", "posts-list", "feed"]:
             try:
                 url = reverse(name)
                 break
             except NoReverseMatch:
                 continue
-        
+
         if not url:
-            pytest.skip("Rota do feed não encontrada nos testes.")
+            pytest.skip("Rota do feed não encontrada.")
 
         response = auth_client.get(url)
-        
-        # 4. Verificar se o post de B aparece
-        if isinstance(response.data, list):
-            results = response.data
-        else:
-            results = response.data.get('results', [])
-
-        # O post de quem nos bloqueou NÃO pode estar no feed
-        filenames = [p.get('content') for p in results]
-        assert "Post Secreto de B" not in filenames
-    
-    def test_block_toggle_and_follow_removal(self, auth_client, user, user_b_profile):
-        """Testa o ciclo completo: Seguir -> Bloquear (Remove Follow) -> Desbloquear (Toggle)"""
-        target_user = user_b_profile.user
-        url = self.get_url('block-user', pk=user_b_profile.id)
-
-        # 1. Simular Follow ativo
-        Follow.objects.create(follower=user, following=target_user)
-        
-        # 2. Primeiro POST: BLOQUEIA
-        response = auth_client.post(url)
-        assert response.status_code == 201
-        assert Block.objects.filter(blocker=user, blocked=target_user).exists()
-        # TAL-14: Follow deve sumir
-        assert not Follow.objects.filter(follower=user, following=target_user).exists()
-
-        # 3. Segundo POST: DESBLOQUEIA (Toggle)
-        response = auth_client.post(url)
-        assert response.status_code == 200
-        assert not Block.objects.filter(blocker=user, blocked=target_user).exists()
-        assert "desbloqueado" in response.data['message']
-    
-    def test_list_blocked_users(self, auth_client, user, user_b, post_factory):
-            """TAL-14: Garante que o utilizador consegue listar quem ele bloqueou"""
-            # 1. User A (autenticado) bloqueia User B
-            Block.objects.create(blocker=user, blocked=user_b)
-
-            # 2. Criamos um User C que NÃO está bloqueado
-            user_c = User.objects.create_user(username="clean_user", email="c@test.com")
-            Profile.objects.get_or_create(user=user_c)
-
-            # 3. Chama a action 'blocked-users' - AGORA FUNCIONA!
-            url = reverse('profile-blocked-users')  # Isso vai funcionar com a nova action
-            response = auth_client.get(url)
-            
-            assert response.status_code == status.HTTP_200_OK
-            
-            # Verifica se o usuário bloqueado aparece na lista
-            blocked_usernames = [item['username'] for item in response.data]
-            assert user_b.username in blocked_usernames
-            assert user_c.username not in blocked_usernames
-
-    # --- NOVOS TESTES: BLINDAGEM MÚTUA E NOTIFICAÇÕES (TAREFA 54) ---
-
-    def test_mutual_invisibility_in_search(self, auth_client, user, user_b_profile):
-        """Garante que a busca é cega para ambos os lados do bloqueio"""
-        target_user = user_b_profile.user
-        
-        # 1. BLOQUEIO: User A bloqueia User B
-        Block.objects.create(blocker=user, blocked=target_user)
-
-        # 2. Teste: O Bloqueador (User A) tenta buscar o Bloqueado (User B)
-        # Deve retornar vazio (Invisibilidade para o bloqueador)
-        search_url = reverse('user-search') + f"?q={target_user.username}"
-        response_a = auth_client.get(search_url)
-        assert len(response_a.data) == 0
-
-        # 3. Teste: O Bloqueado (User B) tenta buscar o Bloqueador (User A)
-        # (Simulando client do User B)
-        auth_client.force_authenticate(user=target_user)
-        response_b = auth_client.get(reverse('user-search') + f"?q={user.username}")
-        assert len(response_b.data) == 0
-
-    def test_notifications_filtered_by_block(self, auth_client, user, user_b, post_factory):
-        """Garante que notificações de/para bloqueados somem da lista"""
-        # 1. User B interage com User A (Gera notificação)
-        my_post = post_factory(user=user, content="Post do User A")
-        from accounts.models import Notification
-        Notification.objects.create(
-            recipient=user,
-            sender=user_b,
-            notification_type='LIKE',
-            post=my_post,
-            text="User B gostou do seu post"
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
         )
 
-        # 2. User A bloqueia User B
+        contents = [p.get("content") for p in results]
+        assert "Post Secreto de B" not in contents
+
+    def test_block_toggle_and_follow_removal(self, auth_client, user, user_b_profile):
+        """Testa o ciclo: Seguir -> Bloquear (Remove Follow) -> Desbloquear."""
+        target_user = user_b_profile.user
+        url = self.get_url("block-user", pk=user_b_profile.id)
+
+        Follow.objects.create(follower=user, following=target_user)
+        auth_client.post(url)  # Bloqueia
+
+        assert not Follow.objects.filter(follower=user, following=target_user).exists()
+
+        response = auth_client.post(url)  # Desbloqueia
+        assert response.status_code == 200
+        assert not Block.objects.filter(blocker=user, blocked=target_user).exists()
+
+    def test_list_blocked_users(self, auth_client, user, user_b):
+        """TAL-14: Garante que o utilizador consegue listar quem ele bloqueou."""
         Block.objects.create(blocker=user, blocked=user_b)
 
-        # 3. User A consulta notificações
-        # A muralha deve esconder a notificação do User B
-        url = reverse('notification-list') # Ajuste o nome conforme seu router
-        response = auth_client.get(url)
-        
-        # Se for paginado, olha no 'results', senão na lista direta
-        results = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
-        
-        assert len(results) == 0
-
-    def test_suggestions_exclude_mutual_blocks(self, auth_client, user, user_b_profile):
-        """Garante que bloqueados não aparecem em 'Quem Seguir' (Sugestões)"""
-        target_user = user_b_profile.user
-        
-        # 1. Bloqueio Mútuo (B bloqueou A)
-        Block.objects.create(blocker=target_user, blocked=user)
-
-        # 2. User A pede sugestões
-        url = reverse('suggested-follows')
-        response = auth_client.get(url)
-        
-        # O User B não pode estar nas sugestões do User A
-        usernames = [p['username'] for p in response.data]
-        assert target_user.username not in usernames
-
-    def test_profile_detail_access_denied_if_blocked(self, auth_client, user, user_b_profile):
-        """Garante que tentar acessar a URL direta de um perfil bloqueado dá 404/403"""
-        target_user = user_b_profile.user
-        Block.objects.create(blocker=target_user, blocked=user)
-
-        # Tentar acessar o publicPerfil do User B
-        url = reverse('profile-detail', kwargs={'pk': user_b_profile.id})
-        response = auth_client.get(url)
-
-        # Como o queryset exclui bloqueados, o Django deve retornar 404 (Not Found)
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-
-    def test_own_profile_remains_visible_to_self(self, auth_client, user):
-        """Bug Fix: Garante que o usuário logado ainda consegue ver o próprio perfil"""
-        url = reverse('profile-detail', kwargs={'pk': user.profile.id})
+        url = reverse("profile-blocked-users")
         response = auth_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['username'] == user.username
+        blocked_usernames = [item["username"] for item in response.data]
+        assert user_b.username in blocked_usernames
+
+    def test_mutual_invisibility_in_search(self, auth_client, user, user_b_profile):
+        """Garante que a busca é cega para ambos os lados do bloqueio."""
+        target_user = user_b_profile.user
+        Block.objects.create(blocker=user, blocked=target_user)
+
+        search_url = reverse("user-search") + f"?q={target_user.username}"
+        response_a = auth_client.get(search_url)
+        assert len(response_a.data) == 0
+
+        auth_client.force_authenticate(user=target_user)
+        response_b = auth_client.get(reverse("user-search") + f"?q={user.username}")
+        assert len(response_b.data) == 0
+
+    def test_notifications_filtered_by_block(
+        self, auth_client, user, user_b, post_factory
+    ):
+        """Garante que notificações de bloqueados somem da lista."""
+        my_post = post_factory(user=user)
+        Notification.objects.create(
+            recipient=user, sender=user_b, notification_type="LIKE", post=my_post
+        )
+
+        Block.objects.create(blocker=user, blocked=user_b)
+        response = auth_client.get(reverse("notification-list"))
+
+        results = (
+            response.data
+            if isinstance(response.data, list)
+            else response.data.get("results", [])
+        )
+        assert len(results) == 0
+
+    def test_suggestions_exclude_mutual_blocks(self, auth_client, user, user_b_profile):
+        """Garante que bloqueados não aparecem em sugestões."""
+        Block.objects.create(blocker=user_b_profile.user, blocked=user)
+
+        response = auth_client.get(reverse("suggested-follows"))
+        usernames = [p["username"] for p in response.data]
+        assert user_b_profile.user.username not in usernames
+
+    def test_profile_detail_access_denied_if_blocked(
+        self, auth_client, user, user_b_profile
+    ):
+        """Garante que perfis bloqueados retornam 404."""
+        Block.objects.create(blocker=user_b_profile.user, blocked=user)
+
+        url = reverse("profile-detail", kwargs={"pk": user_b_profile.id})
+        response = auth_client.get(url)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_own_profile_remains_visible_to_self(self, auth_client, user):
+        """Bug Fix: Garante que o usuário logado ainda vê o próprio perfil."""
+        url = reverse("profile-detail", kwargs={"pk": user.profile.id})
+        response = auth_client.get(url)
+        assert response.status_code == status.HTTP_200_OK

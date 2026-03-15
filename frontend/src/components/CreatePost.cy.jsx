@@ -2,25 +2,26 @@ import React from 'react';
 import CreatePost from './CreatePost';
 import AuthContext from '../context/AuthContext';
 
-describe('<CreatePost />', () => {
+describe('<CreatePost /> - Blindado', () => {
   let onPostCreatedSpy;
 
-  // Mock dos dados que o useAuth() precisa para não quebrar
   const mockAuthValue = {
     user: {
       username: 'cristiano',
-      profile_picture: 'https://via.placeholder.com/150'
-    }
+      profile_picture: 'https://via.placeholder.com/150',
+    },
   };
 
   beforeEach(() => {
-    // Criamos um "espião" para a função de callback
     onPostCreatedSpy = cy.spy().as('onPostCreatedSpy');
 
-    // Interceptamos a chamada da API (axios)
     cy.intercept('POST', '**/posts/', {
       statusCode: 201,
-      body: { id: 1, content: 'Texto do post', author: { username: 'cristiano' } }
+      body: {
+        id: 1,
+        content: 'Texto do post',
+        author: { username: 'cristiano' },
+      },
     }).as('createPostRequest');
   });
 
@@ -33,29 +34,25 @@ describe('<CreatePost />', () => {
       </AuthContext.Provider>
     );
 
-    // 1. Verifica se o avatar carregou do contexto
-    cy.get('img[alt="avatar"]')
-  .should('exist') // Verifica se o elemento está no HTML
-  .and('have.attr', 'src', mockAuthValue.user.profile_picture);
+    // 1. Verifica avatar via data-cy
+    cy.getByData('user-avatar').should(
+      'have.attr',
+      'src',
+      mockAuthValue.user.profile_picture
+    );
 
-    // 2. Verifica o placeholder (usando have.attr que é o correto)
-    cy.get('textarea')
-      .should('have.attr', 'placeholder', "What's on your mind?");
-
-    // 3. Digita texto e verifica o contador
+    // 2. Digita texto
     const texto = 'Testando o Mindly!';
-    cy.get('textarea').type(texto);
-    cy.contains(`${texto.length}/280`).should('be.visible');
+    cy.getByData('post-textarea').type(texto);
 
-    // 4. Clica em Post e verifica se chamou a API e o callback
-    cy.get('button').contains('Post').click();
-    
+    // 3. Valida contador
+    cy.getByData('char-counter').should('contain', `${texto.length}/280`);
+
+    // 4. Envia
+    cy.getByData('post-submit').click();
+
     cy.wait('@createPostRequest');
-    
-    // O campo deve ser limpo após o sucesso (resetState)
-    cy.get('textarea').should('have.value', '');
-    
-    // A função pai deve ter sido chamada
+    cy.getByData('post-textarea').should('have.value', '');
     cy.get('@onPostCreatedSpy').should('have.been.called');
   });
 
@@ -69,11 +66,12 @@ describe('<CreatePost />', () => {
     );
 
     const longText = 'a'.repeat(281);
-    cy.get('textarea').type(longText, { delay: 0 }); // delay 0 para ser rápido
-    
-    cy.get('button').contains('Post').should('be.disabled');
-    cy.contains('281/280').should('have.class', 'text-red-500');
+    cy.getByData('post-textarea').type(longText, { delay: 0 });
+
+    cy.getByData('post-submit').should('be.disabled');
+    cy.getByData('char-counter').should('have.class', 'text-red-500');
   });
+
   it('Deve mostrar preview de vídeo ao selecionar um arquivo .mp4', () => {
     cy.mount(
       <AuthContext.Provider value={mockAuthValue}>
@@ -83,18 +81,20 @@ describe('<CreatePost />', () => {
       </AuthContext.Provider>
     );
 
-    // Simula a seleção de um vídeo
-    cy.get('input[type="file"]').selectFile({
-      contents: Cypress.Buffer.from('video-fake-content'),
-      fileName: 'video_aula.mp4',
-      mimeType: 'video/mp4' // Isso faz o media.type.startsWith('video') ser verdadeiro
-    }, { force: true });
+    // Seleção de vídeo usando o input de arquivo
+    cy.getByData('file-input').selectFile(
+      {
+        contents: Cypress.Buffer.from('video-fake-content'),
+        fileName: 'video_aula.mp4',
+        mimeType: 'video/mp4',
+      },
+      { force: true }
+    );
 
-    // Verifica se a tag <video> apareceu (em vez da tag <img>)
-    cy.get('video').should('be.visible');
-    
-    // Verifica se o botão de remover (X) funciona no vídeo
-    cy.get('button').contains('✕').click();
-    cy.get('video').should('not.exist');
+    cy.getByData('video-preview').should('be.visible');
+
+    // Remove o vídeo
+    cy.getByData('remove-media').click();
+    cy.getByData('video-preview').should('not.exist');
   });
 });

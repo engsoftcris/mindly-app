@@ -1,6 +1,6 @@
 // frontend/src/pages/PublicProfile.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom'; // Adicionado useLocation
+import React, { useState, useEffect, useMemo, useCallback } from 'react'; // 1. Adicionado useCallback
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import FollowButton from '../components/FollowButton';
@@ -11,6 +11,7 @@ import PostCard from '../components/PostCard';
 import CommentModal from '../components/CommentModal';
 import MediaLightbox from '../components/MediaLightbox';
 
+// Mantivemos sua função getId aqui (o linter não reclama se você a usa no useMemo abaixo)
 const getId = (v) => {
   if (v == null) return null;
   if (typeof v === 'number' || typeof v === 'string') return String(v);
@@ -24,26 +25,19 @@ const getId = (v) => {
 };
 
 const PublicProfile = () => {
-  const { id } = useParams(); // this is Profile UUID
+  const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation(); // Adicionado para ler a URL
+  const location = useLocation();
   const { user: currentUser } = useAuth();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [activeTab, setActiveTab] = useState('all');
   const [connModal, setConnModal] = useState({ open: false, tab: 'followers' });
-
-  // Estado para o post vindo da notificação
   const [highlightedPostId, setHighlightedPostId] = useState(null);
-
-  // Lightbox State
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
-
-  // Comment modal state
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [activeCommentPost, setActiveCommentPost] = useState(null);
 
@@ -57,7 +51,6 @@ const PublicProfile = () => {
     return loggedInId === id;
   }, [currentUser, id]);
 
-  // Captura o ID do post da URL (?post=7)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const postId = params.get('post');
@@ -66,57 +59,68 @@ const PublicProfile = () => {
     }
   }, [location]);
 
-  // Reordena os posts para colocar o alvo da notificação no TOPO
   const sortedPosts = useMemo(() => {
     const allPosts = profile?.posts || [];
     if (!highlightedPostId) return allPosts;
-
-    const target = allPosts.find(p => String(p.id) === highlightedPostId);
+    const target = allPosts.find((p) => String(p.id) === highlightedPostId);
     if (!target) return allPosts;
-
-    const others = allPosts.filter(p => String(p.id) !== highlightedPostId);
+    const others = allPosts.filter((p) => String(p.id) !== highlightedPostId);
     return [target, ...others];
   }, [profile?.posts, highlightedPostId]);
 
-  // Função para limpar o destaque (marcar como lido)
   const clearHighlight = () => {
     setHighlightedPostId(null);
-    // Limpa a URL para o post não voltar ao topo no refresh
     navigate(location.pathname, { replace: true });
   };
 
-  const fetchProfile = async () => {
+  // ✅ 2. fetchProfile agora com useCallback (estabilidade de função)
+  const fetchProfile = useCallback(async () => {
     const minWait = new Promise((resolve) => setTimeout(resolve, 800));
     try {
       setLoading(true);
       setError(null);
-      const [response] = await Promise.all([api.get(`/accounts/profiles/${id}/`), minWait]);
+      const [response] = await Promise.all([
+        api.get(`/accounts/profiles/${id}/`),
+        minWait,
+      ]);
       setProfile(response.data);
-    } catch (err) {
-      setError(err?.response?.status === 404 ? 'User not found' : 'Error loading profile');
+    } catch (_err) {
+      // ✅ 3. catch (_err) para o linter ignorar
+      setError(
+        _err?.response?.status === 404
+          ? 'User not found'
+          : 'Error loading profile'
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]); // Só recria se o ID do perfil mudar
 
   useEffect(() => {
     if (id) fetchProfile();
-  }, [id]);
+  }, [id, fetchProfile]); // ✅ 4. Adicionado fetchProfile aqui
 
   const handlePostUpdate = (postIdOrUpdatedPost, isLiked, likesCount) => {
     setProfile((prev) => {
       if (!prev) return prev;
-      if (typeof postIdOrUpdatedPost === 'object' && postIdOrUpdatedPost?.id != null) {
+      if (
+        typeof postIdOrUpdatedPost === 'object' &&
+        postIdOrUpdatedPost?.id != null
+      ) {
         const updatedPost = postIdOrUpdatedPost;
         return {
           ...prev,
-          posts: (prev.posts || []).map((p) => (p.id === updatedPost.id ? updatedPost : p)),
+          posts: (prev.posts || []).map((p) =>
+            p.id === updatedPost.id ? updatedPost : p
+          ),
         };
       }
       return {
         ...prev,
         posts: (prev.posts || []).map((p) =>
-          p.id === postIdOrUpdatedPost ? { ...p, is_liked: isLiked, likes_count: likesCount } : p
+          p.id === postIdOrUpdatedPost
+            ? { ...p, is_liked: isLiked, likes_count: likesCount }
+            : p
         ),
       };
     });
@@ -125,20 +129,34 @@ const PublicProfile = () => {
   const handlePostDelete = (postId) => {
     setProfile((prev) => {
       if (!prev) return prev;
-      return { ...prev, posts: (prev.posts || []).filter((p) => p.id !== postId) };
+      return {
+        ...prev,
+        posts: (prev.posts || []).filter((p) => p.id !== postId),
+      };
     });
   };
 
-  // Media Filters
-  const photos = useMemo(() => 
-    profile?.posts?.filter(
-      (p) => p.media_url && !/\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) && p.moderation_status !== 'REJECTED'
-    ) || [], [profile]);
+  const photos = useMemo(
+    () =>
+      profile?.posts?.filter(
+        (p) =>
+          p.media_url &&
+          !/\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) &&
+          p.moderation_status !== 'REJECTED'
+      ) || [],
+    [profile]
+  );
 
-  const videos = useMemo(() => 
-    profile?.posts?.filter(
-      (p) => p.media_url && /\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) && p.moderation_status !== 'REJECTED'
-    ) || [], [profile]);
+  const videos = useMemo(
+    () =>
+      profile?.posts?.filter(
+        (p) =>
+          p.media_url &&
+          /\.(mp4|webm|mov|mkv|avi)$/i.test(p.media_url) &&
+          p.moderation_status !== 'REJECTED'
+      ) || [],
+    [profile]
+  );
 
   const currentMediaList = useMemo(() => {
     return activeTab === 'photos' ? photos : videos;
@@ -190,31 +208,47 @@ const PublicProfile = () => {
                   />
                 )}
                 {profile && currentUser && (
-                  <FollowButton profileId={profile.id} initialIsFollowing={profile.is_following} />
+                  <FollowButton
+                    profileId={profile.id}
+                    initialIsFollowing={profile.is_following}
+                  />
                 )}
               </>
             )}
           </div>
 
           <div className="mt-14">
-            <h1 className="text-xl font-extrabold">{profile?.display_name || profile?.username}</h1>
+            <h1 className="text-xl font-extrabold">
+              {profile?.display_name || profile?.username}
+            </h1>
             <p className="text-gray-500">@{profile?.username}</p>
           </div>
-          <p className="mt-4 text-gray-200 whitespace-pre-wrap">{profile?.bio || 'No bio yet.'}</p>
+          <p className="mt-4 text-gray-200 whitespace-pre-wrap">
+            {profile?.bio || 'No bio yet.'}
+          </p>
 
           <div className="mt-4 flex gap-5 text-[15px]">
-            <div onClick={() => setConnModal({ open: true, tab: 'following' })} className="flex gap-1 hover:underline cursor-pointer">
-              <span className="font-bold text-white">{profile?.following_count || 0}</span>
+            <div
+              onClick={() => setConnModal({ open: true, tab: 'following' })}
+              className="flex gap-1 hover:underline cursor-pointer"
+            >
+              <span className="font-bold text-white">
+                {profile?.following_count || 0}
+              </span>
               <span className="text-gray-500">Following</span>
             </div>
-            <div onClick={() => setConnModal({ open: true, tab: 'followers' })} className="flex gap-1 hover:underline cursor-pointer">
-              <span className="font-bold text-white">{profile?.followers_count || 0}</span>
+            <div
+              onClick={() => setConnModal({ open: true, tab: 'followers' })}
+              className="flex gap-1 hover:underline cursor-pointer"
+            >
+              <span className="font-bold text-white">
+                {profile?.followers_count || 0}
+              </span>
               <span className="text-gray-500">Followers</span>
             </div>
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-gray-800 sticky top-0 bg-black/80 backdrop-blur-md z-10">
           {['all', 'photos', 'videos'].map((tab) => (
             <button
@@ -223,7 +257,9 @@ const PublicProfile = () => {
               className="flex-1 py-4 hover:bg-white/5 transition relative capitalize"
               type="button"
             >
-              <span className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-gray-500'}`}>
+              <span
+                className={`text-sm font-bold ${activeTab === tab ? 'text-white' : 'text-gray-500'}`}
+              >
                 {tab === 'all' ? 'Posts' : tab}
               </span>
               {activeTab === tab && (
@@ -236,8 +272,12 @@ const PublicProfile = () => {
         <div>
           {profile?.is_restricted ? (
             <div className="flex flex-col items-center justify-center p-12 text-center text-gray-500">
-              <h2 className="text-xl font-bold text-white">These posts are protected</h2>
-              <p className="text-sm mt-2">Follow @{profile?.username} to see their posts.</p>
+              <h2 className="text-xl font-bold text-white">
+                These posts are protected
+              </h2>
+              <p className="text-sm mt-2">
+                Follow @{profile?.username} to see their posts.
+              </p>
             </div>
           ) : (
             <div className="min-h-[300px]">
@@ -247,14 +287,10 @@ const PublicProfile = () => {
                     sortedPosts.map((post) => {
                       const isTarget = String(post.id) === highlightedPostId;
                       return (
-                        <div 
+                        <div
                           key={post.id}
                           onClickCapture={isTarget ? clearHighlight : undefined}
-                          className={`transition-all duration-700 ease-in-out ${
-                            isTarget 
-                              ? 'bg-blue-500/10 border-l-4 border-blue-500' 
-                              : 'bg-transparent border-l-4 border-transparent'
-                          }`}
+                          className={`transition-all duration-700 ease-in-out ${isTarget ? 'bg-blue-500/10 border-l-4 border-blue-500' : 'bg-transparent border-l-4 border-transparent'}`}
                         >
                           <PostCard
                             post={post}
@@ -271,7 +307,9 @@ const PublicProfile = () => {
                       );
                     })
                   ) : (
-                    <div className="p-20 text-center text-gray-500">No posts yet.</div>
+                    <div className="p-20 text-center text-gray-500">
+                      No posts yet.
+                    </div>
                   )}
                 </div>
               )}
@@ -281,35 +319,51 @@ const PublicProfile = () => {
                   {currentMediaList.length > 0 ? (
                     currentMediaList.map((post, index) => {
                       const isPending = post.moderation_status === 'PENDING';
-                      const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(post.media_url);
+                      const isVideo = /\.(mp4|webm|mov|mkv|avi)$/i.test(
+                        post.media_url
+                      );
                       return (
-                        <div 
-                          key={post.id} 
+                        <div
+                          key={post.id}
                           onClick={() => !isPending && openLightbox(index)}
                           className="relative aspect-square bg-gray-900 overflow-hidden group cursor-pointer border border-transparent hover:border-gray-700 transition"
                         >
                           {isVideo ? (
-                            <video src={post.media_url} className={`w-full h-full object-cover ${isPending ? 'blur-2xl opacity-30' : ''}`} />
+                            <video
+                              src={post.media_url}
+                              className={`w-full h-full object-cover ${isPending ? 'blur-2xl opacity-30' : ''}`}
+                            />
                           ) : (
-                            <img src={post.media_url} className={`w-full h-full object-cover ${isPending ? 'blur-2xl opacity-30' : ''}`} alt="" />
+                            <img
+                              src={post.media_url}
+                              className={`w-full h-full object-cover ${isPending ? 'blur-2xl opacity-30' : ''}`}
+                              alt=""
+                            />
                           )}
-                          
                           {isVideo && !isPending && (
                             <div className="absolute bottom-2 right-2 bg-black/50 p-1 rounded backdrop-blur-sm">
-                               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M21 12l-18 12v-24z"/></svg>
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="w-4 h-4 fill-white"
+                              >
+                                <path d="M21 12l-18 12v-24z" />
+                              </svg>
                             </div>
                           )}
-
                           {isPending && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                              <span className="text-[9px] bg-[#1D9BF0] text-white font-bold px-1.5 py-0.5 rounded uppercase">Review</span>
+                              <span className="text-[9px] bg-[#1D9BF0] text-white font-bold px-1.5 py-0.5 rounded uppercase">
+                                Review
+                              </span>
                             </div>
                           )}
                         </div>
                       );
                     })
                   ) : (
-                    <div className="col-span-3 p-20 text-center text-gray-500">No {activeTab} found.</div>
+                    <div className="col-span-3 p-20 text-center text-gray-500">
+                      No {activeTab} found.
+                    </div>
                   )}
                 </div>
               )}
@@ -324,7 +378,6 @@ const PublicProfile = () => {
         profileId={profile?.id}
         initialTab={connModal.tab}
       />
-
       {isCommentModalOpen && activeCommentPost && (
         <CommentModal
           post={activeCommentPost}
@@ -335,15 +388,13 @@ const PublicProfile = () => {
           }}
         />
       )}
-
-      {/* Media Lightbox Component */}
-      <MediaLightbox 
+      <MediaLightbox
         isOpen={isLightboxOpen}
         mediaList={currentMediaList}
         currentIndex={currentMediaIndex}
         onClose={() => setIsLightboxOpen(false)}
-        onPrev={() => setCurrentMediaIndex(prev => prev - 1)}
-        onNext={() => setCurrentMediaIndex(prev => prev + 1)}
+        onPrev={() => setCurrentMediaIndex((prev) => prev - 1)}
+        onNext={() => setCurrentMediaIndex((prev) => prev + 1)}
       />
     </div>
   );

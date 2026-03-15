@@ -8,29 +8,8 @@ import LikeButton from './LikeButton';
 import CommentButton from './CommentButton';
 import ReportButton from './ReportModal';
 
-const getId = (v) => {
-  if (v == null) return null;
-  if (typeof v === 'number' || typeof v === 'string') return String(v);
-  if (typeof v === 'object') {
-    if (v.user_id != null) return String(v.user_id);
-    if (v.id != null) return String(v.id);
-    if (v.user != null) return getId(v.user);
-    if (v.pk != null) return String(v.pk);
-  }
-  return null;
-};
-
 const getProfileId = (author) => {
-  // Author no seu feed pode vir como:
-  // - { id: <profile_uuid>, profile_id: <profile_uuid>, ... }
-  // - ou { profile_id: ... }
-  // Mantém compatível
-  return (
-    author?.profile_id ||
-    author?.id || // no seu serializer atual, id = profile.id
-    author?.uuid ||
-    null
-  );
+  return author?.profile_id || author?.id || author?.uuid || null;
 };
 
 const isVideoUrl = (url) => /\.(mp4|webm|mov|mkv|avi)$/i.test(url || '');
@@ -50,50 +29,36 @@ const PostCard = ({
   const [editContent, setEditContent] = useState(initialPost?.content || '');
   const [loading, setLoading] = useState(false);
 
-  // Keep local state synced with parent updates
   useEffect(() => {
     setPost(initialPost);
     if (!isEditing) setEditContent(initialPost?.content || '');
-  }, [initialPost, isEditing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPost]);
 
   const author = post?.author;
 
- // ✅ Pega o UUID do usuário logado (ex: "08b3aa69...")
   const currentUserId = useMemo(() => {
-    // No seu caso, o id já está vindo como o UUID
     const id = currentUser?.id || currentUser?.profile_id;
     return id ? String(id) : null;
   }, [currentUser]);
 
-  // ✅ Pega o UUID do autor do post (ex: "08b3aa69...")
   const authorUserId = useMemo(() => {
-    // Aqui buscamos o profile_id ou o id (se for UUID) do autor
     const id = author?.profile_id || author?.id;
-    
-    // Pequena trava de segurança: se o id for um número (como o "4" do log), 
-    // ele não vai bater com o UUID. Precisamos do UUID aqui.
     return id ? String(id) : null;
   }, [author]);
 
-
   const isOwnPost = useMemo(() => {
     if (!currentUserId || !authorUserId) return false;
-    // Se o autorUserId estiver vindo como "4", e o logado como "08b3...", vai dar false.
-    // Certifique-se que o authorUserId também seja o UUID longo.
     return currentUserId === authorUserId;
   }, [currentUserId, authorUserId]);
 
-
   const profileIdForLink = useMemo(() => getProfileId(author), [author]);
 
- 
   const isPending = post?.moderation_status === 'PENDING';
   const isRejected = post?.moderation_status === 'REJECTED';
 
   const handleUpdate = async () => {
     const next = (editContent || '').trim();
-    
-    // Se não mudou nada, só fecha o modo edição
     if (!next || next === (post?.content || '').trim()) {
       setIsEditing(false);
       setEditContent(post?.content || '');
@@ -102,25 +67,18 @@ const PostCard = ({
 
     setLoading(true);
     try {
-      // ✅ O SEGREDO: Usar FormData para evitar o erro 415
       const formData = new FormData();
       formData.append('content', next);
-
-      // Enviamos o formData. 
-      // Nota: Verifique se o seu postsAPI.update aceita o objeto de configuração do Axios
-      // Caso dê erro no postsAPI, use: await api.patch(`/posts/${post.id}/`, formData)
       const response = await postsAPI.update(post.id, formData);
-
       setPost(response.data);
       if (onPostUpdate) onPostUpdate(response.data);
-
       toast.success('Post updated and sent for review.');
       setIsEditing(false);
-    } catch (error) {
-      console.error("Erro na edição:", error.response?.data);
+    } catch (_error) {
+      console.error('Erro na edição:', _error.response?.data);
       const msg =
-        error?.response?.data?.detail ||
-        error?.response?.data?.content?.[0] ||
+        _error?.response?.data?.detail ||
+        _error?.response?.data?.content?.[0] ||
         'Could not update the post.';
       toast.error(msg);
     } finally {
@@ -130,7 +88,10 @@ const PostCard = ({
 
   if (isRejected) {
     return (
-      <div className="p-4 border-b border-gray-800 bg-red-900/5 text-center text-red-500 text-[11px] font-bold uppercase tracking-wider">
+      <div
+        data-cy="post-rejected-message"
+        className="p-4 border-b border-gray-800 bg-red-900/5 text-center text-red-500 text-[11px] font-bold uppercase tracking-wider"
+      >
         Content removed for violating guidelines.
       </div>
     );
@@ -141,12 +102,19 @@ const PostCard = ({
   return (
     <div
       ref={highlightRef}
+      data-cy={`post-card-${post?.id}`}
       className={`p-4 transition-colors flex gap-3 ${
-        isHighlighted ? 'bg-blue-500/10 border-l-2 border-blue-500' : 'hover:bg-white/[0.02]'
+        isHighlighted
+          ? 'bg-blue-500/10 border-l-2 border-blue-500'
+          : 'hover:bg-white/[0.02]'
       } border-b border-gray-800`}
     >
       {/* Avatar */}
-      <Link to={`/profile/${profileIdForLink || ''}`} className="flex-shrink-0">
+      <Link
+        to={`/profile/${profileIdForLink || ''}`}
+        className="flex-shrink-0"
+        data-cy="post-author-avatar"
+      >
         <img
           src={
             author?.profile_picture ||
@@ -163,42 +131,39 @@ const PostCard = ({
           <div className="flex items-center gap-1 mb-1 min-w-0">
             <Link
               to={`/profile/${profileIdForLink || ''}`}
+              data-cy="post-author-name"
               className="font-bold text-white hover:underline truncate"
             >
               {author?.display_name || author?.username}
             </Link>
-            <span className="text-gray-500 text-sm truncate">@{author?.username}</span>
+            <span
+              className="text-gray-500 text-sm truncate"
+              data-cy="post-author-handle"
+            >
+              @{author?.username}
+            </span>
           </div>
 
-         <UserActionMenu
-  targetProfile={{
-    ...author,
-    id: profileIdForLink,
-    is_blocked: author?.is_blocked // Importante: o Serializer que ajustamos envia isso!
-  }}
-  currentUserId={currentUserId}
-  postId={post?.id}
-  isOwnPost={isOwnPost}
-  onActionComplete={(blockedId) => {
-    // Se o onActionComplete retornar um ID de perfil (bloqueio), 
-    // chamamos uma função no pai para limpar o feed.
-    // Se o seu pai (Feed.jsx) usa onDeleteSuccess, passe o ID do post ou do autor.
-    if (onDeleteSuccess) {
-      // Dica: Se você passar o post.id, só esse post some. 
-      // Se o seu Feed.jsx for esperto, ele pode filtrar por autor.
-      onDeleteSuccess(post.id); 
-    }
-    
-    // Opcional: Se quiser dar um "refresh" suave ou feedback:
-    console.log(`Usuário ${blockedId} bloqueado. Removendo conteúdo...`);
-  }}
-  onEditClick={() => setIsEditing(true)}
-/>
+          <UserActionMenu
+            targetProfile={{
+              ...author,
+              id: profileIdForLink,
+              is_blocked: author?.is_blocked,
+            }}
+            currentUserId={currentUserId}
+            postId={post?.id}
+            isOwnPost={isOwnPost}
+            onActionComplete={(_blockedId) => {
+              if (onDeleteSuccess) onDeleteSuccess(post.id);
+            }}
+            onEditClick={() => setIsEditing(true)}
+          />
         </div>
 
         {isEditing ? (
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 space-y-2" data-cy="post-edit-container">
             <textarea
+              data-cy="post-edit-input"
               className="w-full bg-gray-900 text-white p-3 rounded-xl border border-blue-500 focus:outline-none text-[15px] min-h-[100px] resize-none"
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
@@ -206,6 +171,7 @@ const PostCard = ({
             />
             <div className="flex gap-2 justify-end">
               <button
+                data-cy="post-edit-cancel"
                 onClick={() => {
                   setIsEditing(false);
                   setEditContent(post?.content || '');
@@ -217,6 +183,7 @@ const PostCard = ({
                 Cancel
               </button>
               <button
+                data-cy="post-edit-save"
                 onClick={handleUpdate}
                 disabled={loading || !(editContent || '').trim()}
                 className="px-4 py-1 text-sm bg-blue-600 text-white rounded-full font-bold hover:bg-blue-700 disabled:opacity-50"
@@ -227,16 +194,23 @@ const PostCard = ({
             </div>
           </div>
         ) : (
-          <p className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]">
+          <p
+            className="text-gray-200 leading-relaxed whitespace-pre-wrap text-[15px]"
+            data-cy="post-content"
+          >
             {post?.content}
           </p>
         )}
 
         {/* Media */}
         {mediaUrl && (
-          <div className="relative mt-3 overflow-hidden rounded-2xl border border-gray-800 bg-black">
+          <div
+            className="relative mt-3 overflow-hidden rounded-2xl border border-gray-800 bg-black"
+            data-cy="post-media-container"
+          >
             {isVideoUrl(mediaUrl) ? (
               <video
+                data-cy="post-video"
                 src={mediaUrl}
                 controls={!isPending}
                 preload="metadata"
@@ -244,15 +218,18 @@ const PostCard = ({
               />
             ) : (
               <img
+                data-cy="post-image"
                 src={mediaUrl}
                 loading="lazy"
                 className={`max-h-96 w-full object-cover ${isPending ? 'blur-2xl opacity-40' : ''}`}
                 alt="Post media"
               />
             )}
-
             {isPending && (
-              <div className="absolute inset-0 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm text-blue-400 font-bold text-xs uppercase p-2 text-center">
+              <div
+                data-cy="post-moderation-badge"
+                className="absolute inset-0 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm text-blue-400 font-bold text-xs uppercase p-2 text-center"
+              >
                 Content under review
               </div>
             )}
@@ -260,18 +237,30 @@ const PostCard = ({
         )}
 
         <div className="mt-3 flex items-center gap-8">
-          <LikeButton post={post} onLikeToggle={onLikeUpdate} />
+          <LikeButton
+            post={post}
+            onLikeToggle={onLikeUpdate}
+            data-cy="post-like-button"
+          />
 
           <CommentButton
             count={post?.comments_count || 0}
             hasCommented={!!post?.user_has_commented}
-            onClick={() => (onCommentClick ? onCommentClick(post) : null)} // ✅ safe + passa o post
+            onClick={() => (onCommentClick ? onCommentClick(post) : null)}
+            data-cy="post-comment-button"
           />
 
-          {currentUser && !isOwnPost && <ReportButton postId={post?.id} />}
+          {currentUser && !isOwnPost && (
+            <ReportButton postId={post?.id} data-cy="post-report-button" />
+          )}
 
-          <span className="text-[11px] text-gray-600 ml-auto">
-            {post?.created_at ? new Date(post.created_at).toLocaleDateString() : ''}
+          <span
+            className="text-[11px] text-gray-600 ml-auto"
+            data-cy="post-date"
+          >
+            {post?.created_at
+              ? new Date(post.created_at).toLocaleDateString()
+              : ''}
           </span>
         </div>
       </div>

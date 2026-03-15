@@ -3,7 +3,6 @@ import { BrowserRouter } from 'react-router-dom';
 import SettingsPage from './SettingsPage';
 import AuthContext, { AuthProvider } from '../context/AuthContext';
 
-
 describe('<SettingsPage /> - Teste de Configurações', () => {
   let mockAuthContext;
 
@@ -76,69 +75,72 @@ describe('<SettingsPage /> - Teste de Configurações', () => {
     cy.get('@updateUserStub').should('have.been.calledOnce');
   });
 
- it('2. Deve mostrar erro se a atualização falhar', () => {
-  cy.intercept('PATCH', '**/accounts/profile/', {
-    statusCode: 500,
-    body: { error: 'Server error' },
-  }).as('updateFail');
+  it('2. Deve mostrar erro se a atualização falhar', () => {
+    cy.intercept('PATCH', '**/accounts/profile/', {
+      statusCode: 500,
+      body: { error: 'Server error' },
+    }).as('updateFail');
 
-  cy.mount(
-    <BrowserRouter>
-      <AuthContext.Provider value={mockAuthContext}>
-        <SettingsPage />
-      </AuthContext.Provider>
-    </BrowserRouter>
-  );
+    cy.mount(
+      <BrowserRouter>
+        <AuthContext.Provider value={mockAuthContext}>
+          <SettingsPage />
+        </AuthContext.Provider>
+      </BrowserRouter>
+    );
 
-  cy.wait('@getSettings');
-  cy.get('[data-cy="settings-submit-button"]').click();
+    cy.wait('@getSettings');
+    cy.get('[data-cy="settings-submit-button"]').click();
 
-  cy.wait('@updateFail').its('response.statusCode').should('eq', 500);
+    cy.wait('@updateFail').its('response.statusCode').should('eq', 500);
 
-  cy.get('[data-cy="settings-status-message"]')
-    .should('be.visible')
-    .and('contain', 'Failed to update settings.');
+    cy.get('[data-cy="settings-status-message"]')
+      .should('be.visible')
+      .and('contain', 'Failed to update settings.');
 
-  cy.get('@updateUserStub').should('not.have.been.called');
-  cy.get('@logoutStub').should('not.have.been.called');
-  cy.url().should('not.include', '/login');
-});
-
-it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)', () => {
-  localStorage.setItem('access', 'fake-token');
-  localStorage.removeItem('refresh');
-
-  cy.intercept('GET', '**/api/accounts/profile/**', {
-    statusCode: 200,
-    body: { id: '1', username: 'testuser', display_name: 'Test' },
-  }).as('getSettings');
-
-  cy.intercept('PATCH', '**/api/accounts/profile/**', {
-    statusCode: 401,
-    body: { error: 'Unauthorized' },
-  }).as('updateUnauthorized');
-
-  cy.mount(
-    <MemoryRouter initialEntries={['/settings']}>
-      <AuthProvider>
-        <Routes>
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/login" element={<div data-cy="login-page">Login</div>} />
-        </Routes>
-      </AuthProvider>
-    </MemoryRouter>
-  );
-
-  cy.wait('@getSettings');
-  cy.get('[data-cy="settings-submit-button"]').click();
-
-  cy.wait('@updateUnauthorized').its('response.statusCode').should('eq', 401);
-
-  cy.get('[data-cy="login-page"]', { timeout: 10000 }).should('be.visible');
-
-  cy.window().then((win) => {
-    expect(win.localStorage.getItem('access')).to.be.null;
-    expect(win.localStorage.getItem('refresh')).to.be.null;
+    cy.get('@updateUserStub').should('not.have.been.called');
+    cy.get('@logoutStub').should('not.have.been.called');
+    cy.url().should('not.include', '/login');
   });
-});
+
+  it('3. Deve redirecionar para /login se o PATCH retornar 401 (sessão expirada)', () => {
+    localStorage.setItem('access', 'fake-token');
+    localStorage.removeItem('refresh');
+
+    cy.intercept('GET', '**/api/accounts/profile/**', {
+      statusCode: 200,
+      body: { id: '1', username: 'testuser', display_name: 'Test' },
+    }).as('getSettings');
+
+    cy.intercept('PATCH', '**/api/accounts/profile/**', {
+      statusCode: 401,
+      body: { error: 'Unauthorized' },
+    }).as('updateUnauthorized');
+
+    cy.mount(
+      <MemoryRouter initialEntries={['/settings']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/login"
+              element={<div data-cy="login-page">Login</div>}
+            />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    cy.wait('@getSettings');
+    cy.get('[data-cy="settings-submit-button"]').click();
+
+    cy.wait('@updateUnauthorized').its('response.statusCode').should('eq', 401);
+
+    cy.get('[data-cy="login-page"]', { timeout: 10000 }).should('be.visible');
+
+    cy.window().then((win) => {
+      expect(win.localStorage.getItem('access')).to.be.null;
+      expect(win.localStorage.getItem('refresh')).to.be.null;
+    });
+  });
 });

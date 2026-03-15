@@ -1,0 +1,22 @@
+[MASTER]
+ignore=migrations
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    line-too-long,
+    too-few-public-methods,
+    invalid-name,
+    import-error,
+    abstract-method,
+    too-many-ancestors,
+    unknown-option-value
+
+[TYPECHECK]
+# Isso resolve o erro do "objects" no Django
+generated-members=objects,request,user,id,DoesNotExist,media.file
+
+[FORMAT]
+max-line-length=120

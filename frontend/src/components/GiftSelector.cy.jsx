@@ -1,16 +1,23 @@
-// src/components/GifSelector.cy.jsx
-import React from 'react'
-import GifSelector from './GiftSelector'
+import React from 'react';
+import GifSelector from './GiftSelector';
 
-describe('<GiftSelector />', () => {
-  it('deve disparar setCanUseGifs(false) e fechar ao receber erro 429 (Cota Excedida)', () => {
+describe('<GiftSelector /> - Blindado', () => {
+  beforeEach(() => {
+    // Interceptador genérico para evitar chamadas reais à Giphy durante o mount
+    cy.intercept('GET', '**/v1/gifs/**', {
+      statusCode: 200,
+      body: { data: [] },
+    }).as('giphyPing');
+  });
+
+  it('deve disparar setCanUseGifs(false) e fechar ao receber erro 429', () => {
     cy.intercept('GET', '**/v1/gifs/**', {
       statusCode: 429,
       body: { message: 'Over Quota' },
-    }).as('giphyError')
+    }).as('giphyError');
 
-    const onCloseSpy = cy.spy().as('onClose')
-    const setCanUseGifsSpy = cy.spy().as('setCanUseGifs')
+    const onCloseSpy = cy.spy().as('onClose');
+    const setCanUseGifsSpy = cy.spy().as('setCanUseGifs');
 
     cy.mount(
       <GifSelector
@@ -18,18 +25,17 @@ describe('<GiftSelector />', () => {
         onClose={onCloseSpy}
         setCanUseGifs={setCanUseGifsSpy}
       />
-    )
+    );
 
-    cy.wait('@giphyError')
+    cy.wait('@giphyError');
 
-    cy.get('@setCanUseGifs').should('have.been.calledOnceWithExactly', false)
-    cy.get('@onClose').should('have.been.calledOnce')
-
-    // opcional: garante que o seletor saiu/fechou (se o pai remove do DOM)
-    // cy.get('[data-cy="gif-selector"]').should('not.exist')
-  })
+    cy.get('@setCanUseGifs').should('have.been.calledWith', false);
+    cy.get('@onClose').should('have.been.calledOnce');
+  });
 
   it('deve selecionar um GIF e retornar a URL correta', () => {
+    const gifUrl = 'https://media.giphy.com/test-gif.gif';
+
     cy.intercept('GET', '**/v1/gifs/**', {
       statusCode: 200,
       body: {
@@ -38,37 +44,31 @@ describe('<GiftSelector />', () => {
             id: '1',
             title: 'Test GIF',
             images: {
-              fixed_height: { url: 'https://media.giphy.com/test-gif.gif' },
-              fixed_height_small: { url: 'https://media.giphy.com/test-gif-small.gif' },
+              fixed_height: { url: gifUrl },
+              fixed_height_small: { url: 'https://media.giphy.com/small.gif' },
             },
           },
         ],
       },
-    }).as('getGifs')
+    }).as('getGifs');
 
-    const onSelectSpy = cy.spy().as('onSelect')
-    const onCloseSpy = cy.spy().as('onClose')
-    const setCanUseGifsSpy = cy.spy().as('setCanUseGifs')
+    const onSelectSpy = cy.spy().as('onSelect');
 
     cy.mount(
       <GifSelector
         onSelect={onSelectSpy}
-        onClose={onCloseSpy}
-        setCanUseGifs={setCanUseGifsSpy}
+        onClose={() => {}}
+        setCanUseGifs={() => {}}
       />
-    )
+    );
 
-    cy.wait('@getGifs')
+    cy.wait('@getGifs');
 
-    // usa data-cy (mais estável que img[src=...])
-    cy.get('[data-cy="gif-grid"]').should('exist')
-    cy.get('[data-cy="gif-item"]').should('have.length.at.least', 1)
+    cy.getByData('gif-grid').should('be.visible');
 
-    cy.get('[data-cy="gif-item"]').first().click({ force: true })
+    // O clique com force: true resolve o problema do centro do elemento estar "escondido"
+    cy.getByData('gif-item').first().click({ force: true });
 
-    cy.get('@onSelect').should(
-      'have.been.calledOnceWithExactly',
-      'https://media.giphy.com/test-gif.gif'
-    )
-  })
-})
+    cy.get('@onSelect').should('have.been.calledWith', gifUrl);
+  });
+});

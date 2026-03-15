@@ -1,8 +1,61 @@
-# Ignorar ficheiros locais do Django
+# --- Django & Local Files ---
 .env
+*.env
 db.sqlite3
-posts/
+db.sqlite3-journal
 media/
 staticfiles/
+posts/
+*.log
+
+# --- Python / Bytecode ---
 __pycache__/
 *.py[cod]
+*$py.class
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Quality & Testing (ISO 9126 / CI) ---
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+
+# --- Docker & System ---
+.docker/
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

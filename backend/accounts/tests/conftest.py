@@ -1,26 +1,28 @@
 import pytest
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
-from accounts.models import Profile
+from accounts.models import Profile, Post
 
 User = get_user_model()
+
+# pylint: disable=redefined-outer-name, unused-argument
+
 
 @pytest.fixture
 def api_client():
     """Fixture básica para chamadas API"""
     return APIClient()
 
+
 @pytest.fixture
 def user(db):
     """Cria um usuário e garante que ele tem um perfil"""
     u = User.objects.create_user(
-        username="testuser", 
-        email="test@test.com", 
-        password="password123"
+        username="testuser", email="test@test.com", password="password123"
     )
-    # Se não tiveres um Signal para criar profile, criamos manualmente aqui
     Profile.objects.get_or_create(user=u)
     return u
+
 
 @pytest.fixture
 def auth_client(api_client, user):
@@ -28,42 +30,46 @@ def auth_client(api_client, user):
     api_client.force_authenticate(user=user)
     return api_client
 
-from accounts.models import Post, User
-@pytest.fixture
-def post(db, user):
-    """Cria um post de teste vinculado ao usuário da fixture user"""
-    return Post.objects.create(
-        user=user, 
-        content="Conteúdo de teste para a TAL-16 🚀"
-    )
-@pytest.fixture
-def user(db):
-    return User.objects.create_user(username="testuser", email="test@test.com", password="password123")
 
 @pytest.fixture
 def other_user(db):
-    return User.objects.create_user(username="other", email="other@test.com", password="password123")
+    """Cria um segundo usuário para testes de interação"""
+    return User.objects.create_user(
+        username="other", email="other@test.com", password="password123"
+    )
+
+
+@pytest.fixture
+def post(db, user):
+    """Cria um post de teste vinculado ao usuário da fixture user"""
+    return Post.objects.create(user=user, content="Conteúdo de teste para a TAL-16 🚀")
+
 
 @pytest.fixture
 def post_to_report(user):
+    """Alias ou post específico para testes de denúncia"""
     return Post.objects.create(user=user, content="Post de teste")
+
 
 @pytest.fixture
 def banned_user(db):
     """Cria um usuário que já nasce banido"""
     return User.objects.create_user(
-        username="banneduser", 
-        email="banned@test.com", 
+        username="banneduser",
+        email="banned@test.com",
         password="password123",
-        is_banned=True
+        is_banned=True,
     )
+
+
 @pytest.fixture
 def user_b(db):
+    """Usuário alvo para testes de perfil/bloqueio"""
     u = User.objects.create_user(
         username="target_user",
         email="target@test.com",
         password="password123",
-        full_name="Target User"
+        full_name="Target User",
     )
     Profile.objects.get_or_create(user=u)
     return u
@@ -71,4 +77,5 @@ def user_b(db):
 
 @pytest.fixture
 def user_b_profile(user_b):
+    """Retorna o perfil do usuário alvo"""
     return user_b.profile

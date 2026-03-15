@@ -1,5 +1,10 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useState, useEffect, useCallback, useContext } from 'react';
+import {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  useContext,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -18,7 +23,7 @@ export const AuthProvider = ({ children }) => {
   }, [navigate]);
 
   const updateUser = useCallback((newData) => {
-    setUser(prev => {
+    setUser((prev) => {
       if (!prev) return prev;
       return { ...prev, ...newData };
     });
@@ -26,9 +31,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = useCallback(async () => {
     try {
-      const [response] = await Promise.all([
-        api.get('/accounts/profile/'),
-      ]);
+      const [response] = await Promise.all([api.get('/accounts/profile/')]);
       setUser(response.data);
       localStorage.setItem('user', JSON.stringify(response.data));
     } catch (error) {
@@ -63,13 +66,15 @@ export const AuthProvider = ({ children }) => {
   }, [fetchUserProfile]);
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      logout, 
-      updateUser, 
-      loading
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        updateUser,
+        loading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

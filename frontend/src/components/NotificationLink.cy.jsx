@@ -4,8 +4,22 @@ import NotificationsPage from './NotificationLink';
 
 describe('<NotificationsPage /> - Component Test', () => {
   const mockNotifications = [
-    { id: 10, notification_type: 'LIKE', sender_name: 'Cristiano', is_read: false, post_content: 'Frontend com Cypress é top!', sender_avatar: null },
-    { id: 11, notification_type: 'COMMENT', sender_name: 'Ana', is_read: true, post_content: 'Concordo plenamente!', sender_avatar: null },
+    {
+      id: 10,
+      notification_type: 'LIKE',
+      sender_name: 'Cristiano',
+      is_read: false,
+      post_content: 'Frontend com Cypress é top!',
+      sender_avatar: null,
+    },
+    {
+      id: 11,
+      notification_type: 'COMMENT',
+      sender_name: 'Ana',
+      is_read: true,
+      post_content: 'Concordo plenamente!',
+      sender_avatar: null,
+    },
   ];
 
   it('1. Deve exibir o texto de carregamento inicial', () => {
@@ -13,8 +27,10 @@ describe('<NotificationsPage /> - Component Test', () => {
       req.reply({ delay: 200, body: mockNotifications });
     }).as('getNotifications');
 
-    cy.intercept('POST', '**/notifications/mark_all_as_read/**', { statusCode: 200, body: {} })
-      .as('markAllRead');
+    cy.intercept('POST', '**/notifications/mark_all_as_read/**', {
+      statusCode: 200,
+      body: {},
+    }).as('markAllRead');
 
     cy.mount(
       <MemoryRouter>
@@ -26,8 +42,13 @@ describe('<NotificationsPage /> - Component Test', () => {
   });
 
   it('2. Deve carregar as notificações e disparar o mark_all_as_read se houver não lidas', () => {
-    cy.intercept('GET', '**/notifications/**', mockNotifications).as('getNotifications');
-    cy.intercept('POST', '**/notifications/mark_all_as_read/**', { statusCode: 200, body: {} }).as('markAllRead');
+    cy.intercept('GET', '**/notifications/**', mockNotifications).as(
+      'getNotifications'
+    );
+    cy.intercept('POST', '**/notifications/mark_all_as_read/**', {
+      statusCode: 200,
+      body: {},
+    }).as('markAllRead');
 
     cy.mount(
       <MemoryRouter>
@@ -43,8 +64,13 @@ describe('<NotificationsPage /> - Component Test', () => {
   });
 
   it('3. Deve renderizar os ícones e cores de fundo corretas', () => {
-    cy.intercept('GET', '**/notifications/**', mockNotifications).as('getNotifications');
-    cy.intercept('POST', '**/notifications/mark_all_as_read/**', { statusCode: 200, body: {} }).as('markAllRead');
+    cy.intercept('GET', '**/notifications/**', mockNotifications).as(
+      'getNotifications'
+    );
+    cy.intercept('POST', '**/notifications/mark_all_as_read/**', {
+      statusCode: 200,
+      body: {},
+    }).as('markAllRead');
 
     cy.mount(
       <MemoryRouter>
@@ -74,8 +100,13 @@ describe('<NotificationsPage /> - Component Test', () => {
   });
 
   it('5. Deve renderizar o conteúdo do post quando disponível', () => {
-    cy.intercept('GET', '**/notifications/**', mockNotifications).as('getNotifications');
-    cy.intercept('POST', '**/notifications/mark_all_as_read/**', { statusCode: 200, body: {} }).as('markAllRead');
+    cy.intercept('GET', '**/notifications/**', mockNotifications).as(
+      'getNotifications'
+    );
+    cy.intercept('POST', '**/notifications/mark_all_as_read/**', {
+      statusCode: 200,
+      body: {},
+    }).as('markAllRead');
 
     cy.mount(
       <MemoryRouter>

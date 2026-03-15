@@ -21,38 +21,38 @@ const UserActionMenu = ({
   const isBlocked = targetProfile?.is_blocked;
 
   useEffect(() => {
-    if (!isOpen) setConfirmDelete(false);
-  }, [isOpen]);
-
-  useEffect(() => {
     const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) setIsOpen(false);
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setConfirmDelete(false); // Limpa aqui!
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const username = targetProfile?.username || targetProfile?.user?.username || 'user';
+  const username =
+    targetProfile?.username || targetProfile?.user?.username || 'user';
   const profileId = targetProfile?.id || targetProfile?.pk;
 
- const targetUserId = useMemo(() => {
-  // Vamos ver exatamente o que tem nesse objeto no console
-  
-  const v = targetProfile?.id || targetProfile?.profile_id || targetProfile?.user_id;
-  
-  const finalId = v ? String(v) : null;
-  return finalId;
-}, [targetProfile]);
+  const targetUserId = useMemo(() => {
+    // Vamos ver exatamente o que tem nesse objeto no console
 
-// No canBlock, vamos logar a comparação
-const canBlock = useMemo(() => {
-  const cur = String(currentUserId || "");
-  const tar = String(targetUserId || "");
-  const result = !!(profileId && cur && tar && cur !== tar);
-  
-  return result;
-}, [profileId, currentUserId, targetUserId]);
+    const v =
+      targetProfile?.id || targetProfile?.profile_id || targetProfile?.user_id;
 
+    const finalId = v ? String(v) : null;
+    return finalId;
+  }, [targetProfile]);
+
+  // No canBlock, vamos logar a comparação
+  const canBlock = useMemo(() => {
+    const cur = String(currentUserId || '');
+    const tar = String(targetUserId || '');
+    const result = !!(profileId && cur && tar && cur !== tar);
+
+    return result;
+  }, [profileId, currentUserId, targetUserId]);
 
   // Função unificada para Bloquear/Desbloquear (Toggle)
   const handleToggleBlock = async (e) => {
@@ -62,18 +62,18 @@ const canBlock = useMemo(() => {
     try {
       // Chama o endpoint de sempre
       await api.post(`/accounts/profiles/${profileId}/block/`);
-      
+
       // Mensagem dinâmica baseada no estado anterior
       const actionLabel = isBlocked ? 'unblocked' : 'blocked';
       toast.success(`@${username} ${actionLabel}.`);
-      
+
       setIsOpen(false);
 
       if (onActionComplete) {
         // Notifica o pai para atualizar o estado local ou remover o post
         onActionComplete(profileId);
       }
-      
+
       // Se estivermos bloqueando (não desbloqueando) a partir de um perfil, volta para o feed
       if (!isBlocked && window.location.pathname.includes('/profile/')) {
         navigate('/feed');
@@ -105,12 +105,22 @@ const canBlock = useMemo(() => {
   };
 
   return (
-    <div data-cy="user-action-menu" className="relative inline-block" ref={menuRef}>
+    <div
+      data-cy="user-action-menu"
+      className="relative inline-block"
+      ref={menuRef}
+    >
       <button
         data-cy="user-action-menu-trigger"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
+
+          // Se estivermos fechando o menu agora, limpamos a confirmação
+          if (isOpen) {
+            setConfirmDelete(false);
+          }
+
           setIsOpen((v) => !v);
         }}
         className="p-2 text-gray-500 hover:text-white rounded-full transition-colors hover:bg-white/10"
@@ -132,7 +142,10 @@ const canBlock = useMemo(() => {
         >
           <div data-cy="user-action-menu-items" className="py-1">
             {isOwnPost ? (
-              <div data-cy="user-action-menu-own-post" className="flex flex-col">
+              <div
+                data-cy="user-action-menu-own-post"
+                className="flex flex-col"
+              >
                 {!confirmDelete && (
                   <button
                     data-cy="user-action-edit"
@@ -149,7 +162,11 @@ const canBlock = useMemo(() => {
                 )}
 
                 <button
-                  data-cy={confirmDelete ? 'user-action-confirm-delete' : 'user-action-delete'}
+                  data-cy={
+                    confirmDelete
+                      ? 'user-action-confirm-delete'
+                      : 'user-action-delete'
+                  }
                   onClick={handleDeletePost}
                   className={`w-full text-left px-4 py-3 text-sm font-bold transition-all duration-200 ${
                     confirmDelete
@@ -180,15 +197,21 @@ const canBlock = useMemo(() => {
                 {canBlock && (
                   <button
                     // O data-cy agora muda dinamicamente para o Cypress encontrar
-                    data-cy={isBlocked ? "user-action-unblock" : "user-action-block"}
+                    data-cy={
+                      isBlocked ? 'user-action-unblock' : 'user-action-block'
+                    }
                     onClick={handleToggleBlock}
                     className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-white/5 font-bold flex items-center gap-2"
                     type="button"
                   >
                     {isBlocked ? (
-                      <><span className="text-lg">🔓</span> Unblock @{username}</>
+                      <>
+                        <span className="text-lg">🔓</span> Unblock @{username}
+                      </>
                     ) : (
-                      <><span className="text-lg">🚫</span> Block @{username}</>
+                      <>
+                        <span className="text-lg">🚫</span> Block @{username}
+                      </>
                     )}
                   </button>
                 )}

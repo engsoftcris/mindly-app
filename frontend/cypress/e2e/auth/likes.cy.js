@@ -106,23 +106,24 @@ describe('Fluxo de Likes (TAL-39)', () => {
   });
 
   it('2. Deve mostrar estado inicial correto (likeado/não likeado)', () => {
-    // Verifica primeiro post (não likeado)
-    cy.contains('Primeiro post para testar likes', { timeout: 10000 })
-      .parents('[data-cy="post-card"], .border-b')
-      .within(() => {
-        cy.contains('button', '10').should('be.visible');
-        cy.get('button').should('not.have.class', 'text-pink-500');
-      });
+  // Verifica primeiro post (não likeado)
+  cy.contains('Primeiro post para testar likes', { timeout: 10000 })
+    // .first() garante que pegamos apenas o container do post específico
+    .parents('[data-cy="post-card"]').first() 
+    .within(() => {
+      cy.get('[data-cy="like-button"]').should('contain', '10');
+      cy.get('[data-cy="like-button"]').should('not.have.class', 'text-pink-500');
+    });
 
-    // Verifica segundo post (já likeado)
-    cy.contains('Segundo post para testar likes', { timeout: 10000 })
-      .parents('[data-cy="post-card"], .border-b')
-      .within(() => {
-        cy.contains('button', '5').should('be.visible');
-        // Se o botão de like tiver cor rosa quando likeado
-        cy.get('button.text-pink-500, button[class*="text-pink-500"]').should('exist');
-      });
-  });
+  // Verifica segundo post (já likeado)
+  cy.contains('Segundo post para testar likes', { timeout: 10000 })
+    .parents('[data-cy="post-card"]').first()
+    .within(() => {
+      cy.get('[data-cy="like-button"]').should('contain', '5');
+      // Verifica se a classe de "likeado" está presente no botão
+      cy.get('[data-cy="like-button"]').should('have.class', 'text-pink-500');
+    });
+});
 
   it('3. Deve lidar com erro na requisição de like (feedback visual)', () => {
     cy.intercept('POST', '**/api/posts/123/like/', {

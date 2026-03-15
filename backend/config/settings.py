@@ -1,19 +1,25 @@
 from pathlib import Path
 import os
 from datetime import timedelta
+import sys
 import dj_database_url
+from typing import Any, cast
 
 # --------------------------------------------------
 # BASE & DEBUG
 # --------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-dev-key-change-in-production")
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY", "django-insecure-dev-key-change-in-production"
+)
 DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes", "on")
 
 # --------------------------------------------------
 # SECURITY & CORS
 # --------------------------------------------------
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend,app").split(",")
+ALLOWED_HOSTS = os.getenv(
+    "ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend,app"
+).split(",")
 
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
@@ -68,7 +74,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [os.path.join(BASE_DIR, 'templates')],
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -88,10 +94,15 @@ TEMPLATES = [
 # --------------------------------------------------
 default_db_url = os.getenv(
     "DATABASE_URL",
-    f"postgresql://{os.getenv('DB_USER', 'mindly_admin')}:{os.getenv('DB_PASSWORD', 'mindly_pass')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'mindly_db')}"
+    f"postgresql://{os.getenv('DB_USER', 'mindly_admin')}:{os.getenv('DB_PASSWORD', 'mindly_pass')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'mindly_db')}",
 )
 DATABASES = {
-    "default": dj_database_url.config(default=default_db_url, conn_max_age=600, conn_health_checks=True)
+    "default": cast(
+        dict[str, Any],
+        dj_database_url.config(
+            default=default_db_url, conn_max_age=600, conn_health_checks=True
+        ),
+    )
 }
 
 # --------------------------------------------------
@@ -99,14 +110,10 @@ DATABASES = {
 # --------------------------------------------------
 AUTH_USER_MODEL = "accounts.User"
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated"
-    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-         "accounts.middleware.JWTAuthenticationSafe",
+        "accounts.middleware.JWTAuthenticationSafe",
         "rest_framework.authentication.SessionAuthentication",
-       
-        
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
@@ -119,8 +126,8 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 # Redirecionamento após Login e Logout bem-sucedidos
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
 
 # --------------------------------------------------
 # SOCIAL AUTH
@@ -134,21 +141,21 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv("GOOGLE_CLIENT_ID")
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SOCIAL_AUTH_FACEBOOK_KEY = os.getenv("FACEBOOK_CLIENT_ID")
 SOCIAL_AUTH_FACEBOOK_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET")
-SOCIAL_AUTH_FACEBOOK_SCOPE = ['email']
-SOCIAL_AUTH_FACEBOOK_PROFILE_EXTRA_PARAMS = {'fields': 'id, name, email'}
+SOCIAL_AUTH_FACEBOOK_SCOPE = ["email"]
+SOCIAL_AUTH_FACEBOOK_PROFILE_EXTRA_PARAMS = {"fields": "id, name, email"}
 
 SOCIAL_AUTH_PIPELINE = (
-    'social_core.pipeline.social_auth.social_details',
-    'social_core.pipeline.social_auth.social_uid',
-    'social_core.pipeline.social_auth.auth_allowed',
-    'social_core.pipeline.social_auth.social_user',
-    'social_core.pipeline.user.get_username',
-    'social_core.pipeline.social_auth.associate_by_email',
-    'social_core.pipeline.user.create_user',
-    'accounts.pipeline.save_user_social_data',
-    'social_core.pipeline.social_auth.associate_user',
-    'social_core.pipeline.social_auth.load_extra_data',
-    'social_core.pipeline.user.user_details',
+    "social_core.pipeline.social_auth.social_details",
+    "social_core.pipeline.social_auth.social_uid",
+    "social_core.pipeline.social_auth.auth_allowed",
+    "social_core.pipeline.social_auth.social_user",
+    "social_core.pipeline.user.get_username",
+    "social_core.pipeline.social_auth.associate_by_email",
+    "social_core.pipeline.user.create_user",
+    "accounts.pipeline.save_user_social_data",
+    "social_core.pipeline.social_auth.associate_user",
+    "social_core.pipeline.social_auth.load_extra_data",
+    "social_core.pipeline.user.user_details",
 )
 
 # --------------------------------------------------
@@ -172,12 +179,12 @@ if AWS_ACCESS_KEY_ID:
 
     # django-storages / boto3
     AWS_DEFAULT_ACL = None
-    AWS_QUERYSTRING_AUTH = False          # URLs sem assinatura
+    AWS_QUERYSTRING_AUTH = False  # URLs sem assinatura
     AWS_S3_FILE_OVERWRITE = False
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_S3_SIGNATURE_VERSION = "s3v4"
 
-    from storages.backends.s3boto3 import S3Boto3Storage
+    from storages.backends.s3boto3 import S3Boto3Storage  
 
     def _supabase_public_base(endpoint: str) -> str:
         """
@@ -202,49 +209,65 @@ if AWS_ACCESS_KEY_ID:
         Força URL pública:
           https://<project>.supabase.co/storage/v1/object/public/<bucket>/<path>
         """
+
         def url(self, name, parameters=None, expire=None, http_method=None):
             name = str(name).lstrip("/")
             return f"{SUPABASE_PUBLIC_BASE}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/{name}"
 
     STORAGES = {
         "default": {"BACKEND": "config.settings.SupabasePublicStorage"},
-        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        },
     }
 
     # Compatibilidade (algumas libs ainda leem isso)
     DEFAULT_FILE_STORAGE = "config.settings.SupabasePublicStorage"
 
     # MEDIA_URL só para prefixo (o FileField.url usa storage.url())
-    MEDIA_URL = f"{SUPABASE_PUBLIC_BASE}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/"
+    MEDIA_URL = (
+        f"{SUPABASE_PUBLIC_BASE}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/"
+    )
 
 else:
     STORAGES = {
         "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        },
     }
     DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://redis:6379/1',  # Ajuste para seu Redis
-        'TIMEOUT': 300,  # 5 minutos padrão
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'PARSER_CLASS': 'redis.connection.HiredisParser',
-        }
-    }
-}
-if DEBUG:
+# Verifica se o pytest está rodando de forma robusta
+IS_TESTING = (
+    "test" in sys.argv or "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST")
+)
+
+if IS_TESTING:
     CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'unique-snowflake',
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake-test",
         }
     }
-    
+elif DEBUG:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake-debug",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
+            "TIMEOUT": 300,  # type: ignore[dict-item]
+        }
+    }
+
 # --------------------------------------------------
 # FINAL CONFIGS
 # --------------------------------------------------

@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 null=True,
                 upload_to="posts_media/",
-                validators=[], # Cleaned!
+                validators=[],  # Cleaned!
             ),
         ),
     ]

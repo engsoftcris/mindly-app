@@ -1,89 +1,100 @@
+"""Testes para os filtros de mídia e status de moderação no perfil (TAL-20)."""
+
 import pytest
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
-from django.contrib.auth import get_user_model
 from accounts.models import Post
 
 User = get_user_model()
 
+
 @pytest.mark.django_db
 class TestProfilePostsFilter:
-    
+    """Testes para os filtros de mídia e status de moderação no perfil (TAL-20)."""
+
     @pytest.fixture
     def setup_data(self, api_client):
-        # 1. Cria usuário seguindo seu padrão de sucesso
-        self.user = User.objects.create_user(
-            username="tester_filters", 
-            email="filter@test.com", 
-            password="password123"
+        """Prepara usuários e diferentes tipos de posts para testar filtros."""
+        user = User.objects.create_user(
+            username="tester_filters", email="filter@test.com", password="password123"
         )
-        api_client.force_authenticate(user=self.user)
-        
-        # O profile é criado automaticamente via signal, conforme seus outros testes
-        self.profile = self.user.profile
-        
-        # 2. Cria posts de teste (Diferenciando Texto, Imagem, Vídeo e Rejeitado)
-        # Post de Texto Puro
-        Post.objects.create(user=self.user, content="Texto puro", media=None)
-        
-        # Post com Imagem
-        Post.objects.create(user=self.user, content="Uma foto", media="image.jpg")
-        
-        # Post com Vídeo
-        Post.objects.create(user=self.user, content="Um video", media="video.mp4")
-        
-        # Post Rejeitado pela Moderação (Não deve aparecer em filtros de mídia)
+        api_client.force_authenticate(user=user)
+
+        # CORREÇÃO MYPY: Garantir que profile não é None
+        profile = user.profile
+        assert profile is not None
+
+        # Criação dos cenários de teste
+        Post.objects.create(user=user, content="Texto puro", media=None)
+        Post.objects.create(user=user, content="Uma foto", media="image.jpg")
+        Post.objects.create(user=user, content="Um video", media="video.mp4")
         Post.objects.create(
-            user=self.user, 
-            content="Banido", 
-            media="rejeitado.jpg", 
-            moderation_status="REJECTED"
+            user=user,
+            content="Banido",
+            media="rejeitado.jpg",
+            moderation_status="REJECTED",
         )
 
-        # 3. Define a URL conforme seu router (user-posts-list)
-        self.url = reverse('user-posts-list', kwargs={'pk': self.profile.id})
-        return api_client
+        url = reverse("user-posts-list", kwargs={"pk": profile.id})
+
+        return {"api_client": api_client, "url": url, "user": user}
 
     def test_filter_media_only_true(self, setup_data):
         """TAL-20: Testa se media_only=true remove posts sem arquivo"""
-        api_client = setup_data
-        response = api_client.get(f"{self.url}?media_only=true")
-        
+        client = setup_data["api_client"]
+        url = setup_data["url"]
+
+        response = client.get(f"{url}?media_only=true")
+
         assert response.status_code == status.HTTP_200_OK
-        
-        # Deve retornar 2 posts (imagem e vídeo). Ignora texto e rejeitado.
-        results = response.data.get('results', response.data)
+
+        # CORREÇÃO MYPY: Garantir que results é uma lista para iteração
+        results = response.data.get("results", response.data)
+        assert isinstance(results, list)
+
         assert len(results) == 2
         for post in results:
-            assert post['media'] is not None
-            assert post['moderation_status'] != "REJECTED"
+            assert post["media"] is not None
+            assert post["moderation_status"] != "REJECTED"
 
     def test_filter_by_type_image(self, setup_data):
         """TAL-20: Testa se type=image retorna apenas extensões de imagem"""
-        api_client = setup_data
-        response = api_client.get(f"{self.url}?media_only=true&type=image")
-        
-        results = response.data.get('results', response.data)
+        client = setup_data["api_client"]
+        url = setup_data["url"]
+
+        response = client.get(f"{url}?media_only=true&type=image")
+
+        results = response.data.get("results", response.data)
+        assert isinstance(results, list)
+
         assert len(results) == 1
-        assert ".jpg" in results[0]['media']
+        assert ".jpg" in results[0]["media"]
 
     def test_filter_by_type_video(self, setup_data):
         """TAL-20: Testa se type=video retorna apenas extensões de vídeo"""
-        api_client = setup_data
-        response = api_client.get(f"{self.url}?media_only=true&type=video")
-        
-        results = response.data.get('results', response.data)
+        client = setup_data["api_client"]
+        url = setup_data["url"]
+
+        response = client.get(f"{url}?media_only=true&type=video")
+
+        results = response.data.get("results", response.data)
+        assert isinstance(results, list)
+
         assert len(results) == 1
-        assert ".mp4" in results[0]['media']
+        assert ".mp4" in results[0]["media"]
 
     def test_moderation_security(self, setup_data):
         """Garante que posts REJECTED não aparecem nem no feed geral do perfil"""
-        api_client = setup_data
-        response = api_client.get(self.url)
-        
-        results = response.data.get('results', response.data)
-        # Total deve ser 3 (Texto, Foto, Vídeo). O Rejeitado deve ser filtrado.
+        client = setup_data["api_client"]
+        url = setup_data["url"]
+
+        response = client.get(url)
+
+        results = response.data.get("results", response.data)
+        assert isinstance(results, list)
+
         assert len(results) == 3
         for post in results:
-            assert post['content'] != "Banido"
-            assert post['moderation_status'] != "REJECTED"
+            assert post["content"] != "Banido"
+            assert post["moderation_status"] != "REJECTED"
