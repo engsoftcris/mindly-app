@@ -219,12 +219,8 @@ class ProfileSerializer(serializers.ModelSerializer[Profile]):
     profile_picture = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     posts = PostSerializer(many=True, read_only=True, source="user.posts")
-    followers_count = serializers.IntegerField(
-        source="user.followers.count", read_only=True
-    )
-    following_count = serializers.IntegerField(
-        source="user.following.count", read_only=True
-    )
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
     is_blocked = serializers.SerializerMethodField()
 
     class Meta:
@@ -302,6 +298,12 @@ class ProfileSerializer(serializers.ModelSerializer[Profile]):
             }
         data["is_restricted"] = False
         return data
+
+    def get_following_count(self, obj):
+        return obj.user.active_following.count()
+
+    def get_followers_count(self, obj):
+        return obj.user.active_followers.count()
 
 
 class BlockSerializer(serializers.ModelSerializer[Block]):

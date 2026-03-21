@@ -1,6 +1,20 @@
+import { useState } from 'react';
 import GoogleLoginButton from '../components/GoogleLoginButton';
+import LoadingScreen from '../components/LoadingScreen';
 
 const Login = () => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Função para capturar o estado de loading do GoogleLoginButton
+  const handleGoogleLoading = (loading) => {
+    setIsLoading(loading);
+  };
+
+  // Se estiver carregando, mostra o LoadingScreen
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       {/* Caixa com glow azul Mindly */}
@@ -35,7 +49,7 @@ const Login = () => {
         <div className="mt-8 space-y-4">
           {/* O GoogleLoginButton deve ter o data-cy="google-login-button" internamente */}
           <div data-cy="google-login-wrapper">
-            <GoogleLoginButton />
+            <GoogleLoginButton onLoadingChange={handleGoogleLoading} />
           </div>
 
           <button

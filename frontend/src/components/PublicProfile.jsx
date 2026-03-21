@@ -1,5 +1,5 @@
 // frontend/src/pages/PublicProfile.jsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react'; // 1. Adicionado useCallback
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -10,8 +10,8 @@ import ConnectionsModal from '../components/ConnectionsModal';
 import PostCard from '../components/PostCard';
 import CommentModal from '../components/CommentModal';
 import MediaLightbox from '../components/MediaLightbox';
+import useRelationshipStore from '../store/useRelationshipStore';
 
-// Mantivemos sua função getId aqui (o linter não reclama se você a usa no useMemo abaixo)
 const getId = (v) => {
   if (v == null) return null;
   if (typeof v === 'number' || typeof v === 'string') return String(v);
@@ -40,6 +40,13 @@ const PublicProfile = () => {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [activeCommentPost, setActiveCommentPost] = useState(null);
+
+  // Pega following e followers do Zustand
+  const { following, followers } = useRelationshipStore();
+
+  const isFollowing = useMemo(() => {
+    return following.includes(profile?.id);
+  }, [following, profile?.id]);
 
   const currentUserId = useMemo(() => {
     return getId(currentUser?.user_id || currentUser?.id || currentUser?.user);
@@ -73,7 +80,6 @@ const PublicProfile = () => {
     navigate(location.pathname, { replace: true });
   };
 
-  // ✅ 2. fetchProfile agora com useCallback (estabilidade de função)
   const fetchProfile = useCallback(async () => {
     const minWait = new Promise((resolve) => setTimeout(resolve, 800));
     try {
@@ -85,7 +91,6 @@ const PublicProfile = () => {
       ]);
       setProfile(response.data);
     } catch (_err) {
-      // ✅ 3. catch (_err) para o linter ignorar
       setError(
         _err?.response?.status === 404
           ? 'User not found'
@@ -94,11 +99,11 @@ const PublicProfile = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]); // Só recria se o ID do perfil mudar
+  }, [id]);
 
   useEffect(() => {
     if (id) fetchProfile();
-  }, [id, fetchProfile]); // ✅ 4. Adicionado fetchProfile aqui
+  }, [id, fetchProfile]);
 
   const handlePostUpdate = (postIdOrUpdatedPost, isLiked, likesCount) => {
     setProfile((prev) => {
@@ -210,7 +215,7 @@ const PublicProfile = () => {
                 {profile && currentUser && (
                   <FollowButton
                     profileId={profile.id}
-                    initialIsFollowing={profile.is_following}
+                    isFollowing={isFollowing}
                   />
                 )}
               </>
@@ -227,13 +232,14 @@ const PublicProfile = () => {
             {profile?.bio || 'No bio yet.'}
           </p>
 
+          {/* CONTADORES - USANDO ZUSTAND QUANDO FOR O PRÓPRIO PERFIL */}
           <div className="mt-4 flex gap-5 text-[15px]">
             <div
               onClick={() => setConnModal({ open: true, tab: 'following' })}
               className="flex gap-1 hover:underline cursor-pointer"
             >
               <span className="font-bold text-white">
-                {profile?.following_count || 0}
+                {isOwner ? following.length : profile?.following_count || 0}
               </span>
               <span className="text-gray-500">Following</span>
             </div>
@@ -242,7 +248,7 @@ const PublicProfile = () => {
               className="flex gap-1 hover:underline cursor-pointer"
             >
               <span className="font-bold text-white">
-                {profile?.followers_count || 0}
+                {isOwner ? followers.length : profile?.followers_count || 0}
               </span>
               <span className="text-gray-500">Followers</span>
             </div>

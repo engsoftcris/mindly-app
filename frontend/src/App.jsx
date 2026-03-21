@@ -1,9 +1,11 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Login from './pages/Login';
+import api from './api/axios';
 import Dashboard from './pages/Dashboard';
 import SettingsPage from './components/SettingsPage.jsx';
 import PublicProfile from './components/PublicProfile';
@@ -13,8 +15,26 @@ import NotificationsPage from './components/Notifications.jsx';
 import LoadingScreen from './components/LoadingScreen';
 import SuggestedUsers from './components/SuggestedUsers';
 import SearchBar from './components/SearchBar';
+import useRelationshipStore from './store/useRelationshipStore';
 
 function App() {
+  useEffect(() => {
+    async function loadRelationships() {
+      try {
+        const response = await api.get(
+          '/accounts/profiles/relationships-sync/'
+        );
+
+        useRelationshipStore.getState().setInitialData(response.data);
+
+        console.log('SYNC REAL:', response.data);
+      } catch (err) {
+        console.error('Erro ao sincronizar relationships:', err);
+      }
+    }
+
+    loadRelationships();
+  }, []);
   const { user, loading } = useAuth();
   const location = useLocation();
   // 1. Enquanto o AuthContext checa o token no localStorage, mostramos o loading
