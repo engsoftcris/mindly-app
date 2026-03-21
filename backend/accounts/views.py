@@ -180,7 +180,7 @@ class ProfileViewSet(viewsets.ModelViewSet[Profile]):
         return Response({"message": "Utilizador bloqueado com sucesso."}, status=201)
 
     @action(detail=True, methods=["get"], url_path="connections")
-    def connections(self, request, pk=None):
+    def connections(self, request, pk=None): # pylint: disable=unused-argument
         profile = self.get_object()
         user_logado = cast("UserModel", request.user)
         connection_type = request.query_params.get("type", "followers")
