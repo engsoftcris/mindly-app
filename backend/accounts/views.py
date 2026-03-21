@@ -180,15 +180,25 @@ class ProfileViewSet(viewsets.ModelViewSet[Profile]):
         return Response({"message": "Utilizador bloqueado com sucesso."}, status=201)
 
     @action(detail=True, methods=["get"], url_path="connections")
-    def connections(self, request, pk=None):  # pylint: disable=unused-argument
+    def connections(self, request, pk=None): # pylint: disable=unused-argument
         profile = self.get_object()
         user_logado = cast("UserModel", request.user)
         connection_type = request.query_params.get("type", "followers")
-        queryset = (
-            profile.user.following.all()
-            if connection_type == "following"
-            else profile.user.followers.all()
-        )
+
+        if connection_type == "following":
+            # Usuários que este perfil segue
+            following_ids = Follow.objects.filter(
+                follower=profile.user, unfollowed_at__isnull=True
+            ).values_list("following_id", flat=True)
+            queryset = User.objects.filter(id__in=following_ids)
+        else:  # followers
+            # Usuários que seguem este perfil
+            followers_ids = Follow.objects.filter(
+                following=profile.user, unfollowed_at__isnull=True
+            ).values_list("follower_id", flat=True)
+            queryset = User.objects.filter(id__in=followers_ids)
+
+        # Filtra bloqueados
         if user_logado.is_authenticated:
             blocked_ids = Block.objects.filter(blocker=user_logado).values_list(
                 "blocked_id", flat=True
@@ -198,6 +208,7 @@ class ProfileViewSet(viewsets.ModelViewSet[Profile]):
             )
             all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
             queryset = queryset.exclude(id__in=all_blocked)
+
         serializer = FollowUserSerializer(
             queryset, many=True, context={"request": request}
         )
@@ -248,6 +259,34 @@ class ProfileViewSet(viewsets.ModelViewSet[Profile]):
             )
         Follow.objects.create(follower=me, following=target_user)
         return Response({"is_following": True, "message": "Following."}, status=201)
+
+    @action(detail=False, methods=["get"], url_path="relationships-sync")
+    def relationships_sync(self, request):
+        user = cast("UserModel", request.user)
+
+        # quem eu sigo
+        following_ids = Follow.objects.filter(
+            follower=user, unfollowed_at__isnull=True
+        ).values_list("following_id", flat=True)
+
+        # quem me segue
+        followers_ids = Follow.objects.filter(
+            following=user, unfollowed_at__isnull=True
+        ).values_list("follower_id", flat=True)
+
+        # quem eu bloqueei
+        blocked_ids = Block.objects.filter(blocker=user).values_list(
+            "blocked_id", flat=True
+        )
+
+        return Response(
+            {
+                "following": list(following_ids),
+                "followers": list(followers_ids),
+                "blockedUsers": list(blocked_ids),
+            },
+            status=200,
+        )
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView["UserModel"]):

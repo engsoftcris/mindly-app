@@ -184,7 +184,7 @@ if AWS_ACCESS_KEY_ID:
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_S3_SIGNATURE_VERSION = "s3v4"
 
-    from storages.backends.s3boto3 import S3Boto3Storage  
+    from storages.backends.s3boto3 import S3Boto3Storage
 
     def _supabase_public_base(endpoint: str) -> str:
         """

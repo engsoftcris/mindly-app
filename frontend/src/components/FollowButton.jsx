@@ -1,44 +1,66 @@
-import React, { useState, useEffect } from 'react'; // 1. Importa useEffect
+import React, { useState } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
+import useRelationshipStore from '../store/useRelationshipStore';
 
 const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
-  const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [loading, setLoading] = useState(false);
 
-  // 2. Sincroniza o estado se a prop mudar (ex: após um F5 ou navegação)
-  useEffect(() => {
-    setIsFollowing(initialIsFollowing);
-  }, [initialIsFollowing]);
+  // Pega do Zustand
+  const { following, follow, unfollow } = useRelationshipStore();
+
+  // Usa Zustand como fonte de verdade, com fallback para initialIsFollowing
+  const isFollowing =
+    following.includes(String(profileId)) ?? initialIsFollowing;
 
   const handleToggleFollow = async (e) => {
     e.stopPropagation();
     setLoading(true);
+
+    // Estado otimista
+    const wasFollowing = isFollowing;
+
+    // Atualiza UI otimista
+    if (wasFollowing) {
+      unfollow(String(profileId));
+    } else {
+      follow(String(profileId));
+    }
+
+    if (onStatusChange) onStatusChange(!wasFollowing);
 
     try {
       const response = await api.post(
         `/accounts/profiles/${profileId}/follow/`
       );
 
-      // 3. Lógica baseada no Status Code do Django
-      // 201 = Criou/Reativou Follow | 200 = Deu Unfollow
-      const followResult = response.status === 201;
+      // Confirma com o backend
+      const newStatus = response.status === 201;
 
-      setIsFollowing(followResult);
-      toast.success(response.data.message);
+      if (newStatus !== !wasFollowing) {
+        // Se o backend devolveu diferente, corrige
+        if (newStatus) {
+          follow(String(profileId));
+        } else {
+          unfollow(String(profileId));
+        }
+        if (onStatusChange) onStatusChange(newStatus);
+      }
 
-      if (onStatusChange) onStatusChange(followResult);
+      toast.success(
+        response.data.message ||
+          (newStatus ? 'Agora você segue! 🎉' : 'Deixou de seguir.')
+      );
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.error || 'Erro ao processar pedido';
+      // Rollback em caso de erro
+      if (wasFollowing) {
+        follow(String(profileId));
+      } else {
+        unfollow(String(profileId));
+      }
+      if (onStatusChange) onStatusChange(wasFollowing);
 
-      toast.info(errorMessage, {
-        icon: '⏳',
-        position: 'bottom-center',
-      });
-
-      // 4. Se deu erro (ex: 400), o isFollowing deve continuar como estava
-      // Não invertemos o estado aqui.
+      toast.error(error.response?.data?.error || 'Erro ao processar pedido');
     } finally {
       setLoading(false);
     }
@@ -54,7 +76,7 @@ const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
         ${loading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}
         ${
           isFollowing
-            ? 'bg-black text-white border border-gray-700 hover:border-red-500'
+            ? 'bg-black text-white border border-gray-700 hover:border-red-500 hover:text-red-500'
             : 'bg-white text-black hover:bg-gray-200 shadow-md'
         }
       `}
