@@ -1,8 +1,10 @@
 from datetime import timedelta
+
 import pytest
 from django.core.cache import cache
 from django.utils import timezone
-from accounts.models import User, Follow
+
+from accounts.models import Follow, User
 
 
 @pytest.mark.django_db

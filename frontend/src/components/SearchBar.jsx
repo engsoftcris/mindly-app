@@ -39,7 +39,15 @@ const SearchBar = () => {
         placeholder="Buscar no Mindly"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)} // Delay para permitir o clique no link
+        onBlur={() => {
+          // O delay de 200ms é essencial para o clique no <Link> funcionar
+          // antes do componente de resultados ser desmontado
+          setTimeout(() => {
+            setIsDropdownOpen(false);
+            setSearchTerm(''); // Limpa o texto da busca
+            setResults([]); // Limpa a lista de resultados anterior
+          }, 200);
+        }}
       />
 
       {/* Dropdown de Resultados */}

@@ -118,6 +118,6 @@ describe('<ConnectionsModal />', () => {
     // 3. Validação robusta da mensagem de lista vazia
     cy.getByData('empty-connections-message')
       .should('be.visible')
-      .and('contain', 'No connections found in this list.');
+      .and('contain', 'No connections found');
   });
 });

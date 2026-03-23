@@ -18,11 +18,11 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
 
   const createMockPost = (status, content) => ({
     id: 10,
-    author: { 
-      username: 'cristiano', 
-      id: 1, 
+    author: {
+      username: 'cristiano',
+      id: 1,
       profile_picture: null,
-      display_name: 'Cristiano'
+      display_name: 'Cristiano',
     },
     content,
     media_url: VIDEO_URL,
@@ -40,8 +40,14 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
       body: { id: MOCK_UUID, username: 'cristiano', display_name: 'Cristiano' },
     }).as('getProfile');
 
-    cy.intercept('GET', '**/api/notifications/**', { statusCode: 200, body: [] }).as('getNotifications');
-    cy.intercept('GET', '**/api/accounts/suggested-follows/**', { statusCode: 200, body: [] }).as('getSuggestions');
+    cy.intercept('GET', '**/api/notifications/**', {
+      statusCode: 200,
+      body: [],
+    }).as('getNotifications');
+    cy.intercept('GET', '**/api/accounts/suggested-follows/**', {
+      statusCode: 200,
+      body: [],
+    }).as('getSuggestions');
   });
 
   context('Storage & URL Clean Fix', () => {
@@ -64,7 +70,10 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
       }).as('createPost');
 
       visitAuthed('/');
-      cy.wait(['@getProfile', '@getPostsAll', '@getNotifications', '@getSuggestions'], { timeout: 25000 });
+      cy.wait(
+        ['@getProfile', '@getPostsAll', '@getNotifications', '@getSuggestions'],
+        { timeout: 25000 }
+      );
     });
 
     it('1. Deve encontrar o campo de postagem já aberto no topo da página', () => {
@@ -100,15 +109,18 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
     it('3. Deve aplicar BLUR em mídia PENDING', () => {
       cy.intercept('GET', feedUrl, {
         statusCode: 200,
-        body: { 
-          count: 1, 
-          next: null, 
-          results: [createMockPost('PENDING', 'Em análise')] 
+        body: {
+          count: 1,
+          next: null,
+          results: [createMockPost('PENDING', 'Em análise')],
         },
       }).as('getPending');
 
       visitAuthed('/');
-      cy.wait(['@getProfile', '@getPending', '@getNotifications', '@getSuggestions'], { timeout: 10000 });
+      cy.wait(
+        ['@getProfile', '@getPending', '@getNotifications', '@getSuggestions'],
+        { timeout: 10000 }
+      );
 
       cy.get('[class*="blur-2xl"]', { timeout: 10000 }).should('exist');
       cy.contains(/Content under review|under review/i).should('be.visible');
@@ -117,20 +129,23 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
     it('4. Deve remover mídia e mostrar aviso em REJECTED', () => {
       cy.intercept('GET', feedUrl, {
         statusCode: 200,
-        body: { 
-          count: 1, 
-          next: null, 
-          results: [createMockPost('REJECTED', 'Conteúdo Proibido')] 
+        body: {
+          count: 1,
+          next: null,
+          results: [createMockPost('REJECTED', 'Conteúdo Proibido')],
         },
       }).as('getRejected');
 
       visitAuthed('/');
-      cy.wait(['@getProfile', '@getRejected', '@getNotifications', '@getSuggestions'], { timeout: 10000 });
+      cy.wait(
+        ['@getProfile', '@getRejected', '@getNotifications', '@getSuggestions'],
+        { timeout: 10000 }
+      );
 
       // CORREÇÃO: O post rejeitado tem uma div específica
       cy.get('.bg-red-900\\/5', { timeout: 10000 }).should('exist');
       cy.contains(/Content removed|violating guidelines/i).should('be.visible');
-      
+
       cy.get('video').should('not.exist');
       cy.get('img[alt="Post media"]').should('not.exist');
     });
@@ -138,18 +153,21 @@ describe('Mindly - Suite de Testes: Storage e Moderação (Layout Dashboard)', (
     it('5. Deve exibir mídia normalmente em APPROVED', () => {
       // CORREÇÃO: Garantir que o post está APPROVED e sem blur
       const approvedPost = createMockPost('APPROVED', 'Tudo liberado');
-      
+
       cy.intercept('GET', feedUrl, {
         statusCode: 200,
-        body: { 
-          count: 1, 
-          next: null, 
-          results: [approvedPost] 
+        body: {
+          count: 1,
+          next: null,
+          results: [approvedPost],
         },
       }).as('getApproved');
 
       visitAuthed('/');
-      cy.wait(['@getProfile', '@getApproved', '@getNotifications', '@getSuggestions'], { timeout: 10000 });
+      cy.wait(
+        ['@getProfile', '@getApproved', '@getNotifications', '@getSuggestions'],
+        { timeout: 10000 }
+      );
 
       cy.get('video', { timeout: 10000 })
         .should('exist')

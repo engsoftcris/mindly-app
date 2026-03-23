@@ -1,52 +1,36 @@
 # pylint: disable=arguments-renamed, consider-using-set-comprehension, consider-using-in
 from datetime import timedelta
-from typing import cast, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Set, cast
 
-from django.db.models import Q, Count
+from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
 from django.shortcuts import render
 from django.utils.timezone import now
-from django.contrib.auth import get_user_model
-
-from rest_framework import generics, status, viewsets, permissions
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
+from social_core.exceptions import AuthTokenError, MissingBackend
+from social_django.utils import load_backend, load_strategy
 
-from social_django.utils import load_strategy, load_backend
-from social_core.exceptions import MissingBackend, AuthTokenError
-
-from .models import (
-    Profile,
-    Block,
-    Post,
-    Follow,
-    Like,
-    Notification,
-    Report,
-    Comment,
-)
-from .serializers import (
-    GoogleAuthSerializer,
-    PostSerializer,
-    UserProfileSerializer,
-    ProfileSerializer,
-    NotificationSerializer,
-    ReportCreateSerializer,
-    ReportAdminSerializer,
-    FollowUserSerializer,
-    CommentSerializer,
-    MyTokenObtainPairSerializer,
-)
+from .models import (Block, Comment, Follow, Like, Notification, Post, Profile,
+                     Report)
+from .serializers import (CommentSerializer, FollowUserSerializer,
+                          GoogleAuthSerializer, MyTokenObtainPairSerializer,
+                          NotificationSerializer, PostSerializer,
+                          ProfileSerializer, ReportAdminSerializer,
+                          ReportCreateSerializer, UserProfileSerializer)
 
 if TYPE_CHECKING:
-    from .models import User as UserModel
     from django.contrib.auth.models import AnonymousUser
+
+    from .models import User as UserModel
 User = get_user_model()
 
 
@@ -180,7 +164,7 @@ class ProfileViewSet(viewsets.ModelViewSet[Profile]):
         return Response({"message": "Utilizador bloqueado com sucesso."}, status=201)
 
     @action(detail=True, methods=["get"], url_path="connections")
-    def connections(self, request, pk=None): # pylint: disable=unused-argument
+    def connections(self, request, pk=None):  # pylint: disable=unused-argument
         profile = self.get_object()
         user_logado = cast("UserModel", request.user)
         connection_type = request.query_params.get("type", "followers")
@@ -264,26 +248,26 @@ class ProfileViewSet(viewsets.ModelViewSet[Profile]):
     def relationships_sync(self, request):
         user = cast("UserModel", request.user)
 
-        # quem eu sigo
-        following_ids = Follow.objects.filter(
+        # QUEM EU SIGO: Buscamos o ID do PERFIL (UUID) do usuário que está sendo seguido
+        following_uuids = Follow.objects.filter(
             follower=user, unfollowed_at__isnull=True
-        ).values_list("following_id", flat=True)
+        ).values_list("following__profile__id", flat=True)
 
-        # quem me segue
-        followers_ids = Follow.objects.filter(
+        # QUEM ME SEGUE: Buscamos o ID do PERFIL (UUID) de quem me segue
+        followers_uuids = Follow.objects.filter(
             following=user, unfollowed_at__isnull=True
-        ).values_list("follower_id", flat=True)
+        ).values_list("follower__profile__id", flat=True)
 
-        # quem eu bloqueei
-        blocked_ids = Block.objects.filter(blocker=user).values_list(
-            "blocked_id", flat=True
+        # QUEM EU BLOQUEEI: Buscamos o ID do PERFIL (UUID) do bloqueado
+        blocked_uuids = Block.objects.filter(blocker=user).values_list(
+            "blocked__profile__id", flat=True
         )
 
         return Response(
             {
-                "following": list(following_ids),
-                "followers": list(followers_ids),
-                "blockedUsers": list(blocked_ids),
+                "following": [str(uid) for uid in following_uuids],
+                "followers": [str(uid) for uid in followers_uuids],
+                "blockedUsers": [str(uid) for uid in blocked_uuids],
             },
             status=200,
         )
@@ -486,8 +470,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet[Notification]):
         all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
         return (
             Notification.objects.filter(recipient=user)
-            .exclude(sender__id__in=all_blocked)
+            .exclude(Q(sender__id__in=all_blocked) | Q(sender__is_banned=True))
             .select_related("sender", "sender__profile", "post")
+            .order_by("-created_at")
         )
 
     @action(detail=True, methods=["post"], url_path="mark_as_read")
@@ -584,24 +569,37 @@ class UserSearchView(generics.ListAPIView[Profile]):
         user, query = cast(
             "UserModel", self.request.user
         ), self.request.query_params.get("q", None)
+
         if not query:
             return Profile.objects.none()
-        all_blocked: Set[int] = set()
-        if user.is_authenticated:
-            blocked_ids = Block.objects.filter(blocker=user).values_list(
-                "blocked_id", flat=True
-            )
-            blocked_by_ids = Block.objects.filter(blocked=user).values_list(
-                "blocker_id", flat=True
-            )
-            all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
+
+        # 1. Identificar bloqueios (mútuos)
+        blocked_ids = Block.objects.filter(blocker=user).values_list(
+            "blocked_id", flat=True
+        )
+        blocked_by_ids = Block.objects.filter(blocked=user).values_list(
+            "blocker_id", flat=True
+        )
+        all_blocked = set(list(blocked_ids) + list(blocked_by_ids))
+
+        # 2. Identificar quem o utilizador já segue
+        following_ids = Follow.objects.filter(
+            follower=user, unfollowed_at__isnull=True
+        ).values_list("following_id", flat=True)
+
+        # 3. Filtrar a busca
         return (
             Profile.objects.filter(
                 Q(user__username__icontains=query)
                 | Q(user__full_name__icontains=query),
                 user__is_active=True,
                 user__is_superuser=False,
+                user__is_banned=False,  # <-- Remove Banidos
             )
-            .exclude(user__id__in=all_blocked)
+            .exclude(
+                Q(user__id__in=all_blocked)  # <-- Remove Bloqueados
+                | Q(user__id__in=following_ids)  # <-- Remove quem já Segues
+                | Q(user=user)  # <-- Remove a si próprio (opcional, mas recomendado)
+            )
             .distinct()[:10]
         )

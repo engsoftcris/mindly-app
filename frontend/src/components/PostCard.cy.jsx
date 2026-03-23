@@ -1,4 +1,5 @@
 import { BrowserRouter } from 'react-router-dom';
+import React from 'react';
 import PostCard from './PostCard';
 
 describe('<PostCard />', () => {
@@ -50,68 +51,46 @@ describe('<PostCard />', () => {
   });
 
   it('deve permitir editar o conteúdo do post e salvar', () => {
-    // 1. Criamos um objeto de post que podemos manipular
-    let dynamicPost = { ...mockPost };
+    const novoTexto = 'Conteúdo editado via Cypress';
 
-    // 2. Função de montagem que permite atualizar a prop se necessário
-    const mountWithPost = (p) => {
-      cy.mount(
+    // 1. Interceptamos o PATCH
+    cy.intercept('PATCH', '**/posts/post-uuid-999/', {
+      statusCode: 200,
+      body: { ...mockPost, content: novoTexto, moderation_status: 'APPROVED' }, // Forçamos APPROVED para o teste
+    }).as('updatePost');
+
+    // 2. Criamos um wrapper para segurar o estado do post no teste
+    const Wrapper = () => {
+      const [p, setP] = React.useState(mockPost);
+      return (
         <BrowserRouter>
           <div className="bg-black min-h-screen p-4">
             <PostCard
               post={p}
               currentUser={currentUser}
-              onPostUpdate={(updated) => {
-                dynamicPost = updated; // Simulando o que o pai faria
-              }}
+              onPostUpdate={(updated) => setP(updated)} // Aqui a prop atualiza!
             />
           </div>
         </BrowserRouter>
       );
     };
 
-    mountWithPost(dynamicPost);
+    cy.mount(<Wrapper />);
 
+    // 3. Fluxo de edição
     cy.get('[data-cy="user-action-menu-trigger"]').click();
     cy.get('[data-cy="user-action-edit"]').click();
-
-    const novoTexto = 'Conteúdo editado via Cypress';
-
-    // Intercepta e responde
-    cy.intercept('PATCH', '**/posts/post-uuid-999/', (req) => {
-      req.reply({
-        statusCode: 200,
-        body: { ...mockPost, content: novoTexto },
-      });
-    }).as('updatePost');
-
     cy.get('[data-cy="post-edit-input"]').clear().type(novoTexto);
     cy.get('[data-cy="post-edit-save"]').click();
 
     cy.wait('@updatePost');
 
-    // ✅ O TRUQUE: Remontamos o componente com a "nova prop"
-    // ou simplesmente ignoramos o reset se o teste for rápido o suficiente.
-    // Mas a forma mais garantida no Cypress Component Test é verificar o texto
-    // IMEDIATAMENTE após o input sumir, antes do useEffect causar o estrago.
-
+    // 4. Agora o texto TEM que estar lá porque o Wrapper atualizou a prop 'post'
     cy.get('[data-cy="post-edit-input"]').should('not.exist');
-
-    // Se o useEffect estiver resetando muito rápido, vamos testar se o
-    // onPostUpdate foi chamado com o valor certo (isso prova que a lógica está ok)
-    cy.get('[data-cy="post-content"]')
-      .invoke('text')
-      .then((text) => {
-        // Se o texto ainda for o antigo, o useEffect resetou o estado.
-        // Em Engenharia de Software, isso indica que seu componente
-        // está "acoplado" demais à prop inicial.
-        cy.log('Texto atual no DOM: ' + text);
-      });
-
-    // Tenta forçar a barra uma última vez:
-    cy.get('[data-cy="post-content"]').should('contain', novoTexto);
+    cy.get('[data-cy="post-content"]', { timeout: 10000 })
+      .should('be.visible')
+      .and('contain', novoTexto);
   });
-
   it('deve abrir o modal de denúncia e enviar quando for outro usuário', () => {
     // 🚀 O QUE FALTOU: Interceptar a chamada para o mock responder 201
     cy.intercept('POST', '**/api/reports/', {

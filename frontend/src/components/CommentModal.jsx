@@ -29,15 +29,18 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
 
   // Logged-in user id (Django User.id)
   // Substitua a linha do currentUserId (por volta da linha 44):
+  // Logged-in user id (Aqui está o segredo: use o profile_id que é o UUID)
   const currentUserId = useMemo(() => {
-    return currentUser?.id || currentUser?.profile_id || null;
+    // Se o seu login salva o profile_id no user, use ele.
+    // Se não, garanta que está pegando a string do UUID.
+    const id = currentUser?.profile_id || currentUser?.id;
+    return id ? String(id).toLowerCase() : null;
   }, [currentUser]);
 
-  // No CommentModal.jsx, altere o postOwnerId:
-  // Procure a linha do postOwnerId no CommentModal.jsx
   const postOwnerId = useMemo(() => {
-    // Pegue o ID do perfil (UUID), não o do usuário (Integer)
-    return post?.author?.id || post?.author?.profile_id || null;
+    // Tenta o profile_id primeiro, porque é ele que você usa no seu AuthContext (currentUserId)
+    const id = post?.author?.profile_id || post?.author?.id || post?.author_id;
+    return id ? String(id).toLowerCase() : null;
   }, [post]);
 
   const handleImageChange = (e) => {

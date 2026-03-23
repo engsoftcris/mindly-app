@@ -2,9 +2,10 @@
 
 import pytest
 from django.db import IntegrityError
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 from rest_framework import status
-from accounts.models import Block, Follow, Post, Notification
+
+from accounts.models import Block, Follow, Notification, Post
 
 # pylint: disable=redefined-outer-name, unused-argument
 

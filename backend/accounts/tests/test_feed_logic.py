@@ -1,7 +1,8 @@
 import pytest
 from django.urls import reverse
 from rest_framework import status
-from accounts.models import Post, User, Block, Profile
+
+from accounts.models import Block, Post, Profile, User
 
 
 @pytest.mark.django_db

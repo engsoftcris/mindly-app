@@ -1,9 +1,10 @@
-from pathlib import Path
 import os
-from datetime import timedelta
 import sys
-import dj_database_url
+from datetime import timedelta
+from pathlib import Path
 from typing import Any, cast
+
+import dj_database_url
 
 # --------------------------------------------------
 # BASE & DEBUG
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "social_django",
+    "drf_yasg",
     "accounts.apps.AccountsConfig",
     "storages",
 ]
@@ -121,8 +123,8 @@ REST_FRAMEWORK = {
     ],
 }
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),  # 1 hora de validade para o acesso
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),  # 7 dias para renovar sem deslogar
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 # Redirecionamento após Login e Logout bem-sucedidos
@@ -290,3 +292,13 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # 2.5MB
 
 # Limite total do request (vídeo máximo permitido)
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
+
+# Swagger Configuration
+
+SWAGGER_USE_COMPAT_RENDERERS = False
+SWAGGER_SETTINGS = {
+    "USE_SESSION_AUTH": False,
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"}
+    },
+}

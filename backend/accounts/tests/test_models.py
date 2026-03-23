@@ -3,6 +3,7 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+
 from accounts.models import Post
 
 User = get_user_model()

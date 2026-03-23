@@ -1,15 +1,16 @@
 """Testes para o sistema de banimento, restrições de acesso e ações administrativas."""
 
 from unittest import mock  # Standard library primeiro (C0411 fix)
+
 import pytest
-from django.contrib.auth import get_user_model
 from django.contrib.admin.sites import AdminSite
+from django.contrib.auth import get_user_model
 from django.test import RequestFactory
 from django.urls import reverse
 from rest_framework import status
 
-from accounts.models import Post
 from accounts.admin import CustomUserAdmin
+from accounts.models import Post
 
 User = get_user_model()
 

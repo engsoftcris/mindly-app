@@ -15,35 +15,47 @@ describe('Mindly - Profile Connections & Modal UX', () => {
         followers_count: 10,
         following_count: 5,
         is_following: false,
-        posts: []
-      }
+        posts: [],
+      },
     }).as('getTargetProfile');
 
     // Mock inicial de Followers
-    cy.intercept('GET', `**/api/accounts/profiles/${targetId}/connections/?type=followers`, {
-      statusCode: 200,
-      body: [{
-        profile_id: otherUserId,
-        username: 'follower_bot',
-        display_name: 'Follower Bot',
-        is_following: false
-      }]
-    }).as('getFollowers');
+    cy.intercept(
+      'GET',
+      `**/api/accounts/profiles/${targetId}/connections/?type=followers`,
+      {
+        statusCode: 200,
+        body: [
+          {
+            profile_id: otherUserId,
+            username: 'follower_bot',
+            display_name: 'Follower Bot',
+            is_following: false,
+          },
+        ],
+      }
+    ).as('getFollowers');
 
     // Mock de Following (para o teste de Tabs)
-    cy.intercept('GET', `**/api/accounts/profiles/${targetId}/connections/?type=following`, {
-      statusCode: 200,
-      body: [{
-        profile_id: 'following-1',
-        username: 'idol_user',
-        display_name: 'My Idol',
-        is_following: true
-      }]
-    }).as('getFollowing');
+    cy.intercept(
+      'GET',
+      `**/api/accounts/profiles/${targetId}/connections/?type=following`,
+      {
+        statusCode: 200,
+        body: [
+          {
+            profile_id: 'following-1',
+            username: 'idol_user',
+            display_name: 'My Idol',
+            is_following: true,
+          },
+        ],
+      }
+    ).as('getFollowing');
 
     cy.intercept('POST', '**/api/accounts/profiles/*/follow/', {
       statusCode: 200,
-      body: { is_following: true }
+      body: { is_following: true },
     }).as('followAction');
   });
 
@@ -55,7 +67,11 @@ describe('Mindly - Profile Connections & Modal UX', () => {
     cy.contains('Followers').click({ force: true });
     cy.wait('@getFollowers');
 
-    cy.get('div.overflow-y-auto').find('button').contains(/^Follow$/).first().click({ force: true });
+    cy.get('div.overflow-y-auto')
+      .find('button')
+      .contains(/^Follow$/)
+      .first()
+      .click({ force: true });
     cy.wait('@followAction');
     cy.contains('button', 'Following').should('be.visible');
 

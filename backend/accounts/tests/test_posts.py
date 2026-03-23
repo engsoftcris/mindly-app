@@ -1,13 +1,15 @@
 """Testes de integração para posts, incluindo ciclo de vida, imagens e soft delete."""
 
 from io import BytesIO
+
 import pytest
-from PIL import Image
-from django.urls import reverse
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
+from PIL import Image
 from rest_framework import status
-from accounts.models import Post, Comment
+
+from accounts.models import Comment, Post
 
 User = get_user_model()
 

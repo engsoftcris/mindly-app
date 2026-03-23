@@ -7,9 +7,9 @@ const useRelationshipStore = create((set) => ({
 
   setInitialData: (data) =>
     set({
-      following: data.following || [],
-      followers: data.followers || [],
-      blockedUsers: data.blockedUsers || [],
+      following: (data.following || []).map((id) => String(id)),
+      followers: (data.followers || []).map((id) => String(id)),
+      blockedUsers: (data.blockedUsers || []).map((id) => String(id)),
     }),
 
   follow: (userId) =>

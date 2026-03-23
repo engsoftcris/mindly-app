@@ -20,19 +20,19 @@ describe('Profile Settings & Real-time Sync (UUID Era) - Robust Version', () => 
       display_name: 'Cristiano Original',
       bio: 'Bio antiga...',
       profile_picture: null,
-      image_status: 'APPROVED'
+      image_status: 'APPROVED',
     };
 
     // 1. Mocks de Autenticação e Perfil (APENAS A ROTA OFICIAL AGORA)
-    cy.intercept('GET', '**/api/accounts/profile/', { 
-      statusCode: 200, 
-      body: initialProfile 
+    cy.intercept('GET', '**/api/accounts/profile/', {
+      statusCode: 200,
+      body: initialProfile,
     }).as('getProfile');
 
     // 2. Mock de Notificações
-    cy.intercept('GET', '**/api/notifications/', { 
-      statusCode: 200, 
-      body: [] 
+    cy.intercept('GET', '**/api/notifications/', {
+      statusCode: 200,
+      body: [],
     }).as('getNotifications');
 
     // Visita a página de SETTINGS
@@ -88,33 +88,51 @@ describe('Profile Settings & Real-time Sync (UUID Era) - Robust Version', () => 
       .and('contain', 'Settings updated successfully!');
 
     // Valida sincronização na Navbar
-    cy.get('[data-cy="navbar-user-display-name"]')
-      .should('contain', 'Ricardo');
+    cy.get('[data-cy="navbar-user-display-name"]').should('contain', 'Ricardo');
   });
 
- it('3. Persistência: Deve manter o nome "Ricardo" ao navegar para a Home', () => {
-  const updatedName = 'Ricardo Silva Pro';
-  
-  cy.intercept('GET', '**/api/accounts/profile/', {
-    statusCode: 200,
-    body: { id: MOCK_UUID, username: USERNAME, display_name: updatedName },
-  }).as('getProfileRicardo');
+  it('3. Persistência: Deve manter o nome "Ricardo" ao navegar para a Home', () => {
+    const updatedName = 'Ricardo Silva Pro';
 
-  // CORREÇÃO: Mudar de posts para feed
-  cy.intercept('GET', '**/api/accounts/feed/**', {
-    statusCode: 200,
-    body: { count: 0, results: [] },
-  }).as('getFeed');  // ← Nome do alias mudado para getFeed
+    // ✅ ESCUDO: Garante que o refresh não dê 401 e deslogue o Ricardo
+    cy.intercept('POST', '**/api/token/refresh/**', {
+      statusCode: 200,
+      body: { access: 'fake-access-new', refresh: 'fake-refresh-new' },
+    }).as('refreshTokenRicardo');
 
-  cy.get('[data-cy="navbar-home-link"]').click();
+    // ✅ MOCK PERFIL: Força o retorno do Ricardo
+    cy.intercept('GET', '**/api/accounts/profile/**', {
+      statusCode: 200,
+      body: { id: MOCK_UUID, username: USERNAME, display_name: updatedName },
+    }).as('getProfileRicardo');
 
-  cy.url().should('eq', `${Cypress.config().baseUrl}/`);
-  
-  // CORREÇÃO: Esperar pelo feed, não pelos posts
-  cy.wait('@getFeed', { timeout: 10000 });
+    // ✅ MOCK FEED & SIDEBARS: Evita que requisições secundárias deem 401
+    cy.intercept('GET', '**/api/accounts/feed/**', {
+      statusCode: 200,
+      body: { count: 0, results: [] },
+    }).as('getFeed');
 
-  cy.get('[data-cy="navbar-user-display-name"]', { timeout: 10000 })
-    .should('be.visible')
-    .and('contain', 'Ricardo');
-});
+    cy.intercept('GET', '**/api/notifications/**', {
+      statusCode: 200,
+      body: [],
+    });
+    cy.intercept('GET', '**/api/accounts/suggested-follows/**', {
+      statusCode: 200,
+      body: [],
+    });
+
+    // Executa a navegação
+    cy.get('[data-cy="navbar-home-link"]').click();
+
+    // Valida a URL
+    cy.url().should('eq', `${Cypress.config().baseUrl}/`);
+
+    // Espera os dados carregarem para garantir que o componente renderizou o estado final
+    cy.wait(['@getProfileRicardo', '@getFeed']);
+
+    // Valida o nome na Navbar
+    cy.get('[data-cy="navbar-user-display-name"]', { timeout: 15000 })
+      .should('be.visible')
+      .should('contain', 'Ricardo');
+  });
 });

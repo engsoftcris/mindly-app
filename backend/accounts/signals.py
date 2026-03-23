@@ -1,6 +1,7 @@
-from django.db.models.signals import pre_save, post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
-from .models import User, Profile, Follow, Like, Comment, Notification, Report
+
+from .models import Comment, Follow, Like, Notification, Profile, Report, User
 
 # pylint: disable=unused-argument
 

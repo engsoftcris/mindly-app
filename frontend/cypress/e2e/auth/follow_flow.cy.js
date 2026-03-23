@@ -59,14 +59,22 @@ describe('Fluxo de Follow/Unfollow entre Usuários', () => {
     // Seu FollowButton usa: POST /accounts/profiles/:id/follow/
     let isFollowing = false;
 
-    cy.intercept('POST', `**/accounts/profiles/${userB.id}/follow/**`, (req) => {
-      isFollowing = !isFollowing;
+    cy.intercept(
+      'POST',
+      `**/accounts/profiles/${userB.id}/follow/**`,
+      (req) => {
+        isFollowing = !isFollowing;
 
-      req.reply({
-        statusCode: isFollowing ? 201 : 200,
-        body: { message: isFollowing ? 'Agora estás a seguir.' : 'Deixaste de seguir.' },
-      });
-    }).as('toggleFollow');
+        req.reply({
+          statusCode: isFollowing ? 201 : 200,
+          body: {
+            message: isFollowing
+              ? 'Agora estás a seguir.'
+              : 'Deixaste de seguir.',
+          },
+        });
+      }
+    ).as('toggleFollow');
   });
 
   it('Deve seguir e deixar de seguir um usuário através do perfil público', () => {

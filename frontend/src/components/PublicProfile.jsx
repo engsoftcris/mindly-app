@@ -105,6 +105,7 @@ const PublicProfile = () => {
     if (id) fetchProfile();
   }, [id, fetchProfile]);
 
+  // Localize o useEffect que chama o fetchProfile no PublicProfile.jsx
   const handlePostUpdate = (postIdOrUpdatedPost, isLiked, likesCount) => {
     setProfile((prev) => {
       if (!prev) return prev;

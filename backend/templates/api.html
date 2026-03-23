@@ -51,57 +51,92 @@
             -webkit-text-fill-color: transparent;
         }
 
-     .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); /* três colunas */
-    gap: 24px;
-    margin-top: 40px;
-    justify-content: center; /* centraliza horizontalmente */
-}
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 40px;
+            justify-content: center;
+        }
 
-  .card-item {
-    background: #161B22;
-    border: 1px solid #2F3336;
-    border-radius: 16px;
-    padding: 30px;
-    transition: all 0.3s ease;
-    text-align: left;
-
-    display: flex;
-    flex-direction: column;
-    min-height: 220px;
-}
+        .card-item {
+            background: #161B22;
+            border: 1px solid #2F3336;
+            border-radius: 16px;
+            padding: 30px;
+            transition: all 0.3s ease;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            min-height: 220px;
+        }
 
         .card-item:hover {
             border-color: #1D9BF0;
             transform: translateY(-5px);
         }
 
-        .card-item h3 { margin-top: 0; color: #1D9BF0; }
-        .card-item p { color: #71767B; font-size: 0.95rem; }
+        .card-item h3 { 
+            margin-top: 0; 
+            color: #1D9BF0; 
+        }
+        
+        .card-item p { 
+            color: #71767B; 
+            font-size: 0.95rem; 
+        }
 
-        /* Botão Glassmorphism */
-  .btn-action {
-    display: inline-block;
-    width: 150px;              /* largura fixa igual para todos */
-    margin-top: auto;           /* alinha todos na mesma altura no final do card */
-    padding: 12px 0;            /* vertical, sem expandir horizontal */
-    background: rgba(29, 155, 240, 0.1);
-    color: #1D9BF0 !important;
-    border: 1px solid #1D9BF0;
-    border-radius: 8px;
-    font-weight: 600;
-    text-decoration: none !important;
-    text-align: center;
-}
+        .btn-action {
+            display: inline-block;
+            width: 150px;
+            margin-top: auto;
+            padding: 12px 0;
+            background: rgba(29, 155, 240, 0.1);
+            color: #1D9BF0 !important;
+            border: 1px solid #1D9BF0;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none !important;
+            text-align: center;
+        }
 
         .btn-action:hover {
             background: #1D9BF0;
             color: white !important;
         }
+        
         .card-item form {
-    margin-top: auto;
-}
+            margin-top: auto;
+        }
+        
+        .btn-swagger {
+            background: rgba(29, 155, 240, 0.1);
+            border-color: #1D9BF0;
+            color: #1D9BF0 !important;
+        }
+        
+        .btn-redoc {
+            background: rgba(123, 213, 255, 0.1);
+            border-color: #7BD5FF;
+            color: #7BD5FF !important;
+        }
+        
+        .btn-redoc:hover {
+            background: #7BD5FF;
+            color: #0F1419 !important;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: auto;
+        }
+        
+        .button-group .btn-action {
+            width: auto;
+            flex: 1;
+            margin-top: 0;
+        }
     </style>
 {% endblock %}
 
@@ -112,37 +147,37 @@
             <p>Infraestrutura escalável para a próxima geração de conexões.</p>
 
             <div class="dashboard-grid">
-               <div class="card-item">
-    <h3>⚙️ Gestão de Dados</h3>
+                <div class="card-item">
+                    <h3>⚙️ Gestão de Dados</h3>
+                    {% if user.is_staff %}
+                        <p>Acesse o painel administrativo para moderar usuários, posts e denúncias.</p>
+                        <a href="{% url 'admin:index' %}" class="btn-action">Abrir Admin</a>
+                    {% else %}
+                        <p style="color:#f4212e;font-weight:600;">
+                            Acesso restrito a administradores
+                        </p>
+                        <p style="color:#71767B;">
+                            Painel administrativo utilizado para gerenciamento da plataforma.
+                        </p>
+                    {% endif %}
+                </div>
 
-    {% if user.is_staff %}
-        <p>Acesse o painel administrativo para moderar usuários, posts e denúncias.</p>
-        <a href="{% url 'admin:index' %}" class="btn-action">Abrir Admin</a>
-    {% else %}
-     <p style="color:#f4212e;font-weight:600;">
-            Acesso restrito a administradores
-        </p>
-        <p style="color:#71767B;">
-            Painel administrativo utilizado para gerenciamento da plataforma.
-        </p>
-
-       
-    {% endif %}
-</div>
-
-     
-
-<div class="card-item">
-    <h3>📚 API Documentation</h3>
-
-    {% if user.is_staff %}
-        <p>Explore os endpoints disponíveis da API e teste requisições diretamente.</p>
-    {% else %}
-        <p style="color:#71767B;">
-            Documentação da API disponível para desenvolvedores autorizados.
-        </p>
-    {% endif %}
-</div>
+                <div class="card-item">
+                    <h3>📚 API Documentation</h3>
+                    {% if user.is_staff or user.is_authenticated %}
+                        <p>Explore os endpoints disponíveis da API e teste requisições diretamente.</p>
+                        <div class="button-group">
+                            <a href="/swagger/" class="btn-action btn-swagger">Swagger UI</a>
+                            <a href="/redoc/" class="btn-action btn-redoc">ReDoc</a>
+                        </div>
+                    {% else %}
+                        <p style="color:#71767B;">
+                            Documentação da API disponível para desenvolvedores autorizados.
+                            <br><br>
+                            <a href="{% url 'rest_framework:login' %}?next=/" style="color: #1D9BF0;">Faça login</a> para acessar.
+                        </p>
+                    {% endif %}
+                </div>
 
                 <div class="card-item">
                     <h3>👤 Minha Conta</h3>
@@ -155,7 +190,8 @@
                         </form>
                     {% else %}
                         <p>Você não está autenticado no portal.</p>
-<a href="{% url 'rest_framework:login' %}?next=/" class="btn-action">Entrar</a>                    {% endif %}
+                        <a href="{% url 'rest_framework:login' %}?next=/" class="btn-action">Entrar</a>
+                    {% endif %}
                 </div>
             </div>
         </section>

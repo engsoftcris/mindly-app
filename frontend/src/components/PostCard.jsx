@@ -1,5 +1,5 @@
 // frontend/src/components/PostCard.jsx
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, memo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { postsAPI } from '../api/axios';
 import { toast } from 'react-toastify';
@@ -29,11 +29,21 @@ const PostCard = ({
   const [editContent, setEditContent] = useState(initialPost?.content || '');
   const [loading, setLoading] = useState(false);
 
+  // Ref para o elemento de vídeo para controle fino de áudio
+  const videoRef = useRef(null);
+
   useEffect(() => {
     setPost(initialPost);
     if (!isEditing) setEditContent(initialPost?.content || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPost]);
+  }, [initialPost, isEditing]);
+
+  // Garante que o vídeo não faça ruído ao montar/atualizar
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.defaultMuted = true;
+    }
+  }, [post?.media_url]);
 
   const author = post?.author;
 
@@ -75,7 +85,6 @@ const PostCard = ({
       toast.success('Post updated and sent for review.');
       setIsEditing(false);
     } catch (_error) {
-      console.error('Erro na edição:', _error.response?.data);
       const msg =
         _error?.response?.data?.detail ||
         _error?.response?.data?.content?.[0] ||
@@ -109,7 +118,6 @@ const PostCard = ({
           : 'hover:bg-white/[0.02]'
       } border-b border-gray-800`}
     >
-      {/* Avatar */}
       <Link
         to={`/profile/${profileIdForLink || ''}`}
         className="flex-shrink-0"
@@ -202,7 +210,6 @@ const PostCard = ({
           </p>
         )}
 
-        {/* Media */}
         {mediaUrl && (
           <div
             className="relative mt-3 overflow-hidden rounded-2xl border border-gray-800 bg-black"
@@ -210,11 +217,14 @@ const PostCard = ({
           >
             {isVideoUrl(mediaUrl) ? (
               <video
+                ref={videoRef}
                 data-cy="post-video"
                 src={mediaUrl}
                 controls={!isPending}
+                muted
+                playsInline
                 preload="metadata"
-                className={`max-h-96 w-full object-cover ${isPending ? 'blur-2xl opacity-40' : ''}`}
+                className={`max-h-96 w-full object-contain ${isPending ? 'blur-2xl opacity-40' : ''}`}
               />
             ) : (
               <img
