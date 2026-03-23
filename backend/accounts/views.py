@@ -1,6 +1,6 @@
 # pylint: disable=arguments-renamed, consider-using-set-comprehension, consider-using-in
 from datetime import timedelta
-from typing import TYPE_CHECKING, Set, cast
+from typing import TYPE_CHECKING, cast
 
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
