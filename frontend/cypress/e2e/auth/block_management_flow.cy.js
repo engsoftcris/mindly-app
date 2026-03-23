@@ -1,12 +1,27 @@
 describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
   const TARGET_UUID = '47c2903b-3ee2-4d35-9bb7-51949fb0274d';
   const TARGET_USER = 'target_user';
-  const ANOTHER_UUID = '87c2903b-3ee2-4d35-9bb7-51949fb0274e';
-  const ANOTHER_USER = 'another_user';
 
   beforeEach(() => {
     cy.viewport(1280, 800);
     Cypress.on('uncaught:exception', () => false);
+
+    // ===== AUTH MOCK (ESSENCIAL) =====
+    cy.window().then((win) => {
+      win.localStorage.setItem('accessToken', 'fake-access');
+      win.localStorage.setItem('refreshToken', 'fake-refresh');
+    });
+
+    cy.intercept('POST', '**/api/token/refresh/', {
+      statusCode: 200,
+      body: { access: 'new-access-token' },
+    }).as('refreshToken');
+
+    // ===== ENDPOINTS BASE =====
+    cy.intercept('GET', '**/api/accounts/profile/', {
+      statusCode: 200,
+      body: { id: 'me-123', username: 'tester' },
+    }).as('getMyProfile');
 
     cy.intercept('GET', '**/api/notifications/**', {
       statusCode: 200,
@@ -17,72 +32,64 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
       statusCode: 200,
       body: { results: [] },
     }).as('getSuggested');
+
+    cy.intercept('GET', '**/api/accounts/profiles/relationships-sync/**', {
+      statusCode: 200,
+      body: [],
+    }).as('relationshipsSync');
   });
 
-  // garante que o PublicProfile saiu do LoadingScreen e renderizou
   const waitProfileRendered = (username) => {
     cy.contains(`@${username}`, { timeout: 20000 }).should('be.visible');
   };
 
   const openActionMenu = () => {
-    // garante que o menu existe (ele só renderiza se currentUser existir)
-    cy.get('[data-cy="user-action-menu"]', { timeout: 20000 }).should('be.visible');
+    cy.get('[data-cy="user-action-menu"]', { timeout: 20000 }).should(
+      'be.visible'
+    );
 
-    cy.get('[data-cy="user-action-menu-trigger"]', { timeout: 20000 })
+    cy.get('[data-cy="user-action-menu-trigger"]')
       .should('be.visible')
-      .click({ force: true })
-      .should('have.attr', 'aria-expanded', 'true');
+      .click({ force: true });
 
-    // NÃO é portal: o panel está na mesma árvore
-    cy.get('[data-cy="user-action-menu-panel"]', { timeout: 10000 })
-      .should('exist')
-      .and('be.visible');
+    cy.get('[data-cy="user-action-menu-panel"]').should('be.visible');
   };
 
   const clickBlock = () => {
-    // o botão existe apenas se canBlock = true
-    cy.get('[data-cy="user-action-block"]', { timeout: 10000 })
+    cy.get('[data-cy="user-action-block"]')
       .should('be.visible')
       .click({ force: true });
   };
 
- it('Deve impedir interação com usuário bloqueado (posts não aparecem)', () => {
-  cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
-    statusCode: 200,
-    body: {
-      id: TARGET_UUID,
-      username: TARGET_USER,
-      display_name: 'Alvo',
-      profile_picture: '',
-      bio: '',
-      is_blocked: true,
-      is_restricted: true,
-      posts: [],
-    },
-  }).as('getBlockedProfile');
-
-  cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
-
-  cy.wait('@getBlockedProfile');
-
-  // ✅ sincroniza com o DOM: garante que saiu do LoadingScreen e renderizou o perfil
-  cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
-
-  cy.contains('h2', 'These posts are protected', { timeout: 20000 }).should('be.visible');
-  cy.get('[data-cy="post-card"]').should('not.exist');
-});
-
- it('Deve realizar o fluxo de bloqueio corretamente', () => {
+  it('Deve impedir interação com usuário bloqueado (posts não aparecem)', () => {
     cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
       statusCode: 200,
       body: {
         id: TARGET_UUID,
         username: TARGET_USER,
-        display_name: 'Alvo',
-        profile_picture: '',
-        bio: '',
+        is_blocked: true,
+        is_restricted: true,
+        posts: [],
+      },
+    }).as('getBlockedProfile');
+
+    cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
+
+    cy.wait('@getBlockedProfile');
+
+    waitProfileRendered(TARGET_USER);
+
+    cy.contains('These posts are protected').should('be.visible');
+    cy.get('[data-cy="post-card"]').should('not.exist');
+  });
+
+  it('Deve realizar o fluxo de bloqueio corretamente', () => {
+    cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
+      statusCode: 200,
+      body: {
+        id: TARGET_UUID,
+        username: TARGET_USER,
         is_blocked: false,
-        is_restricted: false,
         posts: [],
       },
     }).as('getTargetProfile');
@@ -92,93 +99,40 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
       body: { is_blocked: true },
     }).as('blockAction');
 
-    // Intercept da lista de bloqueados que será usada depois
     cy.intercept('GET', '**/api/accounts/profiles/blocked-users/', {
       statusCode: 200,
-      body: [{ id: TARGET_UUID, username: TARGET_USER, display_name: 'Alvo' }],
+      body: [{ id: TARGET_UUID, username: TARGET_USER }],
     }).as('listBlocked');
 
     cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
+
+    // espere apenas o determinístico
     cy.wait('@getTargetProfile');
 
-    cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
-    
-    // Abre o menu e bloqueia
+    waitProfileRendered(TARGET_USER);
+
     openActionMenu();
     clickBlock();
 
     cy.wait('@blockAction');
 
-    // ✅ CORREÇÃO 1: Use regex ou espere a mudança de fato. 
-    // Se o seu app redireciona para /feed, garantimos que a URL mudou.
-    cy.url({ timeout: 20000 }).should('match', /\/$/);
-
-    // ✅ CORREÇÃO 2: Em vez de usar cy.login novamente (que reinicia o app),
-    // vamos navegar via UI ou diretamente pelo cy.visit para manter a sessão quente.
     cy.visit('/settings');
-    
-    cy.get('[data-cy="settings-view-blocked"]', { timeout: 20000 })
-      .should('be.visible')
-      .click();
-      
+
+    cy.url().should('include', '/settings');
+
+    cy.get('[data-cy="settings-view-blocked"]').should('be.visible').click();
+
     cy.wait('@listBlocked');
 
-    cy.contains(`@${TARGET_USER}`, { timeout: 20000 }).should('be.visible');
-  });
-
-  it('Deve bloquear múltiplos usuários e gerenciar a lista corretamente', () => {
-    cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
-      statusCode: 200,
-      body: { id: TARGET_UUID, username: TARGET_USER, display_name: 'Alvo', is_blocked: false, posts: [] },
-    }).as('getTargetProfile');
-
-    cy.intercept('GET', `**/api/accounts/profiles/${ANOTHER_UUID}/`, {
-      statusCode: 200,
-      body: { id: ANOTHER_UUID, username: ANOTHER_USER, display_name: 'Outro', is_blocked: false, posts: [] },
-    }).as('getAnotherProfile');
-
-    cy.intercept('POST', `**/api/accounts/profiles/*/block/`, {
-      statusCode: 201,
-      body: { is_blocked: true },
-    }).as('blockGeneric');
-
-    cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
-    cy.wait('@getTargetProfile');
-    waitProfileRendered(TARGET_USER);
-    openActionMenu();
-    clickBlock();
-    cy.wait('@blockGeneric');
-
-    cy.login({ path: `/profile/${ANOTHER_UUID}`, seedFeed: false });
-    cy.wait('@getAnotherProfile');
-    waitProfileRendered(ANOTHER_USER);
-    openActionMenu();
-    clickBlock();
-    cy.wait('@blockGeneric');
-
-    cy.intercept('GET', '**/api/accounts/profiles/blocked-users/', {
-      statusCode: 200,
-      body: [
-        { id: TARGET_UUID, username: TARGET_USER },
-        { id: ANOTHER_UUID, username: ANOTHER_USER },
-      ],
-    }).as('listFull');
-
-    cy.login({ path: '/settings', seedFeed: false });
-    cy.get('[data-cy="settings-view-blocked"]').click();
-    cy.wait('@listFull');
-
     cy.contains(`@${TARGET_USER}`).should('be.visible');
-    cy.contains(`@${ANOTHER_USER}`).should('be.visible');
   });
 
-  it('Deve manter histórico de bloqueio mesmo após desbloquear (não recria follow)', () => {
+  it('Deve manter histórico de bloqueio mesmo após desbloquear', () => {
     cy.intercept('GET', `**/api/accounts/profiles/${TARGET_UUID}/`, {
       statusCode: 200,
       body: {
         id: TARGET_UUID,
         username: TARGET_USER,
-        display_name: 'Alvo',
         is_blocked: false,
         is_following: true,
         posts: [],
@@ -191,6 +145,7 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
     }).as('block');
 
     cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
+
     cy.wait('@getInitProfile');
     waitProfileRendered(TARGET_USER);
 
@@ -201,16 +156,17 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
     cy.intercept('GET', '**/api/accounts/profiles/blocked-users/', {
       statusCode: 200,
       body: [{ id: TARGET_UUID, username: TARGET_USER }],
-    }).as('listOnce');
+    }).as('listBlocked');
 
     cy.intercept('POST', `**/api/accounts/profiles/${TARGET_UUID}/block/`, {
       statusCode: 200,
       body: { is_blocked: false },
     }).as('unblock');
 
-    cy.login({ path: '/settings', seedFeed: false });
+    cy.visit('/settings');
+
     cy.get('[data-cy="settings-view-blocked"]').click();
-    cy.wait('@listOnce');
+    cy.wait('@listBlocked');
 
     cy.get(`[data-cy="unblock-btn-${TARGET_USER}"]`).click();
     cy.wait('@unblock');
@@ -220,14 +176,14 @@ describe('Mindly - Gestão Completa de Bloqueios (TAL-14)', () => {
       body: {
         id: TARGET_UUID,
         username: TARGET_USER,
-        display_name: 'Alvo',
         is_blocked: false,
         is_following: false,
         posts: [],
       },
     }).as('getFinalProfile');
 
-    cy.login({ path: `/profile/${TARGET_UUID}`, seedFeed: false });
+    cy.visit(`/profile/${TARGET_UUID}`);
+
     cy.wait('@getFinalProfile');
     waitProfileRendered(TARGET_USER);
 

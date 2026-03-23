@@ -2,11 +2,9 @@
 
 import pytest
 from django.contrib.auth import get_user_model
-from accounts.serializers import (
-    PostSerializer,
-    RegisterSerializer,
-    UserProfileSerializer,
-)
+
+from accounts.serializers import (PostSerializer, RegisterSerializer,
+                                  UserProfileSerializer)
 
 User = get_user_model()
 

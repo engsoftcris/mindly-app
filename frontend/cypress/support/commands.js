@@ -1,90 +1,64 @@
 // cypress/support/commands.js
 
+// cypress/support/commands.js
+
 Cypress.Commands.add('login', (options = {}) => {
   const {
     username = 'testuser',
-    userId = '00000000-0000-0000-0000-000000000001',
-    path = '/dashboard',
-    // se você quiser garantir que sempre tem um post renderizado para testes
-    seedFeed = true,
-    initialLikes = 10,
+    userId = 'b369ce73-66ba-4dc9-a736-d79eb3e45e5b',
+    path = '/'
   } = options;
 
-  const user = { id: userId, username };
-  const basePost = { id: 99, content: 'Post de Teste', user };
+  const user = { id: userId, username, display_name: 'Test User' };
 
-  const setAuthStorage = (win) => {
-    const u = JSON.stringify(user);
+  // ✅ 1. PREPARAÇÃO DOS MOCKS (O ESCUDO)
+  // Definimos os mocks ANTES de visitar a página
+  cy.intercept('GET', '**/api/accounts/profile/**', { statusCode: 200, body: user }).as('getProfile');
+  cy.intercept('POST', '**/api/token/refresh/**', {
+    statusCode: 200,
+    body: { access: 'fake-access-123', refresh: 'fake-refresh-123' }
+  }).as('refreshToken');
+  
+  // Mocks de sidebars para evitar 401 que disparam o refresh do axios.js
+  cy.intercept('GET', '**/api/notifications/**', { statusCode: 200, body: { results: [] } });
+  cy.intercept('GET', '**/api/accounts/suggested-follows/**', { statusCode: 200, body: { results: [] } });
+  cy.intercept('GET', '**/api/accounts/profiles/relationships-sync/**', { statusCode: 200, body: { blocked_users: [] } });
 
-    // ajuste aqui para o padrão do seu app (mas deixe redundância, não atrapalha)
-    win.localStorage.setItem('user', u);
-    win.localStorage.setItem('accessToken', 'token-fake-valido');
-    win.localStorage.setItem('refreshToken', 'refresh-fake-valido');
-
-    // compatibilidade extra (caso algum trecho do app leia outras keys)
-    win.localStorage.setItem('token', 'token-fake-valido');
-    win.localStorage.setItem('access', 'token-fake-valido');
-    win.localStorage.setItem('refresh', 'refresh-fake-valido');
-
-    // se em algum ponto usar sessionStorage
-    win.sessionStorage.setItem('user', u);
-    win.sessionStorage.setItem('accessToken', 'token-fake-valido');
-  };
-
-  // Alias únicos e patterns “largos” (evita o problema do wait não achar a rota)
-  const registerDefaultIntercepts = () => {
-    cy.intercept('GET', '**/api/accounts/profile*', {
-      statusCode: 200,
-      body: user,
-    }).as('getProfile');
-
-    if (seedFeed) {
-      cy.intercept('GET', '**/api/posts*', {
-        statusCode: 200,
-        body: [{ ...basePost, likes_count: initialLikes, is_liked: false }],
-      }).as('getFeed');
-    }
-  };
-
-  // Reaproveita a sessão em TODOS os testes (e pode reutilizar entre specs)
-  cy.session(
-    `login:${username}`,
-    () => {
-      registerDefaultIntercepts();
-
-      cy.visit(path, { onBeforeLoad: setAuthStorage });
-
-      // garante que não caiu no /login
-      cy.location('pathname', { timeout: 20000 }).should('not.include', '/login');
-
-      // espera o básico do app carregar (se seedFeed estiver ativo)
-      cy.wait('@getProfile', { timeout: 20000 });
-      if (seedFeed) cy.wait('@getFeed', { timeout: 20000 });
-    },
-    {
-      cacheAcrossSpecs: true,
-      validate() {
-        // valida rapidamente se "continua logado"
-        cy.window().then((win) => {
-          const token = win.localStorage.getItem('accessToken') || win.localStorage.getItem('token');
-          expect(token, 'token presente').to.be.a('string').and.not.be.empty;
-        });
-      },
-    }
-  );
-
-  // Depois da session criada/restaurada, volta para a rota do teste com auth já presente
-  registerDefaultIntercepts();
-  cy.visit(path, { onBeforeLoad: setAuthStorage });
-});
-
-Cypress.Commands.add('visitAuthed', (path = '/', token = 'fake-token-123') => {
+  // ✅ 2. INJEÇÃO DE STORAGE E VISITA
+  // Usamos o onBeforeLoad para garantir que o axios.js já leia os tokens ao carregar
   cy.visit(path, {
     onBeforeLoad(win) {
-      win.localStorage.setItem('access', token)
+      win.localStorage.setItem('access', 'fake-access-123');
+      win.localStorage.setItem('refresh', 'fake-refresh-123');
+      win.localStorage.setItem('user', JSON.stringify(user));
+    }
+  });
+
+  // ✅ 3. ESTABILIZAÇÃO
+  // Garante que o perfil carregou antes de entregar o controle para o teste
+  cy.wait('@getProfile');
+});
+
+/**
+ * Visita uma página já injetando o token de acesso.
+ * Adicionamos o intercept do refresh para evitar que o axios.js 
+ * deslogue o usuário se tentar renovar o token durante o carregamento.
+ */
+Cypress.Commands.add('visitAuthed', (path = '/', token = 'fake-token-123') => {
+  // ✅ ESCUDO: Garante que qualquer tentativa de refresh dê 200 enquanto visita
+  cy.intercept('POST', '**/api/token/refresh/**', {
+    statusCode: 200,
+    body: { access: token, refresh: 'fake-refresh-123' }
+  }).as('visitRefresh');
+
+  cy.visit(path, {
+    onBeforeLoad(win) {
+      // Usando 'access' para bater com o localStorage.getItem('access') do seu axios.js
+      win.localStorage.setItem('access', token);
+      win.localStorage.setItem('refresh', 'fake-refresh-123');
     },
-  })
-})
+  });
+});
 
 // --- COMANDOS PARA ESTABILIZAÇÃO (DoD) ---
 
@@ -93,17 +67,24 @@ Cypress.Commands.add('visitAuthed', (path = '/', token = 'fake-token-123') => {
  * Uso: cy.getByData('login-button').click()
  */
 Cypress.Commands.add('getByData', (selector, ...args) => {
-  return cy.get(`[data-cy=${selector}]`, ...args);
+  return cy.get(`[data-cy="${selector}"]`, ...args);
 });
 
 /**
- * Comando para garantir que uma animação terminou verificando se o elemento parou de se mover.
- * Útil para evitar o erro "element is being animated" do Cypress.
+ * Comando para garantir que um elemento está estável e visível.
+ * Adicionada uma verificação de "não estar desabilitado" para cliques seguros.
  */
 Cypress.Commands.add('waitForStable', (selector, timeout = 5000) => {
-  cy.get(`[data-cy=${selector}]`).should(($el) => {
-    const rect = $el[0].getBoundingClientRect();
-    // Apenas um exemplo simples de verificação de visibilidade e estabilidade
-    expect($el).to.be.visible;
-  });
+  cy.get(`[data-cy="${selector}"]`, { timeout })
+    .should('be.visible')
+    .and('not.be.disabled');
+});
+
+/**
+ * Atalho para interceptar as rotas que sempre dão 401 e quebram o layout
+ */
+Cypress.Commands.add('interceptSidebars', () => {
+  cy.intercept('GET', '**/api/accounts/suggested-follows/**', { statusCode: 200, body: { results: [] } });
+  cy.intercept('GET', '**/api/accounts/profiles/relationships-sync/**', { statusCode: 200, body: { blocked_users: [] } });
+  cy.intercept('GET', '**/api/notifications/**', { statusCode: 200, body: { results: [] } });
 });

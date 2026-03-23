@@ -4,7 +4,8 @@ import pytest
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-from accounts.models import User, Post, Report, Notification
+
+from accounts.models import Notification, Post, Report, User
 
 # pylint: disable=redefined-outer-name, unused-argument
 

@@ -1,5 +1,4 @@
 describe('Fluxo Real de Autenticação - Blindado', () => {
-
   it('1. Deve mostrar a página de login e verificar se o botão do Google está operacional', () => {
     cy.visit('/login');
 
@@ -15,7 +14,7 @@ describe('Fluxo Real de Autenticação - Blindado', () => {
   it('2. Verifica se a API de Auth está respondendo (Integridade)', () => {
     cy.intercept('POST', '**/api/accounts/google/', {
       statusCode: 200,
-      body: { success: true }
+      body: { success: true },
     }).as('googleLogin');
 
     cy.visit('/login');
@@ -31,8 +30,8 @@ describe('Fluxo Real de Autenticação - Blindado', () => {
         body: {
           id: 1,
           name: 'Test User',
-          email: 'test@mindly.app'
-        }
+          email: 'test@mindly.app',
+        },
       }).as('getProfile');
 
       cy.visit('/');

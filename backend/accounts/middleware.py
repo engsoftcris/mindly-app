@@ -1,6 +1,6 @@
-from django.http import JsonResponse
 from django.contrib.auth import get_user_model
-from rest_framework import status, exceptions
+from django.http import JsonResponse
+from rest_framework import exceptions, status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 User = get_user_model()

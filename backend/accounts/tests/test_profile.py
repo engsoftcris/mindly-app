@@ -1,11 +1,11 @@
 import io
 import uuid
-from PIL import Image
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 
 User = get_user_model()

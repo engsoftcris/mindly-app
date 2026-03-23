@@ -1,5 +1,4 @@
 describe('Mindly - Jornada Completa do Utilizador', () => {
-
   const mockProfile = {
     id: '123',
     username: 'testuser',
@@ -15,15 +14,15 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       username: 'juliet.bennett',
       display_name: 'Juliet Bennett',
       profile_picture: null,
-      is_following: false
+      is_following: false,
     },
     {
       id: '789',
       username: 'cris.tobias',
       display_name: 'Cristiano Tobias',
       profile_picture: null,
-      is_following: false
-    }
+      is_following: false,
+    },
   ];
 
   const mockSearchResults = {
@@ -36,9 +35,9 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
         username: 'cris.tobias',
         full_name: 'Cristiano Tobias',
         profile_picture: null,
-        avatar: null
-      }
-    ]
+        avatar: null,
+      },
+    ],
   };
 
   const visitAuthed = (path = '/', options = {}) => {
@@ -67,78 +66,78 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       body: mockPostsEmpty,
     }).as('getPostsInitial');
 
-    cy.intercept('GET', '**/api/accounts/suggested-follows/**', { 
-      statusCode: 200, 
-      body: mockSuggestions 
+    cy.intercept('GET', '**/api/accounts/suggested-follows/**', {
+      statusCode: 200,
+      body: mockSuggestions,
     }).as('getSuggestions');
 
     // CORREÇÃO: Rota de busca exata como no SearchBar
-   cy.intercept('GET', '**/api/accounts/search/**', (req) => {
-  if (req.url.includes('q=cris')) {
-    req.reply({
-      statusCode: 200,
-      body: {
-        count: 1,
-        results: [
-          {
-            id: '789',
-            user: {
-              username: 'cris.tobias',
-              full_name: 'Cristiano Tobias',
-              profile_picture: null
-            },
-            // fallbacks na raiz também
-            username: 'cris.tobias',
-            full_name: 'Cristiano Tobias',
-            profile_picture: null
-          }
-        ]
+    cy.intercept('GET', '**/api/accounts/search/**', (req) => {
+      if (req.url.includes('q=cris')) {
+        req.reply({
+          statusCode: 200,
+          body: {
+            count: 1,
+            results: [
+              {
+                id: '789',
+                user: {
+                  username: 'cris.tobias',
+                  full_name: 'Cristiano Tobias',
+                  profile_picture: null,
+                },
+                // fallbacks na raiz também
+                username: 'cris.tobias',
+                full_name: 'Cristiano Tobias',
+                profile_picture: null,
+              },
+            ],
+          },
+        });
+      } else {
+        req.reply({ statusCode: 200, body: { count: 0, results: [] } });
       }
-    });
-  } else {
-    req.reply({ statusCode: 200, body: { count: 0, results: [] } });
-  }
-}).as('getSearch');
+    }).as('getSearch');
 
-    cy.intercept('GET', '**/api/notifications/**', { 
-      statusCode: 200, 
-      body: [] 
+    cy.intercept('GET', '**/api/notifications/**', {
+      statusCode: 200,
+      body: [],
     }).as('getNotificationsEmpty');
   });
 
- describe('Sidebar e Descoberta (Busca + Sugestões)', () => {
-  it('1. Deve interagir com sugestões e realizar busca usando data-cy', () => {
-    visitAuthed('/');
-    cy.wait(['@getProfile', '@getSuggestions'], { timeout: 10000 });
+  describe('Sidebar e Descoberta (Busca + Sugestões)', () => {
+    it('1. Deve interagir com sugestões e realizar busca usando data-cy', () => {
+      visitAuthed('/');
+      cy.wait(['@getProfile', '@getSuggestions'], { timeout: 10000 });
 
-    cy.get('[data-cy="suggested-item"]', { timeout: 10000 })
-      .should('be.visible')
-      .and('contain', 'Juliet Bennett');
+      cy.get('[data-cy="suggested-item"]', { timeout: 10000 })
+        .should('be.visible')
+        .and('contain', 'Juliet Bennett');
 
-    cy.get('[data-cy="search-input"]').type('cris');
-    
-    // CORREÇÃO: Espera o debounce de 300ms + um extra
-    cy.wait(500);
-    
-    // Agora a requisição deve ter sido feita
-    cy.wait('@getSearch', { timeout: 10000 });
+      cy.get('[data-cy="search-input"]').type('cris');
 
-    cy.get('[data-cy="search-result-item"]', { timeout: 10000 })
-      .should('be.visible')
-      .and('contain', 'Cristiano Tobias')
-      .click();
+      // CORREÇÃO: Espera o debounce de 300ms + um extra
+      cy.wait(500);
 
-    cy.url().should('contain', '/profile/');
+      // Agora a requisição deve ter sido feita
+      cy.wait('@getSearch', { timeout: 10000 });
+
+      cy.get('[data-cy="search-result-item"]', { timeout: 10000 })
+        .should('be.visible')
+        .and('contain', 'Cristiano Tobias')
+        .click();
+
+      cy.url().should('contain', '/profile/');
+    });
   });
-});
 
   describe('Responsividade Mobile', () => {
     it('2. Deve ajustar layout para iPhone e esconder Sidebar', () => {
       cy.viewport('iphone-xr');
       visitAuthed('/');
-      
+
       cy.wait('@getSuggestions', { timeout: 10000 });
-      
+
       cy.get('[data-cy="suggested-item"]').should('not.be.visible');
     });
   });

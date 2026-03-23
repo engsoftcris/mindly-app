@@ -1,5 +1,4 @@
 describe('Mindly - Jornada Completa do Utilizador', () => {
-
   const mockProfile = {
     id: '123',
     username: 'testuser',
@@ -8,7 +7,7 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
     followers_count: 0,
     following_count: 0,
     is_following: false,
-    is_private: false
+    is_private: false,
   };
 
   const mockPostsEmpty = {
@@ -22,19 +21,21 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
     count: 1,
     next: null,
     previous: null,
-    results: [{
-      id: 55, 
-      content: 'Post para Like', 
-      is_liked: false, 
-      likes_count: 0,
-      author: {
-        username: 'testuser',
-        profile_picture: null,
-        display_name: 'Teste Cypress'
+    results: [
+      {
+        id: 55,
+        content: 'Post para Like',
+        is_liked: false,
+        likes_count: 0,
+        author: {
+          username: 'testuser',
+          profile_picture: null,
+          display_name: 'Teste Cypress',
+        },
+        created_at: new Date().toISOString(),
+        comments_count: 0,
       },
-      created_at: new Date().toISOString(),
-      comments_count: 0
-    }]
+    ],
   };
 
   const visitAuthed = (path = '/', options = {}) => {
@@ -62,38 +63,78 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
 
     cy.intercept('GET', '/api/accounts/feed/**', {
       statusCode: 200,
-      body: mockPostsEmpty
+      body: mockPostsEmpty,
     }).as('getFeed');
 
     cy.intercept('GET', '/api/accounts/notifications/**', {
       statusCode: 200,
-      body: []
+      body: [],
     }).as('getNotifications');
 
     cy.intercept('GET', '/api/accounts/suggested-follows/**', {
       statusCode: 200,
-      body: []
+      body: [],
     }).as('getSuggestedFollows');
   });
 
   describe('Navegação e Dashboard', () => {
     it('1. Deve carregar as abas e persistir no Refresh (F5)', () => {
-      visitAuthed('/');
-      cy.wait(['@getProfile', '@getFeed'], { timeout: 15000 });
-      cy.contains('button', /Para você|For You/i, { timeout: 10000 }).should('be.visible');
+      // ✅ 1. Interceptamos o Perfil (ESSENCIAL para o AuthProvider não deslogar)
+      cy.intercept('GET', '**/api/accounts/profile/', {
+        statusCode: 200,
+        body: { id: 'me-123', username: 'testuser' },
+      }).as('getProfile');
+
+      // ✅ 2. Interceptamos o Feed
+      cy.intercept('GET', '**/api/accounts/feed/', {
+        statusCode: 200,
+        body: { results: [] },
+      }).as('getFeed');
+
+      // ✅ 3. INTERCEPT CRÍTICO: Mock do Refresh Token para evitar o redirecionamento ao login
+      cy.intercept('POST', '**/api/token/refresh/', {
+        statusCode: 200,
+        body: { access: 'fake-access', refresh: 'fake-refresh' },
+      }).as('refreshToken');
+
+      // ✅ 4. Outras rotas que estão dando 401 no seu log
+      cy.intercept('GET', '**/api/accounts/profiles/relationships-sync/', {
+        statusCode: 200,
+        body: { blocked_users: [] },
+      });
+
+      // Execução do teste
+      cy.login({ path: '/', seedFeed: false });
+
+      // Espera a primeira carga
+      cy.wait(['@getProfile', '@getFeed']);
+
+      cy.contains('button', /Para você|For You/i).should('be.visible');
+
+      // 🚀 O MOMENTO DO F5
       cy.reload();
-      cy.wait(['@getProfile', '@getFeed'], { timeout: 15000 });
-      cy.contains('button', /Para você|For You/i, { timeout: 10000 }).should('be.visible');
+
+      // ✅ Após o reload, o Cypress precisa interceptar e esperar as chamadas de novo
+      // Se o AuthProvider estiver ok com os mocks acima, ele não vai para /login
+      cy.wait(['@getProfile', '@getFeed'], { timeout: 20000 });
+
+      // Validação final: ainda estamos na home e as abas estão lá
+      cy.url().should('match', /\/$/);
+      cy.contains('button', /Para você|For You/i).should('be.visible');
     });
 
     it('2. Deve navegar para Configurações via Navbar', () => {
       visitAuthed('/');
       cy.wait(['@getProfile', '@getFeed'], { timeout: 15000 });
-      cy.get('nav').contains(/Profile|Perfil|Configurações|Settings/i).click({ force: true });
-      
+      cy.get('nav')
+        .contains(/Profile|Perfil|Configurações|Settings/i)
+        .click({ force: true });
+
       // CORREÇÃO: Usar expect em vez de .or
-      cy.url().then(url => {
-        expect(url).to.satisfy(url => url.includes('/profile') || url.includes('/settings'));
+      cy.url().then((url) => {
+        expect(url).to.satisfy(
+          (url) => url.includes('/profile') || url.includes('/settings')
+        );
       });
     });
 
@@ -105,10 +146,12 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
         expect(win.localStorage.getItem('access')).to.be.null;
         expect(win.localStorage.getItem('refresh')).to.be.null;
       });
-      
+
       // CORREÇÃO: Usar expect em vez de .or
-      cy.url().then(url => {
-        expect(url).to.satisfy(url => url.includes('/login') || url.includes('/signin'));
+      cy.url().then((url) => {
+        expect(url).to.satisfy(
+          (url) => url.includes('/login') || url.includes('/signin')
+        );
       });
     });
   });
@@ -118,32 +161,34 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       // CORREÇÃO: Rota do POST sem /accounts/
       cy.intercept('POST', '/api/posts/', {
         statusCode: 201,
-        body: { 
-          id: 99, 
-          content: 'Sucesso!', 
-          author: { 
+        body: {
+          id: 99,
+          content: 'Sucesso!',
+          author: {
             username: 'testuser',
             profile_picture: null,
-            display_name: 'Teste Cypress'
+            display_name: 'Teste Cypress',
           },
           created_at: new Date().toISOString(),
           likes_count: 0,
           is_liked: false,
-          comments_count: 0
+          comments_count: 0,
         },
       }).as('createPost');
 
       visitAuthed('/');
       cy.wait('@getFeed', { timeout: 15000 });
-      
-      cy.get('textarea[placeholder*="What\'s on your mind?"]', { timeout: 10000 })
+
+      cy.get('textarea[placeholder*="What\'s on your mind?"]', {
+        timeout: 10000,
+      })
         .first()
         .should('be.visible')
         .type('Teste de postagem automatizado');
-      
+
       cy.get('button[type="submit"]', { timeout: 10000 }).click();
       cy.wait('@createPost', { timeout: 10000 });
-      
+
       cy.get('textarea[placeholder*="What\'s on your mind?"]')
         .first()
         .should('have.value', '');
@@ -152,13 +197,13 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
     it('5. Deve alternar o estado de Like em um post', () => {
       cy.intercept('GET', '/api/accounts/feed/**', {
         statusCode: 200,
-        body: mockPostWithContent
+        body: mockPostWithContent,
       }).as('getFeedWithContent');
 
       // CORREÇÃO: Rota do like sem /accounts/
-      cy.intercept('POST', '/api/posts/55/like/', { 
-        statusCode: 200, 
-        body: { is_liked: true, likes_count: 1 } 
+      cy.intercept('POST', '/api/posts/55/like/', {
+        statusCode: 200,
+        body: { is_liked: true, likes_count: 1 },
       }).as('likeAction');
 
       visitAuthed('/');
@@ -168,8 +213,8 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       cy.get('button span:contains("0")', { timeout: 10000 })
         .first()
         .parent()
-        .click({ force: true }); 
-      
+        .click({ force: true });
+
       cy.wait('@likeAction', { timeout: 10000 });
     });
 
@@ -177,7 +222,7 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       // CORREÇÃO: Rota do POST sem /accounts/
       cy.intercept('POST', '/api/posts/', {
         statusCode: 400,
-        body: { error: 'O conteúdo não pode estar vazio' }
+        body: { error: 'O conteúdo não pode estar vazio' },
       }).as('postError');
 
       cy.on('window:alert', (text) => {
@@ -186,11 +231,13 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
 
       visitAuthed('/');
       cy.wait('@getFeed', { timeout: 15000 });
-      
-      cy.get('textarea[placeholder*="What\'s on your mind?"]', { timeout: 10000 })
+
+      cy.get('textarea[placeholder*="What\'s on your mind?"]', {
+        timeout: 10000,
+      })
         .first()
         .type('Trigger Error');
-      
+
       cy.get('button[type="submit"]', { timeout: 10000 }).click();
       cy.wait('@postError', { timeout: 10000 });
     });
@@ -199,32 +246,35 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
   describe('Notificações', () => {
     it('7. Deve carregar a lista de notificações corretamente', () => {
       const mockNotifications = [
-        { 
-          id: 1, 
-          sender_name: 'joao', 
-          notification_type: 'LIKE', 
+        {
+          id: 1,
+          sender_name: 'joao',
+          notification_type: 'LIKE',
           is_read: false,
           created_at: new Date().toISOString(),
           post_content: 'Post de teste',
-          post: { id: 55, content: 'Post de teste' }
-        }
+          post: { id: 55, content: 'Post de teste' },
+        },
       ];
 
       // CORREÇÃO: Remover intercept duplicado
-      cy.intercept('GET', '/api/notifications/**', { // SEM /accounts/
+      cy.intercept('GET', '/api/notifications/**', {
+        // SEM /accounts/
         statusCode: 200,
-        body: mockNotifications
+        body: mockNotifications,
       }).as('getNotifications');
 
       visitAuthed('/notifications');
-      
+
       cy.wait('@getNotifications', { timeout: 15000 })
         .its('response.statusCode')
         .should('eq', 200);
 
       cy.wait(1000);
 
-      cy.contains(/curtiu|like|liked/i, { timeout: 10000 }).should('be.visible');
+      cy.contains(/curtiu|like|liked/i, { timeout: 10000 }).should(
+        'be.visible'
+      );
       cy.contains('joao', { timeout: 10000 }).should('be.visible');
     });
   });
@@ -234,37 +284,59 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       cy.viewport('iphone-xr');
       visitAuthed('/');
       cy.wait(['@getProfile', '@getFeed'], { timeout: 15000 });
-      cy.contains('button', /Para você|For You/i, { timeout: 10000 }).should('be.visible');
+      cy.contains('button', /Para você|For You/i, { timeout: 10000 }).should(
+        'be.visible'
+      );
     });
   });
- describe('Fluxo de Notificações e Destaque de Post', () => {
+  describe('Fluxo de Notificações e Destaque de Post', () => {
     it('9. Deve clicar na notificação, ir para o perfil e destacar o post no topo', () => {
       const postIdAlvo = 77;
       const uuidAutor = 'perfil-do-autor-123';
 
-      const mockNotification = [{ 
-        id: 10, 
-        sender_name: 'Carlos', 
-        notification_type: 'LIKE', 
-        is_read: false,
-        post_id: postIdAlvo,
-        post_author_profile_id: uuidAutor
-      }];
+      const mockNotification = [
+        {
+          id: 10,
+          sender_name: 'Carlos',
+          notification_type: 'LIKE',
+          is_read: false,
+          post_id: postIdAlvo,
+          post_author_profile_id: uuidAutor,
+        },
+      ];
 
       const mockProfileAutor = {
         id: uuidAutor,
         username: 'autor_post',
         display_name: 'Autor Original',
         posts: [
-          { id: 10, content: 'Post antigo', author: { username: 'autor_post' } },
-          { id: postIdAlvo, content: 'Post que recebeu o Like', author: { username: 'autor_post' } },
-          { id: 20, content: 'Post recente', author: { username: 'autor_post' } }
-        ]
+          {
+            id: 10,
+            content: 'Post antigo',
+            author: { username: 'autor_post' },
+          },
+          {
+            id: postIdAlvo,
+            content: 'Post que recebeu o Like',
+            author: { username: 'autor_post' },
+          },
+          {
+            id: 20,
+            content: 'Post recente',
+            author: { username: 'autor_post' },
+          },
+        ],
       };
 
-      cy.intercept('GET', '/api/notifications/', { body: mockNotification }).as('getNotif');
-      cy.intercept('POST', `/api/notifications/10/mark_as_read/`, { statusCode: 200 }).as('markRead');
-      cy.intercept('GET', `/api/accounts/profiles/${uuidAutor}/`, { body: mockProfileAutor }).as('getAutorProfile');
+      cy.intercept('GET', '/api/notifications/', { body: mockNotification }).as(
+        'getNotif'
+      );
+      cy.intercept('POST', `/api/notifications/10/mark_as_read/`, {
+        statusCode: 200,
+      }).as('markRead');
+      cy.intercept('GET', `/api/accounts/profiles/${uuidAutor}/`, {
+        body: mockProfileAutor,
+      }).as('getAutorProfile');
 
       visitAuthed('/notifications');
       cy.wait('@getNotif');
@@ -276,12 +348,15 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
       cy.url().should('include', `post=${postIdAlvo}`);
 
       // Valida se o post alvo está no TOPO
-      cy.get('.divide-y > div').first().within(() => {
-        cy.contains('Post que recebeu o Like').should('be.visible');
-      });
+      cy.get('.divide-y > div')
+        .first()
+        .within(() => {
+          cy.contains('Post que recebeu o Like').should('be.visible');
+        });
 
       // CORREÇÃO DA ASSERTIVA DE CLASSE (Removido o -l- da cor conforme seu log)
-      cy.get('.divide-y > div').first()
+      cy.get('.divide-y > div')
+        .first()
         .should('have.class', 'bg-blue-500/10')
         .and('have.class', 'border-l-4')
         .and('have.class', 'border-blue-500');
@@ -297,9 +372,19 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
     const blockerUserId = 'meu-uuid-123';
 
     it('10. Blocker (Quem bloqueou): Deve continuar vendo tudo do bloqueado', () => {
-      cy.intercept('GET', '/api/accounts/profile/', { body: { ...mockProfile, id: blockerUserId } });
+      cy.intercept('GET', '/api/accounts/profile/', {
+        body: { ...mockProfile, id: blockerUserId },
+      });
       cy.intercept('GET', '/api/accounts/feed/**', {
-        body: { results: [{ id: 88, content: 'Post do bloqueado', author: { id: blockedUserId } }] }
+        body: {
+          results: [
+            {
+              id: 88,
+              content: 'Post do bloqueado',
+              author: { id: blockedUserId },
+            },
+          ],
+        },
       }).as('getFeedBlocker');
 
       visitAuthed('/');
@@ -308,21 +393,29 @@ describe('Mindly - Jornada Completa do Utilizador', () => {
     });
 
     it('11. Blocked (Quem foi bloqueado): Invisibilidade TOTAL do Blocker', () => {
-      cy.intercept('GET', '/api/accounts/profile/', { body: { ...mockProfile, id: blockedUserId } });
-      
+      cy.intercept('GET', '/api/accounts/profile/', {
+        body: { ...mockProfile, id: blockedUserId },
+      });
+
       // 1. Feed Vazio
-      cy.intercept('GET', '/api/accounts/feed/**', { body: { results: [] } }).as('getFeedEmpty');
+      cy.intercept('GET', '/api/accounts/feed/**', {
+        body: { results: [] },
+      }).as('getFeedEmpty');
       visitAuthed('/');
       cy.wait('@getFeedEmpty');
       cy.contains('Post do Blocker').should('not.exist');
 
       // 2. Notificações Vazias (Não pode aparecer quem te bloqueou)
-      cy.intercept('GET', '/api/notifications/**', { body: [] }).as('getNotifEmpty');
+      cy.intercept('GET', '/api/notifications/**', { body: [] }).as(
+        'getNotifEmpty'
+      );
       visitAuthed('/notifications');
       cy.contains('Carlos').should('not.exist');
 
       // 3. Busca/Sugestões Vazias
-      cy.intercept('GET', '/api/accounts/suggested-follows/**', { body: [] }).as('getSuggestionsEmpty');
+      cy.intercept('GET', '/api/accounts/suggested-follows/**', {
+        body: [],
+      }).as('getSuggestionsEmpty');
       visitAuthed('/');
       cy.contains('Autor Original').should('not.exist');
     });

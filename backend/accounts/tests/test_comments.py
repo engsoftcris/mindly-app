@@ -1,12 +1,14 @@
 """Testes para o sistema de comentários, incluindo suporte a GIFs e imagens."""
 
 import io
+
 import pytest
-from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
-from accounts.models import Post, Comment
+
+from accounts.models import Comment, Post
 
 # pylint: disable=redefined-outer-name
 

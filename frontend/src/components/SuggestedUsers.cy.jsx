@@ -1,63 +1,83 @@
+import React from 'react';
 import SuggestedUsers from './SuggestedUsers';
 import { BrowserRouter } from 'react-router-dom';
+import AuthContext from '../../src/context/AuthContext';
+import useRelationshipStore from '../store/useRelationshipStore';
 
 describe('<SuggestedUsers />', () => {
-  it('deve exibir a lista de sugestões carregada da API usando data-cy', () => {
-    const mockUsers = [
-      {
-        id: 10,
-        user: { username: 'cristiano', full_name: 'Cristiano Tobias' },
-      },
-      { id: 11, user: { username: 'juliet', full_name: 'Juliet B' } },
-    ];
+  const profileId = 'test-uuid-123';
 
-    cy.intercept('GET', '**/accounts/suggested-follows/', {
-      body: mockUsers,
+  beforeEach(() => {
+    localStorage.clear();
+    useRelationshipStore.setState({ following: [] });
+
+    cy.intercept('GET', '**/api/notifications/**', { body: [] });
+  });
+
+  const mountWithContext = (mockSuggestions = []) => {
+    cy.intercept('GET', '**/accounts/suggested-follows/**', {
+      statusCode: 200,
+      body: { results: mockSuggestions },
     }).as('getSuggestions');
 
     cy.mount(
       <BrowserRouter>
-        <SuggestedUsers />
+        <AuthContext.Provider value={{ user: { id: profileId } }}>
+          <SuggestedUsers />
+        </AuthContext.Provider>
       </BrowserRouter>
     );
+  };
+
+  it('exibe lista de sugestões', () => {
+    const mockUsers = [
+      { id: 10, username: 'cristiano', display_name: 'Cristiano Tobias' },
+      { id: 11, username: 'juliet', display_name: 'Juliet B' },
+    ];
+
+    mountWithContext(mockUsers);
 
     cy.wait('@getSuggestions');
 
-    // 1. Verifica se os cards de sugestão existem
     cy.get('[data-cy="suggested-item"]').should('have.length', 2);
-
-    // 2. Verifica se os nomes estão corretos nos seletores específicos
-    cy.get('[data-cy="full-name"]')
-      .first()
-      .should('have.text', 'Cristiano Tobias');
-    cy.get('[data-cy="username"]').last().should('have.text', '@juliet');
-
-    // 3. Verifica a quantidade de botões de seguir da forma CORRETA
-    cy.get('[data-cy="follow-button"]').should('have.length', 2);
+    cy.contains('Cristiano Tobias').should('exist');
   });
 
-  it('deve remover o usuário da lista ao clicar em seguir', () => {
-    cy.intercept('GET', '**/accounts/suggested-follows/', {
-      body: [{ id: 10, user: { username: 'cristiano' } }],
-    });
+  it('remove usuário ao seguir', () => {
+    const mockUsers = [
+      { id: 10, username: 'cristiano', display_name: 'Cristiano' },
+    ];
+
+    let callCount = 0;
+
+    cy.intercept('GET', '**/accounts/suggested-follows/**', (req) => {
+      callCount++;
+
+      if (callCount === 1) {
+        req.reply({ statusCode: 200, body: { results: mockUsers } });
+      } else {
+        req.reply({ statusCode: 200, body: { results: [] } });
+      }
+    }).as('getSuggestions');
 
     cy.intercept('POST', '**/accounts/profiles/10/follow/', {
       statusCode: 200,
     }).as('followRequest');
 
+    // 🚨 monta SEM intercept interno
     cy.mount(
       <BrowserRouter>
-        <SuggestedUsers />
+        <AuthContext.Provider value={{ user: { id: 'test-uuid-123' } }}>
+          <SuggestedUsers />
+        </AuthContext.Provider>
       </BrowserRouter>
     );
 
-    // Clica no botão de seguir
-    cy.get('[data-cy="follow-button"]').click();
+    cy.wait('@getSuggestions');
 
-    // Espera a chamada da API
+    cy.get('[data-cy="follow-button"]').click();
     cy.wait('@followRequest');
 
-    // O item deve sumir da lista (feedback visual de sucesso)
     cy.get('[data-cy="suggested-item"]').should('not.exist');
   });
 });

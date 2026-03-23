@@ -3,16 +3,13 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
-from django.contrib.auth.models import (
-    AbstractBaseUser,
-    BaseUserManager,
-    PermissionsMixin,
-)
+from django.conf import settings
+from django.contrib.auth.models import (AbstractBaseUser, BaseUserManager,
+                                        PermissionsMixin)
+from django.core.cache import cache
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils.timezone import now
-from django.core.validators import MaxLengthValidator
-from django.conf import settings
-from django.core.cache import cache
 
 # --- MANAGER MODELS ---
 

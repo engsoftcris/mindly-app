@@ -3,16 +3,9 @@
 import pytest
 from django.urls import reverse
 from rest_framework import status
-from accounts.models import (
-    Block,
-    Notification,
-    Follow,
-    Report,
-    User,
-    Comment,
-    Like,
-    Post,
-)
+
+from accounts.models import (Block, Comment, Follow, Like, Notification, Post,
+                             Report, User)
 
 
 @pytest.mark.django_db

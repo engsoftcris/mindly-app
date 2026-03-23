@@ -1,7 +1,8 @@
 import pytest
-from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
-from accounts.models import Profile, Post
+from rest_framework.test import APIClient
+
+from accounts.models import Post, Profile
 
 User = get_user_model()
 

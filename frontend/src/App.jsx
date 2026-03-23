@@ -18,15 +18,20 @@ import SearchBar from './components/SearchBar';
 import useRelationshipStore from './store/useRelationshipStore';
 
 function App() {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // 1. O EFFECT VEM SEMPRE NO TOPO, ANTES DE QUALQUER 'IF' COM RETURN
   useEffect(() => {
+    // A trava de segurança fica DENTRO do effect
+    if (loading || !user) return;
+
     async function loadRelationships() {
       try {
         const response = await api.get(
           '/accounts/profiles/relationships-sync/'
         );
-
         useRelationshipStore.getState().setInitialData(response.data);
-
         console.log('SYNC REAL:', response.data);
       } catch (err) {
         console.error('Erro ao sincronizar relationships:', err);
@@ -34,10 +39,9 @@ function App() {
     }
 
     loadRelationships();
-  }, []);
-  const { user, loading } = useAuth();
-  const location = useLocation();
-  // 1. Enquanto o AuthContext checa o token no localStorage, mostramos o loading
+  }, [user, loading]);
+
+  // 2. AGORA SIM, VOCÊ PODE FAZER OS RETORNOS CONDICIONAIS
   if (loading) {
     return <LoadingScreen />;
   }
@@ -52,12 +56,12 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-        {/* Adicionado aqui também para o caso de erros no login */}
         <ToastContainer theme="dark" position="bottom-center" />
       </div>
     );
   }
 
+  // 3. RENDERIZAÇÃO DO APP LOGADO
   return (
     <div className="min-h-screen bg-black flex justify-center">
       <div className="w-full max-w-[1300px] flex min-h-screen">
@@ -105,13 +109,8 @@ function App() {
 
         <aside className="hidden lg:block w-[350px] ml-4">
           <div className="sticky top-2 space-y-4 pt-2">
-            {/* 1. COMPONENTE DE BUSCA */}
             <SearchBar />
-
-            {/* 2. COMPONENTE DE SUGESTÕES (Substituindo o "O que está acontecendo") */}
             <SuggestedUsers />
-
-            {/* 3. RODAPÉ (Opcional) */}
             <div className="px-4 text-gray-500 text-xs">
               <p>© 2026 Mindly - Cristiano</p>
             </div>
@@ -119,7 +118,6 @@ function App() {
         </aside>
       </div>
 
-      {/* LUGAR CORRETO DO TOAST CONTAINER: Dentro do return principal */}
       <ToastContainer
         position="bottom-center"
         autoClose={4000}

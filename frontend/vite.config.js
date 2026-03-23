@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       port: 5173,
+      // ✅ AJUSTE: Permite que o popup do Google Login se comunique com o seu localhost
+     
     },
     build: {
       // Ativa o Terser apenas em produção para limpar os console.logs

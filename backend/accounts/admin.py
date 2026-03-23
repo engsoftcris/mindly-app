@@ -1,13 +1,14 @@
-from typing import Any, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
+
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django import forms
 from django.core.exceptions import ValidationError
-from django.utils.html import format_html
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
+from django.utils.html import format_html
 
-from .models import User, Profile, Post, Block, Follow, Report, Notification
+from .models import Block, Follow, Notification, Post, Profile, Report, User
 
 # --- PROTEÇÃO PARA O RUNTIME (Evita TypeError: 'type' object is not subscriptable) ---
 if TYPE_CHECKING:

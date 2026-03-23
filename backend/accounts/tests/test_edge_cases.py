@@ -1,11 +1,13 @@
 """Testes de cenários extremos para follow, block e performance do feed."""
 
 from datetime import timedelta
+
 import pytest
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from rest_framework import status
-from accounts.models import User, Profile, Follow, Block, Post
+
+from accounts.models import Block, Follow, Post, Profile, User
 
 
 def get_profile_url(action_name, pk=None):

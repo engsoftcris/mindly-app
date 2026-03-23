@@ -1,10 +1,11 @@
 """Testes para o motor de busca de usuários e sistema de sugestões de follow."""
 
 import pytest
-from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
+
 from accounts.models import Profile
 
 User = get_user_model()

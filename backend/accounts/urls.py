@@ -1,14 +1,9 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import (
-    SuggestedFollowsView,
-    UserSearchView,
-    UserProfileView,
-    GoogleLoginView,
-    HybridFeedView,
-    ProfileViewSet,
-    UserPostsListView,
-)
+
+from .views import (GoogleLoginView, HybridFeedView, ProfileViewSet,
+                    SuggestedFollowsView, UserPostsListView, UserProfileView,
+                    UserSearchView)
 from .views_picture import UserProfilePictureView
 
 router = DefaultRouter()

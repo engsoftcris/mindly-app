@@ -1,7 +1,10 @@
-from typing import Any, cast, Optional
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from typing import Any, Optional, cast
+
 from rest_framework import exceptions, serializers
-from .models import Post, User, Profile, Block, Follow, Comment, Notification, Report
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from .models import (Block, Comment, Follow, Notification, Post, Profile,
+                     Report, User)
 
 # --- AUXILIARES ---
 
@@ -99,6 +102,7 @@ class GoogleAuthSerializer(serializers.Serializer[Any]):
 
 
 class FeedAuthorSerializer(serializers.ModelSerializer[User]):
+    id = serializers.CharField(source="profile.id", read_only=True)
     profile_picture = serializers.SerializerMethodField()
     display_name = serializers.ReadOnlyField(source="profile.display_name")
     profile_id = serializers.ReadOnlyField(source="profile.id")
