@@ -21,9 +21,7 @@ function App() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // 1. O EFFECT VEM SEMPRE NO TOPO, ANTES DE QUALQUER 'IF' COM RETURN
   useEffect(() => {
-    // A trava de segurança fica DENTRO do effect
     if (loading || !user) return;
 
     async function loadRelationships() {
@@ -32,7 +30,6 @@ function App() {
           '/accounts/profiles/relationships-sync/'
         );
         useRelationshipStore.getState().setInitialData(response.data);
-        console.log('SYNC REAL:', response.data);
       } catch (err) {
         console.error('Erro ao sincronizar relationships:', err);
       }
@@ -41,7 +38,6 @@ function App() {
     loadRelationships();
   }, [user, loading]);
 
-  // 2. AGORA SIM, VOCÊ PODE FAZER OS RETORNOS CONDICIONAIS
   if (loading) {
     return <LoadingScreen />;
   }
@@ -61,7 +57,6 @@ function App() {
     );
   }
 
-  // 3. RENDERIZAÇÃO DO APP LOGADO
   return (
     <div className="min-h-screen bg-black flex justify-center">
       <div className="w-full max-w-[1300px] flex min-h-screen">

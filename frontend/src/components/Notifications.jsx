@@ -13,7 +13,6 @@ const Notifications = () => {
     const fetchNotifications = async () => {
       try {
         const response = await api.get('/notifications/');
-        // Suporta retorno paginado (results) ou array direto
         const data = Array.isArray(response.data)
           ? response.data
           : response.data?.results;
@@ -36,13 +35,6 @@ const Notifications = () => {
   };
 
   const handleNotificationClick = async (n) => {
-    // LOG 1: Ver o que chegou do banco
-    console.log('1. OBJETO RECEBIDO:', n);
-    console.log('2. TIPO:', n.notification_type);
-    console.log('3. ID DO POST:', n.post_id);
-    console.log('4. DONO DO POST (UUID):', n.post_author_profile_id);
-
-    // Marca como lida
     if (!n.is_read) {
       markAsReadLocal(n.id);
       api.post(`/notifications/${n.id}/mark_as_read/`).catch((err) => {
@@ -50,9 +42,6 @@ const Notifications = () => {
       });
     }
 
-    // --- LÓGICA DE NAVEGAÇÃO ---
-
-    // Caso A: FOLLOW
     if (n.notification_type === 'FOLLOW') {
       console.log('ENTROU NO BLOCO FOLLOW. Indo para:', n.sender_uuid);
       if (n.sender_uuid) {
@@ -60,7 +49,6 @@ const Notifications = () => {
       }
     }
 
-    // Caso B: LIKE ou COMMENT (Interação com Post)
     if (n.post_id) {
       console.log('ENTROU NO BLOCO DE POST. Verificando autor...');
 
@@ -70,12 +58,10 @@ const Notifications = () => {
         return navigate(url);
       }
 
-      // Se o autor veio null, mas o post_id existe:
       console.warn(
         'ALERTA: post_id existe, mas post_author_profile_id veio NULL do Django.'
       );
 
-      // Fallback: Se for seu post, vamos tentar o seu próprio ID (recipient)
       if (n.recipient_uuid) {
         console.log(
           'USANDO FALLBACK: Navegando para o seu próprio perfil (recipient_uuid)'
@@ -84,7 +70,6 @@ const Notifications = () => {
       }
     }
 
-    // Se nada acima pegou:
     console.error(
       'FALHA TOTAL: A notificação não entrou em nenhum critério de navegação.'
     );

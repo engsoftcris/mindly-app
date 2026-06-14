@@ -6,7 +6,6 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 User = get_user_model()
 
 
-# --- Esta parte é para a API (DRF) ---
 class JWTAuthenticationSafe(JWTAuthentication):
     def authenticate(self, request):
         user_auth_tuple = super().authenticate(request)
@@ -14,6 +13,7 @@ class JWTAuthenticationSafe(JWTAuthentication):
             return None
 
         user, token = user_auth_tuple
+        # Bloqueia o token imediatamente se o usuário foi banido
         if getattr(user, "is_banned", False):
             reason = getattr(user, "ban_reason", "") or "Violação dos termos de uso."
             raise exceptions.PermissionDenied(
@@ -23,9 +23,6 @@ class JWTAuthenticationSafe(JWTAuthentication):
                 }
             )
         return user, token
-
-
-# --- Esta parte é o que você já tinha (Middleware do Django) ---
 
 
 class BanMiddleware:
@@ -42,6 +39,7 @@ class BanMiddleware:
                 .first()
             )
 
+            # Se encontrou o registro do ban, barra a requisição e retorna 403
             if banned is not None:
                 reason = banned.get("ban_reason") or "Violação dos termos de uso."
                 return JsonResponse(

@@ -27,18 +27,12 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
 
   const charsLeft = MAX_CHARS - newComment.length;
 
-  // Logged-in user id (Django User.id)
-  // Substitua a linha do currentUserId (por volta da linha 44):
-  // Logged-in user id (Aqui está o segredo: use o profile_id que é o UUID)
   const currentUserId = useMemo(() => {
-    // Se o seu login salva o profile_id no user, use ele.
-    // Se não, garanta que está pegando a string do UUID.
     const id = currentUser?.profile_id || currentUser?.id;
     return id ? String(id).toLowerCase() : null;
   }, [currentUser]);
 
   const postOwnerId = useMemo(() => {
-    // Tenta o profile_id primeiro, porque é ele que você usa no seu AuthContext (currentUserId)
     const id = post?.author?.profile_id || post?.author?.id || post?.author_id;
     return id ? String(id).toLowerCase() : null;
   }, [post]);
@@ -66,7 +60,6 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
       setNewComment('');
       setShowGiftSelector(false);
 
-      // reset file input so selecting the same file again triggers onChange
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,7 +199,6 @@ const CommentModal = ({ post, isOpen, onClose, onCommentAdded }) => {
             </div>
           </div>
 
-          {/* New Comment Input */}
           <form
             data-cy="comment-form"
             onSubmit={handleSubmit}

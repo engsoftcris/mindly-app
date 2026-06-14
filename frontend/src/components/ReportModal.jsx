@@ -10,27 +10,20 @@ const ReportButton = ({ postId, onReportSuccess }) => {
   const handleReport = async () => {
     setLoading(true);
     try {
-      // 🚀 A CHAMADA QUE ESTAVA FALTANDO:
       await api.post('/reports/', {
         post: postId,
         reason: reason,
       });
-      // Se chegar aqui, é porque foi status 201 (Sucesso na criação)
       toast.success('Obrigado! Analisaremos a sua denúncia.');
       setIsOpen(false);
       if (onReportSuccess) onReportSuccess(postId);
     } catch (error) {
-      // O Axios pula para cá se o status for 400 (Duplicado)
       if (error.response && error.response.status === 400) {
-        // Aqui você trata a duplicidade
         toast.info('Já recebemos a sua denúncia sobre este post.');
 
-        // Mesmo sendo erro 400, como a denúncia já existe,
-        // podemos fechar o modal e esconder o post como você queria
         setIsOpen(false);
         if (onReportSuccess) onReportSuccess(postId);
       } else {
-        // Erros reais (500, rede, etc)
         toast.error('Erro ao processar denúncia.');
       }
     } finally {
@@ -46,7 +39,6 @@ const ReportButton = ({ postId, onReportSuccess }) => {
         className="flex items-center gap-1.5 text-gray-500 hover:text-red-500 transition-colors duration-200"
         title="Denunciar"
       >
-        {/* Ícone de Bandeira Corrigido */}
         <svg
           xmlns="http://www.w3.org/2000/svg"
           className="h-4.5 w-4.5"

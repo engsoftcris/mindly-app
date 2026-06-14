@@ -1,26 +1,45 @@
 import { useGoogleLogin } from '@react-oauth/google';
-import { googleLoginApi } from '../api/auth';
+import api from '../api/axios'; // Importando sua instância do axios
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 
-const GoogleLoginButton = () => {
+// Adicionamos a prop 'isRegister' (por padrão ela é falsa, ou seja, age como Login)
+const GoogleLoginButton = ({ isRegister = false }) => {
   const navigate = useNavigate();
 
   const login = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
-        const response = await googleLoginApi(tokenResponse.access_token);
+        // Escolhe a rota certa baseada na tela onde o botão está
+        const endpoint = isRegister
+          ? '/accounts/google-register/'
+          : '/accounts/google-login/';
 
+        const response = await api.post(endpoint, {
+          access_token: tokenResponse.access_token,
+        });
+
+        // Salva os tokens recebidos do Django
         localStorage.setItem('access', response.data.access);
         localStorage.setItem('refresh', response.data.refresh);
 
-        toast.success('Login realizado com sucesso!');
+        toast.success(
+          isRegister
+            ? 'Conta criada e login realizado com sucesso! 🎉'
+            : 'Login realizado com sucesso! 👋'
+        );
 
         navigate('/');
         window.location.reload();
       } catch (error) {
+        console.error(error);
+
+        // Pega a mensagem de erro amigável que injetamos no Django (.message ou .error)
         const errorMsg =
-          error.response?.data?.detail || 'Erro ao autenticar no servidor.';
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          'Erro ao autenticar no servidor.';
+
         toast.error(`Erro: ${errorMsg}`);
       }
     },
@@ -33,9 +52,8 @@ const GoogleLoginButton = () => {
     <button
       onClick={() => login()}
       type="button"
-      aria-label="Continuar com Google"
-      // ADICIONADO: data-cy para o botão principal
-      data-cy="google-login-button"
+      aria-label={isRegister ? 'Cadastrar com Google' : 'Continuar com Google'}
+      data-cy={isRegister ? 'google-register-button' : 'google-login-button'}
       className="
         w-full flex justify-center items-center 
         gap-3 py-3 px-4 
@@ -48,12 +66,11 @@ const GoogleLoginButton = () => {
     >
       <img
         className="h-5 w-5"
-        // ADICIONADO: data-cy para o ícone
         data-cy="google-icon"
         src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
         alt="Google logo"
       />
-      Continuar com Google
+      {isRegister ? 'Cadastrar com Google' : 'Continuar com Google'}
     </button>
   );
 };

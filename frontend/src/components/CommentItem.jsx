@@ -15,21 +15,16 @@ const CommentItem = ({
   const [editContent, setEditContent] = useState(comment.content || '');
   const [loading, setLoading] = useState(false);
 
-  // No CommentItem.jsx, altere como pegamos o commentAuthorId:
-  // 1. Extrair o ID do Autor do Comentário (Garantindo que é o UUID do Profile)
   const commentAuthorId = useMemo(() => {
-    // O backend manda 'author_id' no CommentSerializer que mapeamos para o profile.id
     const id =
       comment.author_id || comment.author?.profile_id || comment.author?.id;
     return id ? String(id).toLowerCase() : null;
   }, [comment]);
 
-  // 2. Extrair o ID do Dono do Post (UUID)
   const ownerPostId = useMemo(() => {
     return postOwnerId ? String(postOwnerId).toLowerCase() : null;
   }, [postOwnerId]);
 
-  // 3. Comparação Blindada (UUID vs UUID)
   const isCommentOwner = useMemo(() => {
     if (!currentUserId || !commentAuthorId) return false;
     return String(currentUserId).toLowerCase() === commentAuthorId;
@@ -40,7 +35,6 @@ const CommentItem = ({
     return String(currentUserId).toLowerCase() === ownerPostId;
   }, [currentUserId, ownerPostId]);
 
-  // 4. Regras de Renderização
   const canEdit = isCommentOwner;
   const canDelete = isCommentOwner || isPostOwner;
 
@@ -55,7 +49,6 @@ const CommentItem = ({
 
     setLoading(true);
     try {
-      // ✅ usa multipart pra evitar 415/validações quando o serializer tem image/media_url
       const form = new FormData();
       form.append('content', next);
 
@@ -63,7 +56,6 @@ const CommentItem = ({
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Atualiza o conteúdo exibido
       comment.content = response.data.content;
       setEditContent(response.data.content || '');
 
@@ -108,33 +100,6 @@ const CommentItem = ({
       setLoading(false);
     }
   };
-  // ... logo acima do return (...)
-  console.log('--- 🔍 CHECK PERMISSÕES COMENTÁRIO ---');
-  console.log('ID do Comentário:', comment.id);
-  console.log('Dono do Comentário (BD):', commentAuthorId);
-  console.log('Dono do Post (BD):', ownerPostId);
-  console.log('Você logado (EU):', currentUserId);
-
-  console.table({
-    'É dono do comentário?': isCommentOwner,
-    'É dono do post?': isPostOwner,
-    'Pode Editar? (canEdit)': canEdit,
-    'Pode Deletar? (canDelete)': canDelete,
-  });
-
-  if (canDelete) {
-    console.log(
-      '%c✅ RENDERIZANDO BOTÃO DELETAR',
-      'color: #00ff00; font-weight: bold'
-    );
-  } else {
-    console.log(
-      '%c❌ BOTÃO DELETAR BLOQUEADO',
-      'color: #ff0000; font-weight: bold'
-    );
-  }
-  console.log('---------------------------------------');
-
   return (
     <div
       data-cy="comment-item"

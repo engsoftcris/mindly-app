@@ -15,7 +15,6 @@ const PostActions = ({ post, onUpdate, onDelete }) => {
       setIsEditing(false);
       onUpdate(response.data);
     } catch (_error) {
-      // ✅ Aqui já estava certo (com underline)
       toast.error('Erro ao editar post.');
     }
   };
@@ -27,7 +26,6 @@ const PostActions = ({ post, onUpdate, onDelete }) => {
         toast.info('Post excluído.');
         onDelete(post.id);
       } catch (_error) {
-        // ✅ Ajustado de 'error' para '_error'
         toast.error('Não foi possível excluir.');
       }
     }

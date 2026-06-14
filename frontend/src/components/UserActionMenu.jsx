@@ -1,4 +1,3 @@
-// frontend/src/components/UserActionMenu.jsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
@@ -17,27 +16,29 @@ const UserActionMenu = ({
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
-  // Detecta se o perfil já está bloqueado (campo que vem do seu Serializer)
   const isBlocked = targetProfile?.is_blocked;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setIsOpen(false);
-        setConfirmDelete(false); // Limpa aqui!
+        setConfirmDelete(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const username =
     targetProfile?.username || targetProfile?.user?.username || 'user';
+
   const profileId = targetProfile?.id || targetProfile?.pk;
 
   const targetUserId = useMemo(() => {
-    // Vamos ver exatamente o que tem nesse objeto no console
-
     const v =
       targetProfile?.id || targetProfile?.profile_id || targetProfile?.user_id;
 
@@ -45,7 +46,6 @@ const UserActionMenu = ({
     return finalId;
   }, [targetProfile]);
 
-  // No canBlock, vamos logar a comparação
   const canBlock = useMemo(() => {
     const cur = String(currentUserId || '');
     const tar = String(targetUserId || '');
@@ -54,27 +54,22 @@ const UserActionMenu = ({
     return result;
   }, [profileId, currentUserId, targetUserId]);
 
-  // Função unificada para Bloquear/Desbloquear (Toggle)
   const handleToggleBlock = async (e) => {
     e.stopPropagation();
     if (!profileId) return;
 
     try {
-      // Chama o endpoint de sempre
       await api.post(`/accounts/profiles/${profileId}/block/`);
 
-      // Mensagem dinâmica baseada no estado anterior
       const actionLabel = isBlocked ? 'unblocked' : 'blocked';
       toast.success(`@${username} ${actionLabel}.`);
 
       setIsOpen(false);
 
       if (onActionComplete) {
-        // Notifica o pai para atualizar o estado local ou remover o post
         onActionComplete(profileId);
       }
 
-      // Se estivermos bloqueando (não desbloqueando) a partir de um perfil, volta para o feed
       if (!isBlocked && window.location.pathname.includes('/profile/')) {
         navigate('/feed');
       }
@@ -116,7 +111,6 @@ const UserActionMenu = ({
           e.preventDefault();
           e.stopPropagation();
 
-          // Se estivermos fechando o menu agora, limpamos a confirmação
           if (isOpen) {
             setConfirmDelete(false);
           }
@@ -196,7 +190,6 @@ const UserActionMenu = ({
               <>
                 {canBlock && (
                   <button
-                    // O data-cy agora muda dinamicamente para o Cypress encontrar
                     data-cy={
                       isBlocked ? 'user-action-unblock' : 'user-action-block'
                     }

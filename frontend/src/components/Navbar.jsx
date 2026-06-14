@@ -5,7 +5,6 @@ import api from '../api/axios';
 
 const getUserId = (user) => {
   if (!user) return null;
-  // Tenta todas as possibilidades que o seu backend costuma mandar
   return user.id || user.user_id || user.uuid || user.pk || null;
 };
 
@@ -90,7 +89,6 @@ const Navbar = () => {
               </div>
             </Link>
 
-            {/* LINK DO PERFIL AJUSTADO: Agora envia para /profile/ID_DO_USUARIO */}
             <Link
               data-cy="navbar-profile-link"
               to={userId ? `/profile/${userId}` : '#'}
@@ -115,7 +113,6 @@ const Navbar = () => {
         )}
       </div>
 
-      {/* User section */}
       {user && (
         <div
           data-cy="navbar-user-section"

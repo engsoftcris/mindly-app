@@ -67,9 +67,9 @@ class TestFollowSystem:
         assert follow is not None
         assert follow.unfollowed_at is not None
 
-    def test_follow_cooldown_5_minutes(self, api_client, setup_data):
-        """Testa a regra de negócio de esperar 5 min para seguir novamente."""
-        me, _, profile_other = setup_data  # Limpeza: other removido
+    def test_follow_cooldown_48_hours(self, api_client, setup_data):
+        """Testa a regra de negócio de esperar 48 horas para seguir novamente."""
+        me, _, profile_other = setup_data
         api_client.force_authenticate(user=me)
 
         url = reverse("profile-follow-toggle", kwargs={"pk": profile_other.pk})
@@ -77,15 +77,15 @@ class TestFollowSystem:
         api_client.post(url)  # 1. Follow
         api_client.post(url)  # 2. Unfollow
 
-        # 3. Tentar seguir de novo imediatamente
+        # 3. Tentar seguir de novo imediatamente (Retorna 429)
         response3 = api_client.post(url)
-        assert response3.status_code == status.HTTP_400_BAD_REQUEST
+        assert response3.status_code == status.HTTP_429_TOO_MANY_REQUESTS
         assert "Wait" in response3.data["error"]
         assert response3.data["cooldown"] is True
 
     def test_follow_cooldown_expires(self, api_client, setup_data):
-        """Valida que o cooldown expira após o tempo configurado."""
-        me, _, profile_other = setup_data  # Limpeza: other removido
+        """Valida que o cooldown expira após as 48 horas configuradas."""
+        me, _, profile_other = setup_data
         api_client.force_authenticate(user=me)
 
         url = reverse("profile-follow-toggle", kwargs={"pk": profile_other.pk})
@@ -93,11 +93,13 @@ class TestFollowSystem:
         api_client.post(url)  # Follow
         api_client.post(url)  # Unfollow
 
-        future_time = timezone.now() + timedelta(minutes=6)
+        # AVANÇA O TEMPO: Agora avançamos 49 horas para garantir a expiração do prazo
+        future_time = timezone.now() + timedelta(hours=49)
 
-        with patch("accounts.views.now", return_value=future_time), patch(
-            "accounts.models.now", return_value=future_time
-        ):
+        # Intercepta qualquer chamada de tempo no backend
+        with patch("django.utils.timezone.now", return_value=future_time), patch(
+            "accounts.views.now", return_value=future_time
+        ), patch("accounts.models.now", return_value=future_time):
 
             response3 = api_client.post(url)
             assert response3.status_code == status.HTTP_200_OK

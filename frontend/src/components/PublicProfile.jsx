@@ -1,4 +1,3 @@
-// frontend/src/pages/PublicProfile.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
@@ -41,7 +40,6 @@ const PublicProfile = () => {
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [activeCommentPost, setActiveCommentPost] = useState(null);
 
-  // Pega following e followers do Zustand
   const { following, followers } = useRelationshipStore();
 
   const isFollowing = useMemo(() => {
@@ -105,7 +103,6 @@ const PublicProfile = () => {
     if (id) fetchProfile();
   }, [id, fetchProfile]);
 
-  // Localize o useEffect que chama o fetchProfile no PublicProfile.jsx
   const handlePostUpdate = (postIdOrUpdatedPost, isLiked, likesCount) => {
     setProfile((prev) => {
       if (!prev) return prev;
@@ -233,7 +230,6 @@ const PublicProfile = () => {
             {profile?.bio || 'No bio yet.'}
           </p>
 
-          {/* CONTADORES - USANDO ZUSTAND QUANDO FOR O PRÓPRIO PERFIL */}
           <div className="mt-4 flex gap-5 text-[15px]">
             <div
               onClick={() => setConnModal({ open: true, tab: 'following' })}

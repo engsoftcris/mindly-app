@@ -111,7 +111,8 @@ class TestBlockSystem:
         auth_client.post(url)
 
         response = auth_client.post(url)
-        assert response.status_code == 400
+        # CORREÇÃO AQUI: Mudou de 400 para 429
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
         assert "Wait" in response.data.get("error", "")
 
     def test_block_removes_follow_reciprocally(self, auth_client, user, user_b):

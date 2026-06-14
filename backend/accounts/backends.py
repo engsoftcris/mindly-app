@@ -11,7 +11,7 @@ class UniversalBackend(ModelBackend):
             return None
 
         try:
-            # Tenta achar o usuário por qualquer um dos 3 campos
+            # Busca o usuário aceitando username, email ou telefone (case-insensitive)
             user = User.objects.get(
                 Q(username__iexact=username)
                 | Q(email__iexact=username)
@@ -20,7 +20,7 @@ class UniversalBackend(ModelBackend):
         except User.DoesNotExist:
             return None
 
-        # Verifica a senha (se o usuário tiver uma definida)
+        # Valida a senha informada e checa se a conta está ativa para autenticar
         if user.check_password(password) and self.user_can_authenticate(user):
             return user
         return None

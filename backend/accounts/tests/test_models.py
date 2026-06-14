@@ -12,7 +12,7 @@ User = get_user_model()
 @pytest.mark.django_db
 def test_user_creation_defaults_to_pending_status():
     """
-    Garante que novos usuários começam com status de imagem PENDING.
+    Garante que o perfil do novo usuário começa com status de imagem PENDING.
     """
     user = User.objects.create_user(
         username="testuser",
@@ -20,7 +20,8 @@ def test_user_creation_defaults_to_pending_status():
         password="password123",
         email="test@example.com",
     )
-    assert user.image_status == "PENDING"
+    # CORREÇÃO: O status da imagem de perfil fica dentro do objeto Profile
+    assert user.profile.image_status == "PENDING"
     assert user.is_active is True
 
 

@@ -58,7 +58,7 @@ describe('<BlockedUsersList />', () => {
 
     cy.wait('@postUnblock');
 
-    // 5. Verifica se o CARD sumiu, não apenas o texto (mais seguro)
+    // 5. Verifica se o CARD sumiu, não apenas o texto
     cy.getByData('blocked-user-card-user_bloqueado_1').should('not.exist');
     cy.getByData('blocked-user-card-user_bloqueado_2').should('be.visible');
 

@@ -29,7 +29,6 @@ const PostCard = ({
   const [editContent, setEditContent] = useState(initialPost?.content || '');
   const [loading, setLoading] = useState(false);
 
-  // Ref para o elemento de vídeo para controle fino de áudio
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -37,7 +36,6 @@ const PostCard = ({
     if (!isEditing) setEditContent(initialPost?.content || '');
   }, [initialPost, isEditing]);
 
-  // Garante que o vídeo não faça ruído ao montar/atualizar
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.muted = true;

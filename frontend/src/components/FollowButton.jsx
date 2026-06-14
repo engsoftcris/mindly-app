@@ -6,10 +6,8 @@ import useRelationshipStore from '../store/useRelationshipStore';
 const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
   const [loading, setLoading] = useState(false);
 
-  // Pega do Zustand
   const { following, follow, unfollow } = useRelationshipStore();
 
-  // Usa Zustand como fonte de verdade, com fallback para initialIsFollowing
   const isFollowing =
     following.includes(String(profileId)) ?? initialIsFollowing;
 
@@ -17,10 +15,8 @@ const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
     e.stopPropagation();
     setLoading(true);
 
-    // Estado otimista
     const wasFollowing = isFollowing;
 
-    // Atualiza UI otimista
     if (wasFollowing) {
       unfollow(String(profileId));
     } else {
@@ -34,11 +30,9 @@ const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
         `/accounts/profiles/${profileId}/follow/`
       );
 
-      // Confirma com o backend
       const newStatus = response.status === 201;
 
       if (newStatus !== !wasFollowing) {
-        // Se o backend devolveu diferente, corrige
         if (newStatus) {
           follow(String(profileId));
         } else {
@@ -52,7 +46,6 @@ const FollowButton = ({ profileId, initialIsFollowing, onStatusChange }) => {
           (newStatus ? 'Agora você segue! 🎉' : 'Deixou de seguir.')
       );
     } catch (error) {
-      // Rollback em caso de erro
       if (wasFollowing) {
         follow(String(profileId));
       } else {

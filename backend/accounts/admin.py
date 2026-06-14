@@ -11,6 +11,7 @@ from django.utils.html import format_html
 from .models import Block, Follow, Notification, Post, Profile, Report, User
 
 # --- PROTEÇÃO PARA O RUNTIME (Evita TypeError: 'type' object is not subscriptable) ---
+# Contorna a limitação do Python em runtime para classes genéricas do DRF/Django com typing ativo
 if TYPE_CHECKING:
     BaseModelForm = forms.ModelForm[Profile]
     BaseStackedInline = admin.StackedInline[Profile, User]
@@ -40,6 +41,7 @@ class ProfileAdminForm(BaseModelForm):
         fields = "__all__"
 
     def clean_profile_picture(self) -> Any:
+        # Valida tamanho e formato da imagem de perfil no upload via painel admin
         image = self.cleaned_data.get("profile_picture")
         if not image:
             return image
@@ -53,6 +55,7 @@ class ProfileAdminForm(BaseModelForm):
 
 # --- INLINE ---
 class ProfileInline(BaseStackedInline):
+    # Acopla os campos de Profile diretamente na tela de edição do User correspondente
     model = Profile
     form = ProfileAdminForm
     can_delete = False
@@ -95,6 +98,7 @@ class CustomUserAdmin(BaseUserAdminClass):
     def ban_selected_users(
         self, request: HttpRequest, queryset: QuerySet[User]
     ) -> None:
+        # Bane em lote os usuários selecionados, impedindo o admin de banir a si próprio
         user = cast(User, request.user)
         queryset = queryset.exclude(id=user.id)
         count = queryset.update(is_banned=True, ban_reason="Banimento via Admin.")
@@ -104,6 +108,7 @@ class CustomUserAdmin(BaseUserAdminClass):
     def unban_selected_users(
         self, request: HttpRequest, queryset: QuerySet[User]
     ) -> None:
+        # Desbane em lote os usuários selecionados limpando a flag is_banned
         count = queryset.update(is_banned=False)
         self.message_user(request, f"Banimento removido de {count} usuários.")
 
@@ -126,6 +131,7 @@ class ProfileAdmin(BaseModelAdminProfile):
 
     @admin.display(description="Preview da Foto")
     def photo_preview(self, obj: Profile) -> Any:
+        # Injeta uma tag img HTML para ver o avatar direto na listagem do admin
         if obj.profile_picture:
             return format_html(
                 '<img src="{}" style="width:45px;height:45px;border-radius:50%;object-fit:cover;border:1px solid #ddd;" />',
@@ -135,11 +141,13 @@ class ProfileAdmin(BaseModelAdminProfile):
 
     @admin.action(description="APROVAR fotos selecionadas")
     def approve_photos(self, request: HttpRequest, queryset: QuerySet[Profile]) -> None:
+        # Altera o status da imagem em lote para APPROVED liberando o avatar no app
         count = queryset.update(image_status="APPROVED")
         self.message_user(request, f"{count} fotos aprovadas.")
 
     @admin.action(description="REJEITAR fotos selecionadas")
     def reject_photos(self, request: HttpRequest, queryset: QuerySet[Profile]) -> None:
+        # Reprova a foto em lote alterando para REJECTED para o bloco de moderação
         count = queryset.update(image_status="REJECTED")
         self.message_user(request, f"{count} fotos rejeitadas.")
 
@@ -159,17 +167,21 @@ class PostAdmin(BaseModelAdminPost):
     search_fields = ("content", "user__username")
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Post]:
+        # Força o admin a usar o manager customizado contendo posts logicamente excluídos
         return Post.all_objects.all()
 
     def delete_model(self, request: HttpRequest, obj: Post) -> None:
+        # Ignora o soft delete do model quando acionado pelo painel admin (força remoção física)
         obj.delete(force=True)
 
     @admin.display(description="Conteúdo")
     def content_preview(self, obj: Post) -> str:
+        # Trunca o texto do post em 50 caracteres para não quebrar o layout da tabela
         return (obj.content[:50] + "...") if len(obj.content) > 50 else obj.content
 
     @admin.display(description="Mídia")
     def media_preview(self, obj: Post) -> Any:
+        # Renderiza uma miniatura condicional dependendo se o anexo é vídeo (HTML5) ou imagem
         if not obj.media:
             return "Texto"
         url = obj.media.url
@@ -193,12 +205,14 @@ class ReportAdmin(BaseModelAdminReport):
 
     @admin.display(description="Preview do Post")
     def post_preview(self, obj: Report) -> Any:
+        # Exibe o conteúdo original textual associado ao post denunciado
         if obj.post:
             return format_html("<strong>Post:</strong> {}", obj.post.content)
         return "Post removido"
 
     @admin.action(description="Resolver: Ocultar Post Denunciado")
     def resolve_report(self, request: HttpRequest, queryset: QuerySet[Report]) -> None:
+        # Aplica soft delete no post associado e fecha o ticket do report como resolvido
         for obj in queryset:
             if obj.post:
                 obj.post.is_deleted = True
