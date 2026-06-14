@@ -188,7 +188,8 @@ class TestModeration:
         api_client.post(url)  # Unfollow
         response = api_client.post(url)  # Blocked
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        # CORREÇÃO AQUI: Mudou de HTTP_400_BAD_REQUEST para HTTP_429_TOO_MANY_REQUESTS
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
         # Garantindo acesso seguro ao dicionário de data
         data = response.data

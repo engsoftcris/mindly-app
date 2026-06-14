@@ -3,8 +3,11 @@
 import pytest
 from django.contrib.auth import get_user_model
 
-from accounts.serializers import (PostSerializer, RegisterSerializer,
-                                  UserProfileSerializer)
+from accounts.serializers import (
+    PostSerializer,
+    RegisterSerializer,
+    UserProfileSerializer,
+)
 
 User = get_user_model()
 
@@ -54,9 +57,14 @@ def test_user_created_without_password_has_unusable_password():
 @pytest.mark.django_db
 def test_profile_serializer_returns_default_avatar_for_pending_status():
     """Garante retorno do avatar padrão quando o status da imagem é PENDING."""
-    user = User.objects.create_user(
-        username="photo_test", email="photo@test.com", image_status="PENDING"
-    )
+    # CORREÇÃO: Cria o usuário de forma limpa
+    user = User.objects.create_user(username="photo_test", email="photo@test.com")
+
+    # Garante/força que o Profile associado esteja com o status PENDING no cenário
+    profile = user.profile
+    profile.image_status = "PENDING"
+    profile.save()
+
     serializer = UserProfileSerializer(instance=user)
     assert "default-avatar.png" in serializer.data["profile_picture"]
 
@@ -64,7 +72,6 @@ def test_profile_serializer_returns_default_avatar_for_pending_status():
 @pytest.mark.django_db
 def test_post_serializer_read_only_fields():
     """Garante que campos ReadOnly como 'author' não sejam alterados via input."""
-    # Corrigido W0612: Removi a atribuição 'user =' pois não era usada
     User.objects.create_user(username="cristiano", email="c@test.com")
     payload = {
         "author": "hacker_name",

@@ -22,7 +22,7 @@ const SearchBar = () => {
         setResults([]);
         setIsDropdownOpen(false);
       }
-    }, 300); // Espera 300ms após o usuário parar de digitar
+    }, 300);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
@@ -40,27 +40,21 @@ const SearchBar = () => {
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         onBlur={() => {
-          // O delay de 200ms é essencial para o clique no <Link> funcionar
-          // antes do componente de resultados ser desmontado
           setTimeout(() => {
             setIsDropdownOpen(false);
-            setSearchTerm(''); // Limpa o texto da busca
-            setResults([]); // Limpa a lista de resultados anterior
+            setSearchTerm('');
+            setResults([]);
           }, 200);
         }}
       />
 
-      {/* Dropdown de Resultados */}
       {isDropdownOpen && results.length > 0 && (
         <div className="absolute top-full left-0 w-full bg-black border border-gray-800 rounded-xl mt-1 shadow-2xl z-50 max-h-80 overflow-y-auto">
           {results.map((profile) => {
-            // Tenta pegar o username do objeto 'user' ou da raiz
             const username =
               profile.user?.username || profile.username || 'usuario';
-            // Tenta pegar o nome completo
             const fullName =
               profile.user?.full_name || profile.full_name || username;
-            // Tenta pegar a foto
             const avatarUrl =
               profile.avatar ||
               profile.profile_picture ||
@@ -74,7 +68,7 @@ const SearchBar = () => {
                 data-cy="search-result-item"
                 key={profile.id}
                 to={`/profile/${profile.id}`}
-                onMouseDown={(e) => e.preventDefault()} // Evita que o onBlur feche antes do clique
+                onMouseDown={(e) => e.preventDefault()}
                 className="flex items-center gap-3 p-3 hover:bg-[#16181C] transition border-b border-gray-900 last:border-0"
               >
                 <img

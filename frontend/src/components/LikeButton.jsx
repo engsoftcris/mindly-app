@@ -1,7 +1,7 @@
 // frontend/src/components/LikeButton.jsx
 import React, { useState } from 'react';
-import api from '../api/axios'; // Adjust based on your axios config path
-import { Heart } from 'lucide-react'; // Or your preferred icon library
+import api from '../api/axios';
+import { Heart } from 'lucide-react';
 
 const LikeButton = ({ post, onLikeToggle }) => {
   const [loading, setLoading] = useState(false);
@@ -12,10 +12,8 @@ const LikeButton = ({ post, onLikeToggle }) => {
 
     setLoading(true);
     try {
-      // Endpoint matched with backend: /api/posts/{id}/like/
       const response = await api.post(`/posts/${post.id}/like/`);
 
-      // Notify parent to update the posts list
       onLikeToggle(post.id, response.data.is_liked, response.data.likes_count);
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -26,7 +24,7 @@ const LikeButton = ({ post, onLikeToggle }) => {
 
   return (
     <button
-      data-cy="like-button" // <-- Adicionado para o teste
+      data-cy="like-button"
       onClick={handleLike}
       disabled={loading}
       className={`flex items-center gap-2 transition-colors group ${
@@ -42,10 +40,7 @@ const LikeButton = ({ post, onLikeToggle }) => {
           className={loading ? 'animate-pulse' : ''}
         />
       </div>
-      <span
-        data-cy="likes-count" // <-- Adicionado para o teste
-        className="text-xs font-medium"
-      >
+      <span data-cy="likes-count" className="text-xs font-medium">
         {post.likes_count || 0}
       </span>
     </button>

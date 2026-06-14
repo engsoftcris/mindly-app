@@ -7,7 +7,6 @@ const GiftSelector = ({ onSelect, onClose, setCanUseGifs }) => {
   const [gifs, setGifs] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 2. Envolvemos a fetchGifs em useCallback para estabilizar a função
   const fetchGifs = useCallback(
     async (query = '') => {
       if (!GIPHY_API_KEY) return;
@@ -32,19 +31,16 @@ const GiftSelector = ({ onSelect, onClose, setCanUseGifs }) => {
           setGifs(result.data);
         }
       } catch (_error) {
-        // 3. Usando _error para seguir o padrão do seu linter
         console.error('Erro na requisição:', _error);
       } finally {
         setLoading(false);
       }
     },
     [onClose, setCanUseGifs]
-  ); // Dependências da função
-
+  );
   useEffect(() => {
     fetchGifs();
-  }, [fetchGifs]); // 4. Agora a função é uma dependência estável e segura
-
+  }, [fetchGifs]);
   return (
     <div
       data-cy="gif-selector-overlay"

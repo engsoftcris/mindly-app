@@ -23,14 +23,12 @@ const ProfilePhotoEditor = ({ currentImage, onFileSelect }) => {
         onClick={handleImageClick}
         title="Clique para alterar a foto"
       >
-        {/* Imagem com borda azul se hover ou selecionada */}
         <img
           src={preview || currentImage || '/static/images/default-avatar.png'}
           className="w-28 h-28 rounded-full object-cover border-4 border-gray-900 group-hover:border-[#1D9BF0] transition-all shadow-2xl"
           alt="Avatar Edit"
         />
 
-        {/* Overlay escuro com ícone de câmera que aparece no hover */}
         <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <svg
             viewBox="0 0 24 24"

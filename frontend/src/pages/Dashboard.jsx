@@ -32,8 +32,8 @@ const Dashboard = () => {
         } else {
           const endpoint =
             activeTab === 'all'
-              ? '/accounts/feed/' // Agora a Home também usa a nossa lógica protegida!
-              : '/accounts/feed/?following=true'; // Exemplo: você pode passar um filtro se quiser
+              ? '/accounts/feed/'
+              : '/accounts/feed/?following=true';
           response = await postsAPI.getFeed(endpoint);
         }
         await minWait;
@@ -80,7 +80,6 @@ const Dashboard = () => {
   }
   return (
     <div className="w-full min-h-screen bg-black">
-      {/* HEADER TABS */}
       <div className="sticky top-0 z-30 bg-black/80 backdrop-blur-md border-b border-gray-800">
         <div className="flex w-full">
           {['all', 'following'].map((tab) => (
@@ -104,7 +103,6 @@ const Dashboard = () => {
 
       <CreatePost onPostCreated={handlePostCreated} />
 
-      {/* CHAMADA DO FEED COM TODA A LÓGICA PRESERVADA */}
       {posts.length > 0 ? (
         <Feed
           posts={posts}

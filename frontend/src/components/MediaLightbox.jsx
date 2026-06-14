@@ -31,14 +31,14 @@ const MediaLightbox = ({
     <div
       ref={containerRef}
       id="lightbox-container"
-      data-cy="lightbox-container" // Alvo dos testes 3 e 4
+      data-cy="lightbox-container"
       tabIndex="0"
       onKeyDown={handleKeyDown}
       className="fixed inset-0 z-[999] bg-black/95 flex items-center justify-center backdrop-blur-sm outline-none"
     >
       {/* Botão Fechar */}
       <button
-        data-cy="lightbox-close" // Alvo do teste 5
+        data-cy="lightbox-close"
         onClick={onClose}
         className="absolute top-6 right-6 text-white hover:bg-white/10 p-2 rounded-full z-[1001] transition"
         aria-label="Close lightbox"
@@ -48,7 +48,6 @@ const MediaLightbox = ({
         </svg>
       </button>
 
-      {/* Navegação Esquerda */}
       {currentIndex > 0 && (
         <button
           data-cy="lightbox-prev"
@@ -61,9 +60,8 @@ const MediaLightbox = ({
         </button>
       )}
 
-      {/* Content Container - Overlay de fechamento */}
       <div
-        data-cy="lightbox-overlay" // Alvo do teste 6
+        data-cy="lightbox-overlay"
         className="relative w-full h-full flex items-center justify-center p-4 md:p-20"
         onClick={onClose}
       >
@@ -73,7 +71,7 @@ const MediaLightbox = ({
         >
           {isVideo ? (
             <video
-              data-cy="lightbox-video" // Alvo do teste 2
+              data-cy="lightbox-video"
               src={currentPost.media_url}
               className="max-h-[90vh] max-w-full shadow-2xl rounded-sm"
               controls
@@ -81,7 +79,7 @@ const MediaLightbox = ({
             />
           ) : (
             <img
-              data-cy="lightbox-img" // Alvo do teste 1
+              data-cy="lightbox-img"
               src={currentPost.media_url}
               className="max-h-[90vh] max-w-full object-contain shadow-2xl rounded-sm"
               alt="Profile Media"
@@ -90,10 +88,9 @@ const MediaLightbox = ({
         </div>
       </div>
 
-      {/* Navegação Direita */}
       {currentIndex < mediaList.length - 1 && (
         <button
-          data-cy="lightbox-next" // Alvo do teste 1
+          data-cy="lightbox-next"
           onClick={onNext}
           className="absolute right-4 p-4 text-white hover:bg-white/10 rounded-full z-[1001] transition md:right-10"
         >
@@ -103,9 +100,8 @@ const MediaLightbox = ({
         </button>
       )}
 
-      {/* Contador/Info */}
       <div
-        data-cy="lightbox-counter" // Alvo dos testes 1 e 2
+        data-cy="lightbox-counter"
         className="absolute bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-sm font-medium bg-black/20 px-3 py-1 rounded-full"
       >
         {currentIndex + 1} / {mediaList.length}

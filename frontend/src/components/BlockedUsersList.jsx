@@ -7,8 +7,6 @@ const BlockedUsersList = () => {
   const [blockedProfiles, setBlockedProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Envolvemos a função em useCallback para que ela não mude a cada render
-  // Isso resolve o erro 'React Hook useEffect has a missing dependency'
   const fetchBlockedUsers = useCallback(async () => {
     try {
       const response = await api.get('/accounts/profiles/blocked-users/');
@@ -17,16 +15,15 @@ const BlockedUsersList = () => {
         : response.data.results || [];
       setBlockedProfiles(data);
     } catch (_err) {
-      // 2. Mudado de 'err' para '_err' para satisfazer o linter
       toast.error('Could not load blocked users.');
     } finally {
       setLoading(false);
     }
-  }, []); // Array vazio aqui porque não depende de outras props/state
+  }, []);
 
   useEffect(() => {
     fetchBlockedUsers();
-  }, [fetchBlockedUsers]); // Agora a função é uma dependência estável
+  }, [fetchBlockedUsers]);
 
   const handleUnblock = async (profileId, username) => {
     try {
@@ -34,7 +31,6 @@ const BlockedUsersList = () => {
       toast.success(`@${username} unblocked.`);
       setBlockedProfiles((prev) => prev.filter((p) => p.id !== profileId));
     } catch (_err) {
-      // 3. Mudado para '_err' aqui também
       toast.error('Failed to unblock user.');
     }
   };

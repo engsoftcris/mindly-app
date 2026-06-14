@@ -1,21 +1,20 @@
-// frontend/src/components/SuggestedUsers.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api/axios';
 import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import useRelationshipStore from '../store/useRelationshipStore';
-import { useAuth } from '../context/AuthContext'; // 👈 Importe o context de auth
+import { useAuth } from '../context/AuthContext';
 
 const SuggestedUsers = () => {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth(); // 👈 Pegue o user
-  const location = useLocation(); // 👈 Para reagir a mudanças de rota
+  const { user } = useAuth();
+  const location = useLocation();
 
   const { follow, unfollow, following } = useRelationshipStore();
 
   const fetchSuggestions = useCallback(async () => {
-    if (!user) return; // Não busca se não estiver logado
+    if (!user) return;
 
     try {
       const response = await api.get('/accounts/suggested-follows/');
@@ -28,7 +27,6 @@ const SuggestedUsers = () => {
     }
   }, [user]);
 
-  // Busca inicial e toda vez que mudar de página (opcional, para manter fresco)
   useEffect(() => {
     fetchSuggestions();
   }, [fetchSuggestions, location.pathname]);
@@ -48,19 +46,18 @@ const SuggestedUsers = () => {
         toast.success(`Agora você segue @${username}! 🎉`);
       }
 
-      // Remove da lista local com um pequeno delay para a transição ser suave
       setSuggestions((prev) => {
         const newlist = prev.filter((p) => String(p.id) !== id);
-        // Se a lista ficar vazia, busca novas sugestões
         if (newlist.length === 0) fetchSuggestions();
         return newlist;
       });
     } catch (err) {
       unfollow(id);
-      if (err.response?.status === 400 && err.response?.data?.cooldown) {
-        const minutes = err.response.data.minutes_remaining || 0;
+      if (err.response?.status === 429 && err.response?.data?.cooldown) {
+        const hours = err.response.data.hours_remaining || 48;
+        const label = hours === 1 ? 'hora' : 'horas';
         toast.warning(
-          `⏱️ Aguarde ${minutes} min para seguir @${username} novamente.`
+          `⏱️ Aguarde ${hours} ${label} para seguir @${username} novamente.`
         );
       } else {
         toast.error(`Não foi possível seguir @${username}.`);

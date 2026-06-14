@@ -49,7 +49,6 @@ const CreatePost = ({ onPostCreated }) => {
   return (
     <div className="p-4 border-b border-gray-800 bg-black">
       <div className="flex gap-4">
-        {/* Avatar com data-cy */}
         <img
           data-cy="user-avatar"
           src={user?.profile_picture || '/static/images/default-avatar.png'}
@@ -69,7 +68,6 @@ const CreatePost = ({ onPostCreated }) => {
               rows={content.split('\n').length || 1}
             />
 
-            {/* Preview de Mídia */}
             {previewUrl && (
               <div className="relative mt-2 mb-4 group rounded-2xl overflow-hidden border border-gray-800">
                 <button

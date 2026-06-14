@@ -102,8 +102,8 @@ class TestPostIntegration:
 
         assert response.status_code == 200
         user.refresh_from_db()
-        # Aqui o campo image_status é do User, não do Profile, por isso o Mypy não reclama
-        assert user.image_status == "PENDING"
+        # CORREÇÃO AQUI: O campo image_status pertence ao Profile, não ao User
+        assert user.profile.image_status == "PENDING"
 
     def test_comment_delete_autonomy_tal_48(self, auth_client, user):
         """TAL-48: Testa se o dono pode apagar seu próprio comentário."""

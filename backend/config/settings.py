@@ -9,32 +9,40 @@ import dj_database_url
 # --------------------------------------------------
 # BASE & DEBUG
 # --------------------------------------------------
+# Define o diretório raiz do projeto subindo dois níveis a partir deste arquivo
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Chave secreta de criptografia puxada do ambiente; usa uma padrão insegura apenas para dev
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY", "django-insecure-dev-key-change-in-production"
 )
+# Ativa ou desativa o modo debug convertendo strings comuns da env em booleano
 DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true", "yes", "on")
 
 # --------------------------------------------------
 # SECURITY & CORS
 # --------------------------------------------------
+# Domínios/IPs autorizados a responder por este app, mapeados a partir de uma lista na env
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend,app"
 ).split(",")
 
 if DEBUG:
+    # Em desenvolvimento local, libera o acesso de qualquer origem para facilitar testes do frontend
     CORS_ALLOW_ALL_ORIGINS = True
 else:
+    # Em produção, restringe o CORS estritamente para o endereço do frontend
     CORS_ALLOWED_ORIGINS = ["http://localhost:5173"]
     frontend_env = os.getenv("FRONTEND_URL")
     if frontend_env:
         CORS_ALLOWED_ORIGINS.append(frontend_env)
 
+# Permite o envio de cookies e cabeçalhos de autenticação nas requisições cross-origin
 CORS_ALLOW_CREDENTIALS = True
 
 # --------------------------------------------------
 # APPLICATIONS
 # --------------------------------------------------
+# Módulos ativos no ecossistema do Django (nativos, terceiros e os apps locais do projeto)
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -54,6 +62,7 @@ INSTALLED_APPS = [
 # --------------------------------------------------
 # MIDDLEWARE
 # --------------------------------------------------
+# Processadores executados em toda requisição/resposta; interceptam o fluxo global do sistema
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -64,7 +73,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "accounts.middleware.BanMiddleware",
+    "accounts.middleware.BanMiddleware",  # Middleware local para travar requisições de contas banidas
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -73,6 +82,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 # --------------------------------------------------
 # TEMPLATES
 # --------------------------------------------------
+# Configurações do motor de renderização de telas HTML e processadores de contexto
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -94,10 +104,12 @@ TEMPLATES = [
 # --------------------------------------------------
 # DATABASE
 # --------------------------------------------------
+# Monta uma string de conexão fallback estruturada caso a DATABASE_URL principal não exista na env
 default_db_url = os.getenv(
     "DATABASE_URL",
     f"postgresql://{os.getenv('DB_USER', 'mindly_admin')}:{os.getenv('DB_PASSWORD', 'mindly_pass')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'mindly_db')}",
 )
+# Alimenta o dicionário de banco usando dj_database_url com reaproveitamento de conexões ativo
 DATABASES = {
     "default": cast(
         dict[str, Any],
@@ -110,11 +122,14 @@ DATABASES = {
 # --------------------------------------------------
 # AUTH & JWT
 # --------------------------------------------------
+# Aponta o Django para utilizar a classe de modelo customizada de User desenvolvida no app accounts
 AUTH_USER_MODEL = "accounts.User"
+
+# Configuração global do Django REST Framework para permissões, autenticações e renderizadores
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "accounts.middleware.JWTAuthenticationSafe",
+        "accounts.middleware.JWTAuthenticationSafe",  # Auth customizada que valida banimentos por token
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_RENDERER_CLASSES": [
@@ -122,6 +137,7 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
 }
+# Define o tempo de expiração do token de acesso (1 hora) e do token de renovação (7 dias)
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),  # 1 hora de validade para o acesso
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),  # 7 dias para renovar sem deslogar
@@ -134,11 +150,14 @@ LOGOUT_REDIRECT_URL = "/"
 # --------------------------------------------------
 # SOCIAL AUTH
 # --------------------------------------------------
+# Backends de autenticação permitidos; engloba o login unificado do app, Google, Facebook e o nativo
 AUTHENTICATION_BACKENDS = (
+    "accounts.backends.UniversalBackend",
     "social_core.backends.google.GoogleOAuth2",
     "social_core.backends.facebook.FacebookAppOAuth2",
     "django.contrib.auth.backends.ModelBackend",
 )
+# Credenciais das APIs externas coletadas das variáveis de ambiente para Auth Social
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv("GOOGLE_CLIENT_ID")
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SOCIAL_AUTH_FACEBOOK_KEY = os.getenv("FACEBOOK_CLIENT_ID")
@@ -146,6 +165,7 @@ SOCIAL_AUTH_FACEBOOK_SECRET = os.getenv("FACEBOOK_CLIENT_SECRET")
 SOCIAL_AUTH_FACEBOOK_SCOPE = ["email"]
 SOCIAL_AUTH_FACEBOOK_PROFILE_EXTRA_PARAMS = {"fields": "id, name, email"}
 
+# Etapas sequenciais executadas pelo Python Social Auth ao criar ou logar contas por redes sociais
 SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.social_auth.social_details",
     "social_core.pipeline.social_auth.social_uid",
@@ -154,7 +174,7 @@ SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.user.get_username",
     "social_core.pipeline.social_auth.associate_by_email",
     "social_core.pipeline.user.create_user",
-    "accounts.pipeline.save_user_social_data",
+    "accounts.pipeline.save_user_social_data",  # Injeta nossa função para persistir dados sociais customizados
     "social_core.pipeline.social_auth.associate_user",
     "social_core.pipeline.social_auth.load_extra_data",
     "social_core.pipeline.user.user_details",
@@ -163,6 +183,7 @@ SOCIAL_AUTH_PIPELINE = (
 # --------------------------------------------------
 # STATIC FILES (WHITENOISE)
 # --------------------------------------------------
+# Gerenciamento de caminhos e diretórios de arquivos estáticos usando Whitenoise em produção
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
@@ -171,6 +192,7 @@ WHITENOISE_USE_FINDERS = True
 # --------------------------------------------------
 # STORAGE (SUPABASE S3)
 # --------------------------------------------------
+# Se houver uma chave cadastrada na env, ativa e parametriza a integração S3 com o bucket do Supabase
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 
 if AWS_ACCESS_KEY_ID:
@@ -181,7 +203,7 @@ if AWS_ACCESS_KEY_ID:
 
     # django-storages / boto3
     AWS_DEFAULT_ACL = None
-    AWS_QUERYSTRING_AUTH = False  # URLs sem assinatura
+    AWS_QUERYSTRING_AUTH = False
     AWS_S3_FILE_OVERWRITE = False
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_S3_SIGNATURE_VERSION = "s3v4"
@@ -200,6 +222,7 @@ if AWS_ACCESS_KEY_ID:
                 "AWS_S3_ENDPOINT_URL vazio. Ex: https://<project>.storage.supabase.co/storage/v1/s3"
             )
 
+        # Trata a URL do endpoint S3 para converter no formato HTTP público padrão do Supabase
         base = endpoint.split("/storage/v1/s3")[0].rstrip("/")
         base = base.replace(".storage.supabase.co", ".supabase.co")
         return base
@@ -213,9 +236,11 @@ if AWS_ACCESS_KEY_ID:
         """
 
         def url(self, name, parameters=None, expire=None, http_method=None):
+            # Sobrescreve o gerador de links padrão para retornar a URL pública direta do objeto no Supabase
             name = str(name).lstrip("/")
             return f"{SUPABASE_PUBLIC_BASE}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/{name}"
 
+    # Associa as classes de armazenamento de arquivos de mídia (Supabase) e arquivos estáticos (WhiteNoise)
     STORAGES = {
         "default": {"BACKEND": "config.settings.SupabasePublicStorage"},
         "staticfiles": {
@@ -232,6 +257,7 @@ if AWS_ACCESS_KEY_ID:
     )
 
 else:
+    # Fallback local se não houver configurações S3 na env (salva os arquivos no próprio disco do servidor)
     STORAGES = {
         "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
         "staticfiles": {
@@ -247,6 +273,7 @@ IS_TESTING = (
     "test" in sys.argv or "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST")
 )
 
+# Ajusta o comportamento e o driver do Cache do sistema baseado no ambiente atual (Testes, Dev ou Prod)
 if IS_TESTING:
     CACHES = {
         "default": {
@@ -262,6 +289,7 @@ elif DEBUG:
         }
     }
 else:
+    # Em produção, usa uma instância real externa do Redis rodando como cache centralizado
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
@@ -302,3 +330,25 @@ SWAGGER_SETTINGS = {
         "Bearer": {"type": "apiKey", "name": "Authorization", "in": "header"}
     },
 }
+
+# --------------------------------------------------
+# PASSWORD VALIDATION
+# --------------------------------------------------
+# Regras nativas aplicadas pelo Django para validar força e complexidade ao criar ou alterar senhas
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {
+            "min_length": 8,  # Define o tamanho mínimo de 8 caracteres exigido pelo projeto
+        },
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]

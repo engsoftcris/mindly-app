@@ -72,7 +72,6 @@ const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
     try {
       const response = await api.post(`/accounts/profiles/${targetId}/follow/`);
 
-      // ✅ ADICIONADO: Se o servidor responder 200/201, mostramos a mensagem
       if (response.status === 200 || response.status === 201) {
         if (!isCurrentlyFollowing) {
           toast.success(`Agora você segue @${username}! 🎉`);
@@ -81,7 +80,6 @@ const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
         }
       }
     } catch (err) {
-      // 2. ROLLBACK (Se der erro real, desfazemos a mudança visual)
       if (isCurrentlyFollowing) {
         follow(targetId);
       } else {
@@ -90,7 +88,6 @@ const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
 
       const errorData = err.response?.data;
 
-      // Tratamento para o erro de Cooldown (Aquele do seu log)
       if (errorData?.cooldown) {
         toast.warning(errorData.error);
       } else {
@@ -142,7 +139,6 @@ const ConnectionsModal = ({ isOpen, onClose, profileId, initialTab }) => {
             </div>
           ) : users.length > 0 ? (
             users.map((u) => {
-              // Aplica a mesma lógica de ID na renderização
               const targetId = String(
                 u.profile_id || u.id || u.pk || u.user_id || u.user?.id
               );
