@@ -134,25 +134,23 @@ class RegisterSerializer(serializers.ModelSerializer[User]):
             raise serializers.ValidationError("Este e-mail já está em uso.")
         return value
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        # Intercepta os dados e força o Django a validar a senha contida no payload
-        password = attrs.get("password")
-        if not password:
-            raise serializers.ValidationError({"password": "Password is required."})
+    def validate_password(self, value: str) -> str:
+        """
+        ✅ CORREÇÃO: Força a validação da senha diretamente no campo.
+        Isso garante que o CreateAPIView pegue o erro antes de salvar.
+        """
+        # Pega os valores enviados no payload de forma segura
+        username_val = self.initial_data.get("username", "")
+        email_val = self.initial_data.get("email", "")
 
-        # Garante que os valores passados sejam strings vazias caso venham nulos
-        username_val = attrs.get("username") or ""
-        email_val = attrs.get("email") or ""
-
-        # Opcional: passa o objeto do usuário simulado para evitar senhas parecidas com username/email
         user_instance = User(username=username_val, email=email_val)
 
         try:
-            validate_password(password, user=user_instance)
+            validate_password(value, user=user_instance)
         except DjangoValidationError as e:
-            raise serializers.ValidationError({"password": list(e.messages)})
-
-        return attrs
+            # Retorna a lista de strings diretamente para o campo password
+            raise serializers.ValidationError(list(e.messages))
+        return value
 
     def create(self, validated_data: dict[str, Any]) -> User:
         """

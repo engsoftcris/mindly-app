@@ -23,6 +23,7 @@ const Login = () => {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState(''); // Alterado: Adicionado estado de sucesso
   const [loading, setLoading] = useState(false);
 
   const handleInputChange = (e) => {
@@ -46,15 +47,23 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccessMessage(''); // Alterado: Limpa mensagens de sucesso anteriores
     try {
+      // Alterado: Lendo a URL do Vite com fallback para localhost
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const response = await axios.post(
-        'http://localhost:8000/api/accounts/register/',
+        `${baseURL}/accounts/register/`,
         formData
       );
       if (response.status === 201) {
-        alert('Conta criada com sucesso! Agora você já pode fazer o login.');
-        setIsRegistering(false);
+        // Alterado: Removido alert horrível e adicionada mensagem temporária na tela
+        setSuccessMessage('Conta criada com sucesso! Redirecionando para o login...');
         setFormData({ username: '', email: '', full_name: '', password: '' });
+        
+        setTimeout(() => {
+          setIsRegistering(false);
+          setSuccessMessage('');
+        }, 3000);
       }
     } catch (err) {
       const data = err.response?.data;
@@ -77,8 +86,10 @@ const Login = () => {
     setLoading(true);
     setError('');
     try {
+      // Alterado: Lendo a URL do Vite com fallback para localhost
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const response = await axios.post(
-        'http://localhost:8000/api/accounts/login/',
+        `${baseURL}/accounts/login/`,
         loginData
       );
       if (response.status === 200) {
@@ -176,10 +187,17 @@ const Login = () => {
               </p>
             )}
 
+            {/* Alterado: Caixa de mensagem verde estilizada para avisar o sucesso do registro */}
+            {successMessage && (
+              <p className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg p-2 text-center animate-pulse">
+                {successMessage}
+              </p>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-xl bg-[#1d9bf0] hover:bg-[#1a8cd8] text-sm font-bold text-white transition-colors"
+              disabled={loading || successMessage}
+              className="w-full py-3 rounded-xl bg-[#1d9bf0] hover:bg-[#1a8cd8] text-sm font-bold text-white transition-colors disabled:opacity-50"
             >
               {loading ? 'Criando conta...' : 'Registrar'}
             </button>
@@ -202,6 +220,7 @@ const Login = () => {
                 onClick={() => {
                   setIsRegistering(false);
                   setError('');
+                  setSuccessMessage(''); // Alterado: Reseta o sucesso ao voltar
                 }}
                 className="text-xs text-[#1d9bf0] hover:underline bg-transparent border-none"
               >
